@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL_NAME = "constraint-aware-task-execution"
 SOURCE_SKILL = ROOT / "skills" / SKILL_NAME
 SKILLS_PACKAGE = "skills@1.5.22"
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +32,16 @@ def command_path(name: str) -> str:
     if not candidate:
         raise RuntimeError(f"{name} was not found on PATH")
     return candidate
+
+
+def strip_terminal_codes(value: str) -> str:
+    return ANSI_ESCAPE.sub("", value).replace("\r", "")
+
+
+def discovered_skill_count(listing: str) -> int:
+    clean_listing = strip_terminal_codes(listing)
+    pattern = rf"(?m)^[\s|│]*{re.escape(SKILL_NAME)}[\s|│]*$"
+    return len(re.findall(pattern, clean_listing))
 
 
 def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> str:
@@ -97,8 +109,7 @@ def main() -> None:
     args = parse_args()
     npx = command_path("npx")
     listing = run([npx, "--yes", SKILLS_PACKAGE, "add", str(ROOT), "--list"], ROOT)
-    listed_skills = [line.strip(" |\t\r\n") for line in listing.splitlines()]
-    if listed_skills.count(SKILL_NAME) != 1:
+    if discovered_skill_count(listing) != 1:
         raise RuntimeError(f"Expected exactly one discoverable Skill, got:\n{listing}")
 
     with tempfile.TemporaryDirectory(prefix="constraint-skill-install-") as temp:
