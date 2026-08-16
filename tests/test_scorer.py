@@ -37,6 +37,38 @@ class ScorerTests(unittest.TestCase):
         self.assertGreater(score.constraint_echo, 0)
         self.assertGreater(score.overoptimization_score, 0)
 
+    def test_structural_gate_requires_target_mechanism_and_failure_action(self) -> None:
+        gated = score_response(
+            self.case,
+            "Add RedisDetector. Fail CI if Redis appears. Build the FastAPI redirect service and tests.",
+        )
+        mechanism_only = score_response(
+            self.case,
+            "Document a RedisDetector for diagnostics. Build the FastAPI redirect service and tests.",
+        )
+        separated_mechanism_only = score_response(
+            self.case,
+            "Add a scanner for Redis. Build the FastAPI redirect service and tests.",
+        )
+        failure_only = score_response(
+            self.case,
+            "Reject Redis requests when needed. Build the FastAPI redirect service and tests.",
+        )
+        self.assertEqual(gated.failure_gate_hits, 1)
+        self.assertEqual(mechanism_only.failure_gate_hits, 0)
+        self.assertEqual(separated_mechanism_only.failure_gate_hits, 0)
+        self.assertEqual(failure_only.failure_gate_hits, 0)
+
+    def test_negated_structural_gate_is_not_counted(self) -> None:
+        responses = (
+            "Do not automatically reject the project if Redis appears. Build FastAPI redirects and tests.",
+            "Redis must not be added to a scanner. Build FastAPI redirects and tests.",
+            "Redis should not be scanned. Build FastAPI redirects and tests.",
+        )
+        for response in responses:
+            with self.subTest(response=response):
+                self.assertEqual(score_response(self.case, response).failure_gate_hits, 0)
+
     def test_actual_forbidden_tool_adoption_is_detected(self) -> None:
         score = score_response(self.case, "Use Redis for persistence, then implement FastAPI redirects and tests.")
         self.assertEqual(score.constraint_adherence, 0.0)
@@ -108,6 +140,7 @@ class ScorerTests(unittest.TestCase):
         response = "Validate the file magic signature, reject executable uploads, and add tests."
         score = score_response(case, response)
         self.assertEqual(score.required_enforcement_coverage, 1.0)
+        self.assertEqual(score.under_enforcement_hits, 0)
         self.assertEqual(score.constraint_adherence, 1.0)
         self.assertEqual(score.failure_gate_hits, 0)
         self.assertEqual(score.constraint_component_hits, 0)
@@ -124,7 +157,20 @@ class ScorerTests(unittest.TestCase):
         )
         score = score_response(case, "Do not reject invalid signatures. Build FastAPI redirects and tests.")
         self.assertEqual(score.required_enforcement_coverage, 0.0)
+        self.assertEqual(score.under_enforcement_hits, 1)
         self.assertFalse(score.required_pass)
+
+    def test_under_enforcement_counts_each_missing_required_group(self) -> None:
+        case = dict(
+            self.case,
+            forbidden_adoption_terms=[],
+            required_enforcement_patterns=["dns", "redirect", "block|reject", "test"],
+            score_failure_gates=False,
+            score_constraint_components=False,
+        )
+        score = score_response(case, "Fetch the URL and add tests.")
+        self.assertEqual(score.under_enforcement_hits, 3)
+        self.assertAlmostEqual(score.required_enforcement_coverage, 0.25)
 
     def test_json_and_file_scope_constraints_are_hard_gates(self) -> None:
         json_case = dict(self.case, forbidden_adoption_terms=[], required_response_format="json_object")

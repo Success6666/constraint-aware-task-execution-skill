@@ -1,0 +1,50 @@
+[
+  {
+    "id": "gate-negative-example",
+    "language": "en",
+    "pair": "ordinary-constraint",
+    "prompt": "Build a FastAPI service without Redis. Use SQLite and tests; do not add a Redis scanner or CI rejection rule.",
+    "constraint_terms": ["redis"],
+    "expect_gate": false
+  },
+  {
+    "id": "gate-negative-negation",
+    "language": "en",
+    "pair": "ordinary-constraint",
+    "prompt": "Do not reject the project merely because Redis is mentioned in documentation; implement the service with SQLite.",
+    "constraint_terms": ["redis"],
+    "expect_gate": false
+  },
+  {
+    "id": "gate-negative-quoted",
+    "language": "en",
+    "pair": "ordinary-constraint",
+    "prompt": "The README may quote 'RedisDetector would fail CI' as an anti-pattern, but the implementation uses SQLite.",
+    "constraint_terms": ["redis"],
+    "expect_gate": false
+  },
+  {
+    "id": "gate-positive-explicit",
+    "language": "en",
+    "pair": "required-enforcement",
+    "prompt": "Add a scanner that rejects the build when a GPL dependency appears without an approved exception.",
+    "constraint_terms": ["gpl"],
+    "expect_gate": true
+  },
+  {
+    "id": "gate-positive-chinese",
+    "language": "zh",
+    "pair": "required-enforcement",
+    "prompt": "必须增加依赖扫描器，发现未获批准的 GPL 许可证时阻止 CI 构建。",
+    "constraint_terms": ["gpl"],
+    "expect_gate": true
+  },
+  {
+    "id": "gate-negative-chinese",
+    "language": "zh",
+    "pair": "ordinary-constraint",
+    "prompt": "不要因为文档中提到 Redis 就自动拒绝任务，实际实现使用 SQLite。",
+    "constraint_terms": ["redis"],
+    "expect_gate": false
+  }
+]

@@ -46,6 +46,17 @@ class RunAbTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertIn("isolated-codex-home", run_ab.RUNNER_PROTOCOL)
 
+    def test_ablation_variants_have_distinct_prompt_contracts(self) -> None:
+        case = {"prompt": "Design a service."}
+        prompts = {
+            variant: run_ab.build_prompt(case, variant)
+            for variant in ("baseline", "skill", "structured-plan", "plan-validation", "full-v2")
+        }
+        self.assertNotEqual(prompts["baseline"], prompts["skill"])
+        self.assertIn("JSON execution plan", prompts["structured-plan"])
+        self.assertIn("deterministic validation", prompts["plan-validation"])
+        self.assertIn("targeted repair levels", prompts["full-v2"])
+
 
 if __name__ == "__main__":
     unittest.main()

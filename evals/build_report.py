@@ -39,7 +39,7 @@ def main() -> None:
 
     metrics = (
         "evaluation_pass", "required_pass", "objective_coverage", "constraint_adherence", "constraint_violation_hits",
-        "required_enforcement_coverage", "failure_gate_hits", "constraint_component_hits",
+        "required_enforcement_coverage", "under_enforcement_hits", "failure_gate_hits", "constraint_component_hits",
         "constraint_echo", "soft_preference_hardening",
     )
     summary = {

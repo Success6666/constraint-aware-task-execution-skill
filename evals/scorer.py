@@ -24,6 +24,19 @@ COMPONENT_WORDS = (
     "检测器", "扫描器", "守卫", "校验器", "策略", "中间件", "检查器",
 )
 
+STRUCTURAL_COMPONENT_PATTERN = re.compile(
+    r"(?:detect(?:or|ion)?|scan(?:ner|ning)?|guard|validator|policy|"
+    r"middleware|hook|check(?:er|ing)?)\w*"
+    r"|检测器|检测|扫描器|扫描|守卫|校验器|校验|策略|中间件|钩子|检查器|检查",
+    flags=re.IGNORECASE,
+)
+STRUCTURAL_FAILURE_PATTERN = re.compile(
+    r"\b(?:fail(?:ed|s|ure)?|reject(?:ed|s)?|block(?:ed|s)?|forbid(?:den|s)?|"
+    r"ban(?:ned|s)?|deny|quarantine|abort(?:ed|s)?)\w*\b"
+    r"|失败|拒绝|阻止|禁止|拦截|隔离|中止",
+    flags=re.IGNORECASE,
+)
+
 FILE_TOKEN_PATTERN = re.compile(
     r"(?<![\w.-])(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\."
     r"(?:py|ts|tsx|js|jsx|md|json|ya?ml|toml|xml)(?![\w.-])",
@@ -40,6 +53,7 @@ class Score:
     constraint_adherence: float
     constraint_violation_hits: int
     required_enforcement_coverage: float
+    under_enforcement_hits: int
     response_format_compliance: float
     path_scope_compliance: float
     failure_gate_hits: int
@@ -82,6 +96,14 @@ def regex_group_coverage(text: str, pattern_groups: list[str]) -> float:
         return 1.0
     matched = sum(bool(re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)) for pattern in pattern_groups)
     return matched / len(pattern_groups)
+
+
+def missing_pattern_groups(text: str, pattern_groups: list[str]) -> int:
+    """Count required enforcement groups that are absent from the response."""
+    return sum(
+        not bool(re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL))
+        for pattern in pattern_groups
+    )
 
 
 def mask_negated_adoption(text: str, terms: list[str]) -> str:
@@ -127,14 +149,68 @@ def adoption_hits(text: str, terms: list[str], custom_patterns: list[str]) -> in
 def mask_negated_enforcement(text: str) -> str:
     patterns = (
         r"\b(?:do not|don't|never|must not|should not)\s+(?:automatically\s+|ever\s+)?"
-        r"(?:reject|block|fail|validate|scan|verify|check|quarantine)\w*\b",
+        r"(?:add|build|create|introduce|implement|reject|block|fail|fail(?:ure)?|"
+        r"validate|scan|verify|check|quarantine)\w*\b",
+        r"\b(?:[A-Za-z0-9_.-]+)\s+(?:(?:is|was|will be)\s+not|(?:should|must)\s+not\s+(?:be\s+)?)"
+        r"(?:added|built|created|introduced|implemented|rejected|blocked|failed|"
+        r"validated|scanned|verified|checked|quarantined)\b",
         r"(?:不|不要|不得|无需|避免)\s*(?:直接|自动|立即)?\s*"
-        r"(?:拒绝|阻止|失败|校验|验证|扫描|检查|隔离|拦截)",
+        r"(?:添加|创建|引入|实现|拒绝|阻止|失败|校验|验证|扫描|检查|隔离|拦截)",
+        r"(?:[A-Za-z0-9_.-]+)\s*(?:不应|不能|不可|不会|未|不再)\s*"
+        r"(?:添加|创建|引入|实现|拒绝|阻止|失败|校验|验证|扫描|检查|隔离|拦截|"
+        r"add|build|create|introduce|implement|reject|block|fail|validate|scan|"
+        r"verify|check|quarantine)",
     )
     masked = text
     for pattern in patterns:
         masked = re.sub(pattern, " ", masked, flags=re.IGNORECASE | re.DOTALL)
     return masked
+
+
+def structural_gate_hits(text: str, terms: list[str]) -> int:
+    """Detect high-confidence target -> mechanism -> failure relationships.
+
+    A gate is counted only when a constraint target is related to both an
+    enforcement mechanism and a failure action. Sentence adjacency is allowed
+    because plans commonly introduce a detector and its CI/runtime action in
+    consecutive sentences. Negated enforcement is masked before matching.
+    """
+    if not terms:
+        return 0
+
+    masked = mask_negated_enforcement(text)
+    segments = [segment for segment in re.split(r"(?:\r?\n+|(?<=[.!?。！？；;])\s+)", masked) if segment.strip()]
+    if not segments:
+        return 0
+
+    hits = 0
+    for term in terms:
+        target = re.compile(re.escape(term), flags=re.IGNORECASE)
+        target_indexes = [index for index, segment in enumerate(segments) if target.search(segment)]
+        if not target_indexes:
+            continue
+        mechanism_indexes = [
+            index for index in target_indexes if STRUCTURAL_COMPONENT_PATTERN.search(segments[index])
+        ]
+        failure_indexes = [
+            index for index in target_indexes if STRUCTURAL_FAILURE_PATTERN.search(segments[index])
+        ]
+        if any(abs(mechanism - failure) <= 1 for mechanism in mechanism_indexes for failure in failure_indexes):
+            hits += 1
+    return hits
+
+
+def fallback_gate_hits(text: str, terms: list[str]) -> int:
+    """Retain V1 matching only when all three gate parts are present."""
+    masked = mask_negated_enforcement(text)
+    hits = 0
+    for term in terms:
+        context = constraint_contexts(masked, [term])
+        if not context or not count_patterns(context, GATE_PATTERNS):
+            continue
+        if STRUCTURAL_COMPONENT_PATTERN.search(context) and STRUCTURAL_FAILURE_PATTERN.search(context):
+            hits += 1
+    return hits
 
 
 def response_format_compliance(case: dict, response: str) -> float:
@@ -172,9 +248,9 @@ def score_response(case: dict, response: str) -> Score:
     violation_hits += path_violations
 
     enforcement_text = mask_negated_enforcement(response)
-    enforcement_coverage = regex_group_coverage(
-        enforcement_text, case.get("required_enforcement_patterns", []),
-    )
+    required_enforcement_patterns = case.get("required_enforcement_patterns", [])
+    enforcement_coverage = regex_group_coverage(enforcement_text, required_enforcement_patterns)
+    under_enforcement_hits = missing_pattern_groups(enforcement_text, required_enforcement_patterns)
     adherence_parts = []
     if forbidden_terms or case.get("constraint_violation_patterns") or case.get("allowed_paths"):
         adherence_parts.append(1.0 if violation_hits == 0 else 0.0)
@@ -188,7 +264,13 @@ def score_response(case: dict, response: str) -> Score:
     evaluation_pass = required_pass and coverage >= minimum_coverage
 
     contexts = constraint_contexts(response, case["constraint_terms"])
-    gate_hits = count_patterns(contexts, GATE_PATTERNS) if case.get("score_failure_gates", True) else 0
+    if case.get("score_failure_gates", True):
+        structural_hits = structural_gate_hits(response, case["constraint_terms"])
+        # Keep the broad V1 detector as a compatibility fallback for wording
+        # that cannot be segmented cleanly (for example, code identifiers).
+        gate_hits = structural_hits or fallback_gate_hits(response, case["constraint_terms"])
+    else:
+        gate_hits = 0
 
     component_hits = 0
     echo_mentions = 0
@@ -219,6 +301,7 @@ def score_response(case: dict, response: str) -> Score:
         constraint_adherence=round(adherence, 4),
         constraint_violation_hits=violation_hits,
         required_enforcement_coverage=round(enforcement_coverage, 4),
+        under_enforcement_hits=under_enforcement_hits,
         response_format_compliance=format_compliance,
         path_scope_compliance=path_compliance,
         failure_gate_hits=gate_hits,

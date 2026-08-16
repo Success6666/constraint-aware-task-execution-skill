@@ -19,6 +19,24 @@ Per case, 7 improved, 0 worsened, and 23 tied. The scorer compares only response
 
 See [`evals/results/REPORT.md`](evals/results/REPORT.md), [`evals/results/summary.json`](evals/results/summary.json), and the committed raw responses for the full evidence. This is a deterministic, single-model regression experiment, not a universal performance claim or a statistical significance test.
 
+## V1.5/V2 execution protocol
+
+The repository now includes deterministic execution primitives in [`evals/protocol.py`](evals/protocol.py):
+
+- versioned structured-plan parsing and validation;
+- separate constraint, implementation strategy, and failure-gate fields;
+- relation-based gate detection with negation and quoted-example handling;
+- plugin validators for JSON, Markdown, file scope, and Python AST/compile checks;
+- explicit `pass`, `fail`, and `unsupported` artifact states;
+- bounded Level 1 artifact repair, Level 2 artifact regeneration, and Level 3 replanning decisions.
+
+`evals/run_ab.py` supports the original `baseline`/`skill` comparison plus `--variant ablation` for positive framing,
+structured planning, plan validation, and full V2 prompt variants. `evals/ablation.py` summarizes completed rows while
+keeping missing variants visible. Validation errors are machine feedback; over-optimization scores are evaluation-only
+and are never included in model repair prompts.
+
+The artifact validators prove observable contracts only. Unsupported semantic checks remain explicitly `unsupported`.
+
 ## Install
 
 Use Node.js 22.20 or later. The commands below install a copied Skill globally and do not rely on symlinks.

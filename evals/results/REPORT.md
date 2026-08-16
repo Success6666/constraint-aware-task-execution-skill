@@ -17,6 +17,7 @@ Completed pairs: `30/30`
 | `constraint_adherence` | 1.0000 | 1.0000 | +0.0000 |
 | `constraint_violation_hits` | 0.0000 | 0.0000 | +0.0000 |
 | `required_enforcement_coverage` | 1.0000 | 1.0000 | +0.0000 |
+| `under_enforcement_hits` | 0.0000 | 0.0000 | +0.0000 |
 | `failure_gate_hits` | 0.0000 | 0.0000 | +0.0000 |
 | `constraint_component_hits` | 0.1000 | 0.0000 | -0.1000 |
 | `constraint_echo` | 0.4333 | 0.1667 | -0.2666 |

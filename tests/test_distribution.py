@@ -49,6 +49,12 @@ class DistributionTests(unittest.TestCase):
             },
         )
 
+    def test_adversarial_gate_cases_cover_both_directions_and_languages(self) -> None:
+        cases = json.loads((ROOT / "evals" / "adversarial_cases.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(cases), 6)
+        self.assertEqual({case["expect_gate"] for case in cases}, {True, False})
+        self.assertEqual({case["language"] for case in cases}, {"en", "zh"})
+
 
 if __name__ == "__main__":
     unittest.main()

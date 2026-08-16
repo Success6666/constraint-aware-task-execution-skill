@@ -22,7 +22,15 @@ SKILL_PATH = ROOT / "skills" / "constraint-aware-task-execution"
 RESULTS_PATH = ROOT / "evals" / "results"
 WORKSPACES_PATH = ROOT / "evals" / "workspaces"
 CODEX_HOMES_PATH = WORKSPACES_PATH / ".codex-homes"
-RUNNER_PROTOCOL = "isolated-codex-home-answer-only-v3"
+RUNNER_PROTOCOL = "isolated-codex-home-answer-only-v4-ablation"
+ABLATION_VARIANTS = (
+    "baseline",
+    "skill",
+    "positive-framing",
+    "structured-plan",
+    "plan-validation",
+    "full-v2",
+)
 EVALUATION_RULES = """# Evaluation Workspace
 
 Answer the user's design request directly in the final response. Do not inspect, create, edit, or
@@ -31,8 +39,8 @@ patch files and do not run commands. Do not discuss the workspace, permissions, 
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run baseline/Skill Codex A/B evaluations.")
-    parser.add_argument("--variant", choices=("baseline", "skill", "both"), default="both")
+    parser = argparse.ArgumentParser(description="Run baseline/Skill and V2 ablation evaluations.")
+    parser.add_argument("--variant", choices=(*ABLATION_VARIANTS, "both", "ablation"), default="both")
     parser.add_argument("--case", action="append", dest="case_ids")
     parser.add_argument("--model", help="Optional Codex model override")
     parser.add_argument("--base-url", default=None, help="Optional OpenAI-compatible Codex base URL")
@@ -64,7 +72,7 @@ def prepare_workspace(case_id: str, variant: str) -> Path:
     workspace.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workspace, check=True)
     (workspace / "AGENTS.md").write_text(EVALUATION_RULES, encoding="utf-8")
-    if variant == "skill":
+    if variant in set(ABLATION_VARIANTS) - {"baseline"}:
         target = workspace / ".codex" / "skills" / SKILL_PATH.name
         target.parent.mkdir(parents=True)
         shutil.copytree(SKILL_PATH, target)
@@ -85,12 +93,31 @@ def prepare_codex_home(case_id: str, variant: str) -> Path:
 
 def build_prompt(case: dict, variant: str) -> str:
     task = case["prompt"]
-    if variant == "skill":
+    if variant in {"skill", "positive-framing", "structured-plan", "plan-validation", "full-v2"}:
         task = (
             "Use $constraint-aware-task-execution at "
             ".codex/skills/constraint-aware-task-execution to solve this user request: "
             + task
         )
+    variant_instruction = {
+        "positive-framing": (
+            " Keep the primary objective explicit, describe constraints as boundaries, and avoid repeating the "
+            "forbidden option."
+        ),
+        "structured-plan": (
+            " Return a JSON execution plan with objective, hard_constraints, soft_preferences, risk_points, "
+            "artifacts, and validation_profile before giving any implementation detail."
+        ),
+        "plan-validation": (
+            " Return a JSON execution plan and include only deterministic validation checks that the user explicitly "
+            "requires or that are needed for safety, format, path, or test contracts."
+        ),
+        "full-v2": (
+            " Return a JSON execution plan, separate constraints from implementation strategies and failure gates, "
+            "and describe targeted repair levels without returning scores or self-congratulation."
+        ),
+    }.get(variant, "")
+    task += variant_instruction
     return task + (
         "\n\nThis is an answer-only design task. Do not inspect, create, edit, or patch files, and do not "
         "run tools or commands. Return a concrete, implementation-ready answer focused on what should "
@@ -221,7 +248,12 @@ def main() -> int:
     args = parse_args()
     if args.jobs < 1 or args.jobs > 8:
         raise SystemExit("--jobs must be between 1 and 8")
-    variants = ("baseline", "skill") if args.variant == "both" else (args.variant,)
+    if args.variant == "both":
+        variants = ("baseline", "skill")
+    elif args.variant == "ablation":
+        variants = ABLATION_VARIANTS
+    else:
+        variants = (args.variant,)
     cases = load_cases(args.case_ids)
     existing: dict[tuple[str, str], dict] = {}
     scores_path = RESULTS_PATH / "scores.json"
@@ -236,7 +268,7 @@ def main() -> int:
     selected_keys = {(case["id"], variant) for case, variant in jobs}
     result_map = {key: row for key, row in existing.items() if key not in selected_keys}
     order = {key: index for index, key in enumerate(
-        [(case["id"], variant) for case in load_cases(None) for variant in ("baseline", "skill")]
+        [(case["id"], variant) for case in load_cases(None) for variant in ABLATION_VARIANTS]
     )}
     pending: list[tuple[dict, str, str]] = []
     for case, variant in jobs:

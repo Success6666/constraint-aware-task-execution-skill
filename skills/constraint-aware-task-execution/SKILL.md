@@ -22,6 +22,19 @@ Complete the user's actual task while satisfying constraints proportionally.
 8. If the result is clear without constraint commentary, demonstrate compliance through the implementation and omit the commentary.
 9. Never mention this Skill, its rules, or that the Skill was loaded or followed.
 
+## Structured execution
+
+For tasks that need a plan or a verifiable artifact, keep these concepts separate:
+
+- `constraint`: the boundary stated by the user;
+- `implementation_strategy`: the simplest compliant approach;
+- `failure_gate`: an explicit rejection or blocking action, used only when the user requests enforcement or safety requires it.
+
+When an external execution harness is available, prefer a structured plan and deterministic checks for JSON shape,
+file scope, syntax, compilation, tests, and other observable contracts. Do not claim semantic success when the
+artifact cannot be deterministically verified. Return machine-readable validation errors and repair only the affected
+section before rebuilding the artifact or replanning.
+
 ## Final Check
 
 Before finishing, ask:
