@@ -1,0 +1,4 @@
+interface:
+  display_name: "Constraint-Aware Task Execution"
+  short_description: "Prevent constraints from replacing the primary objective"
+  default_prompt: "Use $constraint-aware-task-execution to complete this task without over-optimizing its constraints."

@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "objective_coverage": 1.0,
+    "failure_gate_hits": 0,
+    "constraint_component_hits": 0,
+    "constraint_echo": 0.4167,
+    "soft_preference_hardening": 0,
+    "overoptimization_score": 0.4167
+  },
+  "skill": {
+    "objective_coverage": 1.0,
+    "failure_gate_hits": 0,
+    "constraint_component_hits": 0,
+    "constraint_echo": 0.25,
+    "soft_preference_hardening": 0,
+    "overoptimization_score": 0.25
+  }
+}

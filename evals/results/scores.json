@@ -1,0 +1,367 @@
+{
+  "generated_at": "2026-08-16T02:58:31.016013+00:00",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 2,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 2.0
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "jobs-no-celery",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "jobs-no-celery",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "csv-no-pandas",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "csv-no-pandas",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "inventory-no-orm",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "inventory-no-orm",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "qa-no-langchain",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "qa-no-langchain",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "fastapi-no-celery-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "fastapi-no-celery-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "config-no-yaml-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "config-no-yaml-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "tests-no-mocks-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "tests-no-mocks-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "local-dev-no-docker-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "local-dev-no-docker-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "rate-limit-avoid-global-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "rate-limit-avoid-global-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "client-avoid-singleton-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "client-avoid-singleton-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "score": {
+        "objective_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    }
+  ]
+}

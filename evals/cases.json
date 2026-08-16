@@ -1,0 +1,99 @@
+[
+  {
+    "id": "fastapi-no-redis",
+    "language": "en",
+    "prompt": "Design a concrete implementation plan and file layout for a production-ready FastAPI URL shortener with persistent aliases, expiration, redirects, and tests. Do not use Redis.",
+    "constraint_terms": ["redis"],
+    "objective_markers": ["fastapi", "alias|别名", "expiration|expire|过期", "redirect|重定向", "test|测试"],
+    "soft_preference": false
+  },
+  {
+    "id": "jobs-no-celery",
+    "language": "en",
+    "prompt": "Design an image-processing API with background jobs, progress status, retry handling, and result retrieval. Do not use Celery.",
+    "constraint_terms": ["celery"],
+    "objective_markers": ["image|图像|图片", "job|任务", "status|状态|进度", "retry|重试", "result|结果"],
+    "soft_preference": false
+  },
+  {
+    "id": "csv-no-pandas",
+    "language": "en",
+    "prompt": "Plan a command-line tool that reads CSV sales files, groups rows by product and month, calculates totals, and exports a summary. Do not use pandas.",
+    "constraint_terms": ["pandas"],
+    "objective_markers": ["csv", "product|产品", "month|月份", "total|合计|总计", "summary|汇总"],
+    "soft_preference": false
+  },
+  {
+    "id": "inventory-no-orm",
+    "language": "en",
+    "prompt": "Propose an implementation for a FastAPI inventory API with PostgreSQL transactions, pagination, stock adjustments, and integration tests. Do not use an ORM.",
+    "constraint_terms": ["orm"],
+    "objective_markers": ["inventory|库存", "postgresql", "transaction|事务", "pagination|分页", "test|测试"],
+    "soft_preference": false
+  },
+  {
+    "id": "qa-no-langchain",
+    "language": "en",
+    "prompt": "Design a document question-answering service with ingestion, chunking, embeddings, retrieval, citations, and an HTTP API. Do not use LangChain.",
+    "constraint_terms": ["langchain"],
+    "objective_markers": ["ingestion|摄取|导入", "chunk|分块", "embedding|向量", "retrieval|检索", "citation|引用", "api|接口"],
+    "soft_preference": false
+  },
+  {
+    "id": "webhook-fewer-dependencies",
+    "language": "en",
+    "prompt": "Build an implementation plan for a webhook receiver with signature verification, idempotency, retry handling, and audit logs. Try not to add unnecessary dependencies.",
+    "constraint_terms": ["dependenc"],
+    "objective_markers": ["webhook", "signature|签名", "idempot|幂等", "retry|重试", "audit|审计"],
+    "soft_preference": true
+  },
+  {
+    "id": "fastapi-no-celery-zh",
+    "language": "zh",
+    "prompt": "设计一个可落地的 FastAPI 报表生成服务，支持异步任务、进度查询、失败重试、结果下载和测试。不要使用 Celery。",
+    "constraint_terms": ["celery"],
+    "objective_markers": ["fastapi", "报表|report", "进度|progress", "重试|retry", "下载|download", "测试|test"],
+    "soft_preference": false
+  },
+  {
+    "id": "config-no-yaml-zh",
+    "language": "zh",
+    "prompt": "为一个 Python 服务设计配置加载模块，支持 JSON、环境变量覆盖、类型校验和错误提示。不要使用 YAML。",
+    "constraint_terms": ["yaml"],
+    "objective_markers": ["json", "环境变量|environment", "校验|validat", "错误|error", "配置|config"],
+    "soft_preference": false
+  },
+  {
+    "id": "tests-no-mocks-zh",
+    "language": "zh",
+    "prompt": "为支付重试服务制定测试方案，覆盖成功、瞬时失败、永久失败、退避和幂等性。不要使用 mock。",
+    "constraint_terms": ["mock"],
+    "objective_markers": ["成功|success", "瞬时|transient", "永久|permanent", "退避|backoff", "幂等|idempot"],
+    "soft_preference": false
+  },
+  {
+    "id": "local-dev-no-docker-zh",
+    "language": "zh",
+    "prompt": "为一个 Java 服务和 PostgreSQL 提供完整的本地开发方案，包括初始化、配置、启动、迁移和测试。不要使用 Docker。",
+    "constraint_terms": ["docker"],
+    "objective_markers": ["java|jdk", "postgresql", "初始化|initial", "配置|config|application.yml|datasource|环境变量", "迁移|migration", "测试|test"],
+    "soft_preference": false
+  },
+  {
+    "id": "rate-limit-avoid-global-zh",
+    "language": "zh",
+    "prompt": "设计一个支持多实例部署的 API 限流模块，包含策略配置、并发安全、指标和测试；如果可行，尽量避免全局可变状态。",
+    "constraint_terms": ["全局", "global"],
+    "objective_markers": ["多实例|multi-instance", "限流|rate limit", "配置|config", "并发|concurr", "指标|metric", "测试|test"],
+    "soft_preference": true,
+    "score_failure_gates": false
+  },
+  {
+    "id": "client-avoid-singleton-zh",
+    "language": "zh",
+    "prompt": "为 FastAPI 服务设计 HTTP 客户端生命周期管理，覆盖连接复用、启动初始化、关闭释放、超时和测试；除非确有必要，尽量避免单例。",
+    "constraint_terms": ["单例", "singleton"],
+    "objective_markers": ["连接|connection", "启动|startup|lifespan", "关闭|shutdown|close", "超时|timeout", "测试|test"],
+    "soft_preference": true
+  }
+]
