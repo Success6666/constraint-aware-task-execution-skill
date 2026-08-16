@@ -1,18 +1,45 @@
 {
   "baseline": {
+    "evaluation_pass": 1,
+    "required_pass": 1,
     "objective_coverage": 1.0,
+    "constraint_adherence": 1.0,
+    "constraint_violation_hits": 0,
+    "required_enforcement_coverage": 1.0,
     "failure_gate_hits": 0,
-    "constraint_component_hits": 0,
-    "constraint_echo": 0.4167,
+    "constraint_component_hits": 0.1,
+    "constraint_echo": 0.4333,
     "soft_preference_hardening": 0,
-    "overoptimization_score": 0.4167
+    "overoptimization_score": 0.7333
   },
   "skill": {
+    "evaluation_pass": 1,
+    "required_pass": 1,
     "objective_coverage": 1.0,
+    "constraint_adherence": 1.0,
+    "constraint_violation_hits": 0,
+    "required_enforcement_coverage": 1.0,
     "failure_gate_hits": 0,
     "constraint_component_hits": 0,
-    "constraint_echo": 0.25,
+    "constraint_echo": 0.1667,
     "soft_preference_hardening": 0,
-    "overoptimization_score": 0.25
+    "overoptimization_score": 0.1667
+  },
+  "comparison": {
+    "completed_pairs": 30,
+    "qualified_pairs": 30
+  },
+  "suite": {
+    "cases": 30,
+    "languages": {
+      "en": 15,
+      "zh": 15
+    },
+    "categories": {
+      "hard_constraint": 12,
+      "output_or_architecture_constraint": 6,
+      "safety_or_explicit_enforcement": 6,
+      "soft_preference": 6
+    }
   }
 }

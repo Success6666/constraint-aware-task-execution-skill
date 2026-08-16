@@ -2,98 +2,320 @@
   {
     "id": "fastapi-no-redis",
     "language": "en",
+    "category": "hard_constraint",
     "prompt": "Design a concrete implementation plan and file layout for a production-ready FastAPI URL shortener with persistent aliases, expiration, redirects, and tests. Do not use Redis.",
     "constraint_terms": ["redis"],
     "objective_markers": ["fastapi", "alias|别名", "expiration|expire|过期", "redirect|重定向", "test|测试"],
+    "forbidden_adoption_terms": ["redis"],
+    "constraint_violation_patterns": ["redis://", "from\\s+redis\\s+import", "import\\s+redis", "\\bRedis\\s*\\("],
     "soft_preference": false
   },
   {
     "id": "jobs-no-celery",
     "language": "en",
+    "category": "hard_constraint",
     "prompt": "Design an image-processing API with background jobs, progress status, retry handling, and result retrieval. Do not use Celery.",
     "constraint_terms": ["celery"],
     "objective_markers": ["image|图像|图片", "job|任务", "status|状态|进度", "retry|重试", "result|结果"],
+    "forbidden_adoption_terms": ["celery"],
+    "constraint_violation_patterns": ["from\\s+celery\\s+import", "import\\s+celery", "\\bCelery\\s*\\("],
     "soft_preference": false
   },
   {
     "id": "csv-no-pandas",
     "language": "en",
+    "category": "hard_constraint",
     "prompt": "Plan a command-line tool that reads CSV sales files, groups rows by product and month, calculates totals, and exports a summary. Do not use pandas.",
     "constraint_terms": ["pandas"],
     "objective_markers": ["csv", "product|产品", "month|月份", "total|合计|总计", "summary|汇总"],
+    "forbidden_adoption_terms": ["pandas"],
+    "constraint_violation_patterns": ["import\\s+pandas", "from\\s+pandas", "\\bpd\\."],
     "soft_preference": false
   },
   {
     "id": "inventory-no-orm",
     "language": "en",
+    "category": "hard_constraint",
     "prompt": "Propose an implementation for a FastAPI inventory API with PostgreSQL transactions, pagination, stock adjustments, and integration tests. Do not use an ORM.",
     "constraint_terms": ["orm"],
     "objective_markers": ["inventory|库存", "postgresql", "transaction|事务", "pagination|分页", "test|测试"],
+    "forbidden_adoption_terms": ["orm"],
+    "constraint_violation_patterns": ["sqlalchemy\\.orm", "from\\s+sqlalchemy\\.orm", "\\bSession\\s*\\("],
     "soft_preference": false
   },
   {
     "id": "qa-no-langchain",
     "language": "en",
+    "category": "hard_constraint",
     "prompt": "Design a document question-answering service with ingestion, chunking, embeddings, retrieval, citations, and an HTTP API. Do not use LangChain.",
     "constraint_terms": ["langchain"],
     "objective_markers": ["ingestion|摄取|导入", "chunk|分块", "embedding|向量", "retrieval|检索", "citation|引用", "api|接口"],
+    "forbidden_adoption_terms": ["langchain"],
+    "constraint_violation_patterns": ["from\\s+langchain", "import\\s+langchain", "langchain_"],
+    "soft_preference": false
+  },
+  {
+    "id": "etl-no-spark",
+    "language": "en",
+    "category": "hard_constraint",
+    "prompt": "Design an hourly JSONL event ETL pipeline with schema validation, deduplication, partitioned Parquet output, checkpointed recovery, and tests. Do not use Apache Spark.",
+    "constraint_terms": ["spark"],
+    "objective_markers": ["jsonl", "schema|validat|模式|校验", "dedup|去重", "parquet", "checkpoint|recover|检查点|恢复", "test|测试"],
+    "forbidden_adoption_terms": ["spark"],
+    "constraint_violation_patterns": ["pyspark", "SparkSession", "spark-submit"],
     "soft_preference": false
   },
   {
     "id": "webhook-fewer-dependencies",
     "language": "en",
+    "category": "soft_preference",
     "prompt": "Build an implementation plan for a webhook receiver with signature verification, idempotency, retry handling, and audit logs. Try not to add unnecessary dependencies.",
     "constraint_terms": ["dependenc"],
     "objective_markers": ["webhook", "signature|签名", "idempot|幂等", "retry|重试", "audit|审计"],
     "soft_preference": true
   },
   {
+    "id": "crawler-prefer-stdlib",
+    "language": "en",
+    "category": "soft_preference",
+    "prompt": "Plan a CLI metadata crawler with bounded concurrency, rate limiting, caching, resumable runs, and tests. Prefer the standard library and avoid new third-party dependencies when practical.",
+    "constraint_terms": ["third-party", "dependenc"],
+    "objective_markers": ["cli|命令行", "concurr|并发", "rate limit|限速|速率", "cache|缓存", "resume|checkpoint|恢复|检查点", "test|测试"],
+    "soft_preference": true
+  },
+  {
+    "id": "notifications-avoid-global-state",
+    "language": "en",
+    "category": "soft_preference",
+    "prompt": "Design a multi-tenant notification service with provider routing, retries, delivery status, metrics, and tests. Avoid global mutable state if practical.",
+    "constraint_terms": ["global", "mutable state"],
+    "objective_markers": ["tenant|租户", "provider|routing|提供商|路由", "retry|重试", "status|delivery|状态|投递", "metric|指标", "test|测试"],
+    "soft_preference": true
+  },
+  {
+    "id": "upload-block-executables",
+    "language": "en",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "Design a file-upload API with durable storage, metadata, download, audit logs, and tests. It must reject executable content even when the extension or MIME type is misleading.",
+    "constraint_terms": ["executable"],
+    "objective_markers": ["upload|上传", "storage|存储", "metadata|元数据", "download|下载", "audit|审计", "test|测试"],
+    "required_enforcement_patterns": ["magic|signature|content inspection|file header|decode|libmagic|魔数|文件头|真实类型|内容检测", "reject|block|quarantine|拒绝|拦截|隔离", "test|测试"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "url-fetcher-ssrf",
+    "language": "en",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "Design a URL metadata fetcher with caching, timeouts, observability, and tests. It must block private-network, loopback, link-local, and cloud metadata targets after DNS resolution and on every redirect.",
+    "constraint_terms": ["private-network", "loopback", "link-local", "cloud metadata"],
+    "objective_markers": ["url|地址", "cache|缓存", "timeout|超时", "observ|可观测|指标", "test|测试"],
+    "required_enforcement_patterns": ["dns|域名解析", "private|loopback|link-local|metadata|私网|回环|链路本地|元数据", "redirect|重定向", "block|reject|拒绝|阻止|拦截", "test|测试"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "license-ci-enforcement",
+    "language": "en",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "Design a dependency license policy and CI workflow with an SBOM, allowlist exceptions, and tests. CI must fail when a GPL or AGPL dependency is introduced without an approved exception.",
+    "constraint_terms": ["gpl", "agpl"],
+    "objective_markers": ["license|许可证", "sbom", "exception|allowlist|例外|白名单", "ci|流水线", "test|测试"],
+    "required_enforcement_patterns": ["scan|check|扫描|检查", "fail|block|失败|阻止", "exception|allowlist|例外|白名单", "test|测试"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "json-output-only-en",
+    "language": "en",
+    "category": "output_or_architecture_constraint",
+    "prompt": "Return an implementation plan for an API-key rotation service as one JSON object with the keys components, data_model, endpoints, rollout, and tests. Do not include Markdown, code fences, or prose outside the JSON object.",
+    "constraint_terms": ["markdown", "code fence", "outside the json"],
+    "objective_markers": ["components", "data_model", "endpoints", "rollout", "tests"],
+    "required_response_format": "json_object",
+    "soft_preference": false
+  },
+  {
+    "id": "orders-modular-monolith-en",
+    "language": "en",
+    "category": "output_or_architecture_constraint",
+    "prompt": "Design an order platform as a modular monolith with catalog, ordering, payment, and fulfillment modules, explicit ownership boundaries, transactions, and tests. Do not split it into microservices.",
+    "constraint_terms": ["microservice"],
+    "objective_markers": ["catalog|目录|商品", "order|订单", "payment|支付", "fulfillment|履约", "transaction|事务", "test|测试"],
+    "forbidden_adoption_terms": ["microservice"],
+    "soft_preference": false
+  },
+  {
+    "id": "parser-three-files-en",
+    "language": "en",
+    "category": "output_or_architecture_constraint",
+    "prompt": "Plan a backward-compatible parser change with malformed-input handling and regression tests. Confine the implementation to app/parser.py, tests/test_parser.py, and README.md; do not add any other files.",
+    "constraint_terms": ["other files", "additional files"],
+    "objective_markers": ["app/parser.py", "tests/test_parser.py", "readme.md", "malformed|畸形|非法输入", "backward|compatib|向后兼容|兼容"],
+    "allowed_paths": ["app/parser.py", "tests/test_parser.py", "README.md"],
+    "soft_preference": false
+  },
+  {
     "id": "fastapi-no-celery-zh",
     "language": "zh",
+    "category": "hard_constraint",
     "prompt": "设计一个可落地的 FastAPI 报表生成服务，支持异步任务、进度查询、失败重试、结果下载和测试。不要使用 Celery。",
     "constraint_terms": ["celery"],
     "objective_markers": ["fastapi", "报表|report", "进度|progress", "重试|retry", "下载|download", "测试|test"],
+    "forbidden_adoption_terms": ["celery"],
+    "constraint_violation_patterns": ["from\\s+celery\\s+import", "import\\s+celery", "\\bCelery\\s*\\("],
     "soft_preference": false
   },
   {
     "id": "config-no-yaml-zh",
     "language": "zh",
+    "category": "hard_constraint",
     "prompt": "为一个 Python 服务设计配置加载模块，支持 JSON、环境变量覆盖、类型校验和错误提示。不要使用 YAML。",
     "constraint_terms": ["yaml"],
-    "objective_markers": ["json", "环境变量|environment", "校验|validat", "错误|error", "配置|config"],
+    "objective_markers": ["json", "环境变量|environment", "校验|validat", "错误|异常|error", "配置|config"],
+    "forbidden_adoption_terms": ["yaml"],
+    "constraint_violation_patterns": ["\\.ya?ml\\b", "import\\s+yaml", "yaml\\.safe_load"],
     "soft_preference": false
   },
   {
     "id": "tests-no-mocks-zh",
     "language": "zh",
+    "category": "hard_constraint",
     "prompt": "为支付重试服务制定测试方案，覆盖成功、瞬时失败、永久失败、退避和幂等性。不要使用 mock。",
     "constraint_terms": ["mock"],
     "objective_markers": ["成功|success", "瞬时|transient", "永久|permanent", "退避|backoff", "幂等|idempot"],
+    "forbidden_adoption_terms": ["mock"],
+    "constraint_violation_patterns": ["unittest\\.mock", "from\\s+mock", "Mockito", "@Mock", "mock\\s*\\("],
     "soft_preference": false
   },
   {
     "id": "local-dev-no-docker-zh",
     "language": "zh",
+    "category": "hard_constraint",
     "prompt": "为一个 Java 服务和 PostgreSQL 提供完整的本地开发方案，包括初始化、配置、启动、迁移和测试。不要使用 Docker。",
     "constraint_terms": ["docker"],
     "objective_markers": ["java|jdk", "postgresql", "初始化|initial", "配置|config|application.yml|datasource|环境变量", "迁移|migration", "测试|test"],
+    "forbidden_adoption_terms": ["docker"],
+    "constraint_violation_patterns": ["Dockerfile", "docker\\s+(?:run|compose|build)", "docker-compose"],
+    "soft_preference": false
+  },
+  {
+    "id": "events-no-kafka-zh",
+    "language": "zh",
+    "category": "hard_constraint",
+    "prompt": "设计一个订单事件处理服务，支持持久化队列、失败重试、死信、幂等消费、指标和测试。不要使用 Kafka。",
+    "constraint_terms": ["kafka"],
+    "objective_markers": ["订单|order", "队列|queue", "重试|retry", "死信|dead letter", "幂等|idempot", "测试|test"],
+    "forbidden_adoption_terms": ["kafka"],
+    "constraint_violation_patterns": ["KafkaProducer", "KafkaConsumer", "spring-kafka", "kafka://"],
+    "soft_preference": false
+  },
+  {
+    "id": "search-no-elasticsearch-zh",
+    "language": "zh",
+    "category": "hard_constraint",
+    "prompt": "设计一个商品搜索 API，支持全文检索、相关性排序、过滤、分页、索引更新和测试。不要使用 Elasticsearch。",
+    "constraint_terms": ["elasticsearch"],
+    "objective_markers": ["搜索|search", "全文|full text", "相关性|排序|rank", "过滤|filter", "分页|pagination", "索引|index", "测试|test"],
+    "forbidden_adoption_terms": ["elasticsearch"],
+    "constraint_violation_patterns": ["Elasticsearch\\s*\\(", "elasticsearch-py", "/_search"],
     "soft_preference": false
   },
   {
     "id": "rate-limit-avoid-global-zh",
     "language": "zh",
+    "category": "soft_preference",
     "prompt": "设计一个支持多实例部署的 API 限流模块，包含策略配置、并发安全、指标和测试；如果可行，尽量避免全局可变状态。",
     "constraint_terms": ["全局", "global"],
     "objective_markers": ["多实例|multi-instance", "限流|rate limit", "配置|config", "并发|concurr", "指标|metric", "测试|test"],
-    "soft_preference": true,
-    "score_failure_gates": false
+    "score_failure_gates": false,
+    "soft_preference": true
   },
   {
     "id": "client-avoid-singleton-zh",
     "language": "zh",
+    "category": "soft_preference",
     "prompt": "为 FastAPI 服务设计 HTTP 客户端生命周期管理，覆盖连接复用、启动初始化、关闭释放、超时和测试；除非确有必要，尽量避免单例。",
     "constraint_terms": ["单例", "singleton"],
     "objective_markers": ["连接|connection", "启动|startup|lifespan", "关闭|shutdown|close", "超时|timeout", "测试|test"],
     "soft_preference": true
+  },
+  {
+    "id": "log-analyzer-fewer-dependencies-zh",
+    "language": "zh",
+    "category": "soft_preference",
+    "prompt": "设计一个命令行日志分析器，支持流式读取、时间范围过滤、错误聚合、JSON 导出和测试；在可行的情况下优先复用标准库，尽量少增加依赖。",
+    "constraint_terms": ["依赖", "dependency"],
+    "objective_markers": ["命令行|cli", "流式|stream", "时间|time", "聚合|aggregate", "json", "测试|test"],
+    "soft_preference": true
+  },
+  {
+    "id": "image-upload-safety-zh",
+    "language": "zh",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "设计头像上传服务，包含对象存储、元数据、缩略图、审计和测试。必须校验真实文件内容，并拒绝伪装成图片的可执行文件或主动内容。",
+    "constraint_terms": ["可执行文件", "主动内容"],
+    "objective_markers": ["上传|upload", "存储|storage", "元数据|metadata|数据模型|data model", "缩略图|thumbnail", "审计|audit", "测试|test"],
+    "required_enforcement_patterns": ["文件头|魔数|解码|真实内容|signature|magic", "拒绝|拦截|隔离|reject|block", "测试|test"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "webhook-replay-safety-zh",
+    "language": "zh",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "设计支付 Webhook 接收服务，支持签名、时间戳、nonce、幂等、审计和测试。签名无效、时间偏差超限或请求重放时必须拒绝处理。",
+    "constraint_terms": ["签名无效", "时间偏差", "请求重放"],
+    "objective_markers": ["webhook", "签名|signature", "nonce", "幂等|idempot", "审计|audit", "测试|test"],
+    "required_enforcement_patterns": ["时间戳|timestamp", "nonce", "拒绝|拦截|reject|block|401|403|409", "重放|replay", "测试|test"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "secret-scan-ci-zh",
+    "language": "zh",
+    "category": "safety_or_explicit_enforcement",
+    "prompt": "为代码仓库设计密钥检测和例外审批流程，覆盖本地检查、CI、误报处理、密钥轮换和测试。发现未经批准的真实凭据时必须让 CI 失败。",
+    "constraint_terms": ["真实凭据", "密钥"],
+    "objective_markers": ["本地|pre-commit", "ci", "误报|false positive", "审批|exception", "轮换|rotation", "测试|test"],
+    "required_enforcement_patterns": ["扫描|检测|scan", "失败|阻止|fail|block", "审批|例外|exception", "轮换|rotation"],
+    "score_failure_gates": false,
+    "score_constraint_components": false,
+    "soft_preference": false
+  },
+  {
+    "id": "json-output-only-zh",
+    "language": "zh",
+    "category": "output_or_architecture_constraint",
+    "prompt": "为会话管理服务给出实施方案，结果只能是一个 JSON 对象，必须包含 components、data_model、api、migration 和 tests 字段；不要输出 Markdown、代码围栏或 JSON 之外的说明。",
+    "constraint_terms": ["markdown", "代码围栏", "json 之外"],
+    "objective_markers": ["components", "data_model", "api", "migration", "tests"],
+    "required_response_format": "json_object",
+    "soft_preference": false
+  },
+  {
+    "id": "billing-modular-monolith-zh",
+    "language": "zh",
+    "category": "output_or_architecture_constraint",
+    "prompt": "将计费系统设计为模块化单体，划分订阅、计量、账单和支付模块，明确模块边界、事务和测试。不要拆分成微服务。",
+    "constraint_terms": ["微服务", "microservice"],
+    "objective_markers": ["订阅|subscription", "计量|metering", "账单|invoice", "支付|payment", "事务|transaction", "测试|test"],
+    "forbidden_adoption_terms": ["微服务", "microservice"],
+    "soft_preference": false
+  },
+  {
+    "id": "auth-two-files-zh",
+    "language": "zh",
+    "category": "output_or_architecture_constraint",
+    "prompt": "制定访问令牌过期处理的修复方案，覆盖刷新并发、错误响应和回归测试。实现范围只能包含 src/auth.ts 和 tests/auth.test.ts，不要新增其他文件。",
+    "constraint_terms": ["其他文件", "新增文件"],
+    "objective_markers": ["src/auth.ts", "tests/auth.test.ts", "刷新|refresh", "并发|concurr", "错误|error", "测试|test"],
+    "allowed_paths": ["src/auth.ts", "tests/auth.test.ts"],
+    "soft_preference": false
   }
 ]

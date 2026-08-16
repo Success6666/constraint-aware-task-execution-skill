@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "constraint-aware-task-execution"
+SKILL = ROOT / "skills" / "constraint-aware-task-execution"
 
 
 class SkillStructureTests(unittest.TestCase):
@@ -19,6 +19,7 @@ class SkillStructureTests(unittest.TestCase):
         for phrase in (
             "primary objective", "hard constraints", "soft preferences", "failure gate",
             "simplest reasonable implementation", "over-optimization", "proportional",
+            "do not name the forbidden option again",
         ):
             self.assertIn(phrase, content)
 

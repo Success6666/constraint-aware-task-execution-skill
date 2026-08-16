@@ -1,119 +1,193 @@
-当前仓库没有业务代码或技术栈信息，因此方案采用框架无关设计，默认复用现有 Web 框架和关系型数据库。
+## Implementation Plan
 
-## 总体方案
+Assume an HTTP service backed by an existing relational database. Use the platform’s standard HTTP, cryptography, logging, and database libraries; add a dependency only if the current stack cannot safely provide a required primitive.
 
-采用“接收后持久化、后台处理”的 Inbox 模式：
+### 1. Define the webhook contract
+
+Document per provider:
+
+- Endpoint and HTTP method.
+- Signature, timestamp, and event ID headers.
+- Exact signing format and hashing algorithm.
+- Expected response codes and retry behavior.
+- Maximum request size and accepted content type.
+- Secret rotation procedure.
+
+Preserve the raw request body because signatures must usually be verified against the exact received bytes, before JSON parsing or transformation.
+
+### 2. Implement request authentication
+
+Create a small provider-specific verifier interface:
 
 ```text
-Webhook 请求
-  → 读取原始请求体
-  → 验证时间戳与签名
-  → 提取事件 ID
-  → 事务写入 webhook_events
-  → 快速返回 2xx
-  → 数据库轮询任务处理
-  → 成功 / 延迟重试 / 死信
-  → 全流程写入审计记录
+verify(headers, rawBody, candidateSecrets) -> verification result
 ```
 
-不额外引入消息队列。后台任务直接使用数据库抢占待处理事件，后续吞吐量确实超过数据库方案能力时再迁移到现有队列系统。
+Verification flow:
 
-## 实施步骤
+1. Reject requests exceeding the configured size limit.
+2. Read the raw body once.
+3. Parse the signature and signed timestamp.
+4. Reject timestamps outside a short configurable tolerance, such as five minutes.
+5. Compute the expected HMAC using the standard cryptography library.
+6. Compare signatures with a constant-time comparison.
+7. During secret rotation, accept the active and immediately previous secret.
+8. Parse the payload only after successful verification.
 
-1. 定义供应商配置
+Return a generic `401` or `400`; do not expose expected signatures or secret details.
 
-   配置 webhook 来源、签名算法、密钥、签名头、时间戳头和最大允许时间偏差。密钥从环境变量或现有密钥管理系统读取，禁止写入数据库、日志或代码仓库。
+### 3. Persist receipt and enforce idempotency
 
-2. 实现安全的接收端点
+Use the provider’s immutable event ID as the idempotency key. Scope it by provider or tenant to avoid collisions.
 
-   - 限制请求体大小和允许的 HTTP 方法。
-   - 保留原始请求字节，不能先反序列化再计算签名。
-   - 先验证时间戳，默认允许前后 5 分钟偏差，降低重放风险。
-   - 使用标准库 HMAC，例如 `HMAC-SHA256`。
-   - 使用恒定时间比较函数验证签名。
-   - 签名通过后再解析 JSON。
-   - 缺失必要字段返回 `400`，签名无效返回 `401`，系统暂时不可用返回 `503`。
+Suggested table:
 
-3. 建立事件 Inbox 表
+```sql
+webhook_events
+--------------
+id
+provider
+external_event_id
+event_type
+payload
+payload_hash
+status              -- received, processing, succeeded, retryable, failed
+attempt_count
+next_attempt_at
+last_error_code
+last_error_message
+received_at
+processing_started_at
+completed_at
+created_at
+updated_at
 
-   `webhook_events` 建议字段：
+UNIQUE (provider, external_event_id)
+```
 
-   | 字段 | 用途 |
-   |---|---|
-   | `id` | 内部主键 |
-   | `provider` | webhook 来源 |
-   | `event_id` | 来源方事件唯一标识 |
-   | `event_type` | 事件类型 |
-   | `payload` | 原始请求体或受控 JSON |
-   | `payload_hash` | 请求体摘要 |
-   | `status` | `pending/processing/retry/succeeded/dead` |
-   | `attempt_count` | 已处理次数 |
-   | `next_attempt_at` | 下次处理时间 |
-   | `locked_at`、`locked_by` | 并发抢占与超时恢复 |
-   | `last_error_code` | 归类后的错误码 |
-   | `created_at`、`processed_at` | 生命周期时间 |
+Receipt transaction:
 
-   对 `(provider, event_id)` 建立唯一约束。签名验证和 JSON 基础校验通过后，在单个事务中插入事件；唯一键冲突表示重复投递，直接返回与首次接收相同的成功响应。
+1. Verify the signature.
+2. Attempt to insert the event with status `received`.
+3. If the unique constraint reports a duplicate, return the same successful acknowledgement without processing it again.
+4. Commit before acknowledging the request.
 
-4. 实现后台处理器
+The database unique constraint is the authoritative concurrency control. Do not rely on an in-memory “seen events” cache.
 
-   - 定时查询到期的 `pending` 或 `retry` 事件。
-   - 使用数据库的行锁跳过机制，或条件更新实现原子抢占。
-   - 按 `event_type` 调用对应业务处理函数。
-   - 业务写入与事件状态更新尽可能放在同一数据库事务中。
-   - 下游业务表也应保存来源事件 ID 或使用唯一业务键，防止“业务已成功、状态更新前进程崩溃”造成重复副作用。
-   - 对外部 API、邮件等无法纳入事务的副作用，使用 Outbox 表或目标系统提供的幂等键。
+If event IDs are not guaranteed, use a documented fallback key derived from stable provider fields. A payload hash alone is risky because two legitimate identical payloads may represent separate events.
 
-5. 实现重试策略
+### 4. Decouple receipt from processing
 
-   将失败分为：
+Keep the HTTP path short:
 
-   - 可重试：网络超时、限流、数据库暂时故障、下游 `5xx`。
-   - 不可重试：字段无效、不支持的事件类型、明确的业务拒绝。
-   - 未知错误：默认有限重试，并记录异常分类。
+```text
+Receive -> verify -> persist/deduplicate -> acknowledge
+                                  |
+                                  v
+                         background processor
+```
 
-   建议指数退避并加入随机抖动：
+A background worker claims persisted events in batches. With a relational database, this can use transactional row locking such as `FOR UPDATE SKIP LOCKED`; this avoids requiring a message broker for the initial implementation.
 
-   ```text
-   delay = min(基础间隔 × 2^(attempt-1), 最大间隔) + jitter
-   ```
+Claiming an event should atomically change its state from `received` or due `retryable` to `processing`. Business-side effects and status updates should be designed so a worker crash cannot silently lose an event.
 
-   默认尝试 8 次，最大间隔 6 小时。超过次数后标记为 `dead`。`processing` 状态超过锁定超时时间的事件重新置为 `retry`，用于进程崩溃恢复。
+### 5. Make business processing idempotent
 
-6. 建立审计日志
+Transport deduplication does not prevent duplicate side effects after a crash. Each handler should therefore use a stable operation key, normally the webhook event ID.
 
-   使用独立的追加式 `webhook_audit_logs` 表，记录：
+Examples:
 
-   - 内部事件 ID、来源事件 ID和供应商。
-   - `received`、`signature_rejected`、`duplicate`、`processing_started`、`retry_scheduled`、`succeeded`、`dead` 等动作。
-   - 尝试次数、时间、处理节点和归类后的错误信息。
-   - 请求关联 ID、负载摘要。
+- Store the event ID on the created or updated domain record.
+- Add a unique constraint for event-driven operations.
+- Use an idempotency key when calling downstream services that support one.
+- Apply state transitions conditionally, such as updating only when the incoming event version is newer.
 
-   不记录签名、密钥、授权头和敏感字段。完整请求体是否保存及保存周期应根据业务合规要求决定。
+Wrap local domain changes and the final `succeeded` status update in one database transaction where practical.
 
-7. 增加运维能力
+### 6. Add retry handling
 
-   - 统计接收量、签名失败量、重复量、处理延迟、重试量和死信量。
-   - 对死信积压、处理延迟和连续签名失败设置告警。
-   - 提供受权限控制的死信查询和重新入队操作。
-   - 重新处理时新增审计记录，不覆盖历史记录。
+Classify processing failures:
 
-## 测试计划
+- **Retryable:** timeouts, temporary database failures, rate limits, and downstream `5xx` responses.
+- **Permanent:** invalid payload shape, unsupported event type, missing required domain entity where retry cannot help, and rejected business rules.
 
-- 使用固定测试向量验证正确签名、错误签名、过期时间戳和请求体被修改。
-- 验证同一事件串行及并发投递时只产生一条 Inbox 记录。
-- 验证重复事件返回成功，但不重复执行业务副作用。
-- 验证暂时性错误按退避策略重试，永久错误直接进入死信。
-- 模拟进程在业务提交前后崩溃，验证事件可以恢复且业务结果不重复。
-- 验证审计记录完整且不泄露密钥、签名或敏感负载。
-- 进行请求体大小限制、畸形 JSON、并发抢占和数据库故障测试。
+For retryable failures:
 
-## 验收标准
+```text
+delay = min(baseDelay * 2^attempt, maxDelay) + random jitter
+```
 
-- 无效签名和超出时间窗口的请求不会进入业务处理。
-- 同一 `(provider, event_id)` 无论并发投递多少次，只被有效处理一次。
-- 成功接收的事件在返回 `2xx` 前已经持久化。
-- 暂时性失败能够自动恢复，达到上限后进入可查询的死信状态。
-- 进程异常退出不会永久遗失或锁死事件。
-- 每个事件的接收、处理、重试和最终结果均可追溯。
-- 日志和审计数据中不包含密钥、完整签名或未经处理的敏感信息。
+Suggested defaults:
+
+- Base delay: 5 seconds.
+- Maximum delay: 15 minutes.
+- Maximum attempts: 8.
+- Store `attempt_count`, `next_attempt_at`, and a sanitized error summary.
+
+After the final attempt, set status to `failed` and alert through the application’s existing monitoring path. Provide an operator action to replay a failed event; replay must use the same idempotency protections.
+
+Also recover events left in `processing` beyond a lease timeout, since that normally indicates worker termination.
+
+### 7. Add structured audit logs
+
+Record lifecycle events such as:
+
+- Request received.
+- Signature accepted or rejected.
+- Event stored or identified as duplicate.
+- Processing attempt started.
+- Processing succeeded.
+- Retry scheduled.
+- Event permanently failed.
+- Manual replay requested.
+
+Each record should include:
+
+```text
+timestamp, provider, external_event_id, internal_event_id,
+event_type, action, result, attempt, correlation_id, duration_ms
+```
+
+Never log secrets, signature values, authorization headers, or full payloads by default. Keep the original payload in access-controlled storage if it is required for debugging or compliance. Audit entries should be append-only from the application’s perspective and follow the existing log retention policy.
+
+### 8. Operational endpoints and metrics
+
+Add narrowly scoped operational visibility:
+
+- Health check for the HTTP service and database.
+- Counts of received, duplicate, succeeded, retrying, and failed events.
+- Processing latency and queue age.
+- Signature rejection rate.
+- Oldest pending event.
+- Alerting for permanent failures and growing backlog.
+
+Protect any event inspection or replay endpoint with existing administrative authentication and record every replay in the audit log.
+
+### 9. Delivery sequence
+
+1. Implement raw-body capture and provider signature verification.
+2. Add the event table and transactional deduplication.
+3. Return fast acknowledgements after durable persistence.
+4. Add the database-backed worker and handler dispatch by event type.
+5. Make each business handler idempotent.
+6. Add retry classification, backoff, leases, and terminal failure handling.
+7. Add structured audit records, metrics, alerts, and administrative replay.
+8. Roll out behind provider-specific configuration, beginning with a test endpoint or sandbox secret.
+
+### 10. Verification
+
+Cover these cases with automated tests:
+
+- Valid and invalid signatures.
+- Altered body, missing headers, stale timestamp, and rotated secrets.
+- Duplicate requests, including concurrent duplicates.
+- Successful acknowledgement only after the receipt transaction commits.
+- Worker crash after claiming and after applying a side effect.
+- Retryable versus permanent failures.
+- Backoff limits and maximum-attempt behavior.
+- Recovery of expired processing leases.
+- Duplicate replay without duplicate business effects.
+- Payloads and secrets absent from logs.
+- Unsupported event types handled and audited predictably.
+
+The completion criterion is stronger than “duplicate HTTP requests are ignored”: repeated delivery, concurrent delivery, worker crashes, and manual replay must all produce at most one intended business effect.

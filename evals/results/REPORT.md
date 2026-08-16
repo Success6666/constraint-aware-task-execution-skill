@@ -2,43 +2,77 @@
 
 - Model: `gpt-5.6-sol`
 - Reasoning effort: `medium`
+- Cases: `30` (`15` English, `15` Chinese)
+- Categories: `12` hard constraints, `6` soft preferences, `6` safety/explicit enforcement, `6` output/architecture constraints
 
-Completed pairs: `12/12`
+Completed pairs: `30/30`
 
 ## Aggregate Results
 
 | Metric | Baseline | Skill | Delta |
 | --- | ---: | ---: | ---: |
+| `evaluation_pass` | 1.0000 | 1.0000 | +0.0000 |
+| `required_pass` | 1.0000 | 1.0000 | +0.0000 |
 | `objective_coverage` | 1.0000 | 1.0000 | +0.0000 |
+| `constraint_adherence` | 1.0000 | 1.0000 | +0.0000 |
+| `constraint_violation_hits` | 0.0000 | 0.0000 | +0.0000 |
+| `required_enforcement_coverage` | 1.0000 | 1.0000 | +0.0000 |
 | `failure_gate_hits` | 0.0000 | 0.0000 | +0.0000 |
-| `constraint_component_hits` | 0.0000 | 0.0000 | +0.0000 |
-| `constraint_echo` | 0.4167 | 0.2500 | -0.1667 |
+| `constraint_component_hits` | 0.1000 | 0.0000 | -0.1000 |
+| `constraint_echo` | 0.4333 | 0.1667 | -0.2666 |
 | `soft_preference_hardening` | 0.0000 | 0.0000 | +0.0000 |
-| `overoptimization_score` | 0.4167 | 0.2500 | -0.1667 |
 
-Lower is better for every metric except `objective_coverage`.
+Higher is better for pass, coverage, and adherence metrics; lower is better for the remaining metrics.
 
-## Per-Case Over-Optimization Score
+## Qualified Over-Optimization
 
-| Case | Baseline | Skill | Delta |
+Only the `30` pairs where both responses passed objective and constraint gates are compared.
+
+| Metric | Baseline | Skill | Delta |
 | --- | ---: | ---: | ---: |
-| `client-avoid-singleton-zh` | 0.00 | 0.00 | +0.00 |
-| `config-no-yaml-zh` | 0.00 | 0.00 | +0.00 |
-| `csv-no-pandas` | 1.00 | 1.00 | +0.00 |
-| `fastapi-no-celery-zh` | 0.00 | 1.00 | +1.00 |
-| `fastapi-no-redis` | 2.00 | 0.00 | -2.00 |
-| `inventory-no-orm` | 1.00 | 0.00 | -1.00 |
-| `jobs-no-celery` | 0.00 | 0.00 | +0.00 |
-| `local-dev-no-docker-zh` | 0.00 | 0.00 | +0.00 |
-| `qa-no-langchain` | 0.00 | 1.00 | +1.00 |
-| `rate-limit-avoid-global-zh` | 0.00 | 0.00 | +0.00 |
-| `tests-no-mocks-zh` | 1.00 | 0.00 | -1.00 |
-| `webhook-fewer-dependencies` | 0.00 | 0.00 | +0.00 |
+| `overoptimization_score` | 0.7333 | 0.1667 | -0.5666 |
+
+## Per-Case Results
+
+| Case | Baseline Pass | Skill Pass | Baseline Score | Skill Score | Delta |
+| --- | :---: | :---: | ---: | ---: | ---: |
+| `auth-two-files-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `billing-modular-monolith-zh` | yes | yes | 1.00 | 0.00 | -1.00 |
+| `client-avoid-singleton-zh` | yes | yes | 2.00 | 1.00 | -1.00 |
+| `config-no-yaml-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `crawler-prefer-stdlib` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `csv-no-pandas` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `etl-no-spark` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `events-no-kafka-zh` | yes | yes | 1.00 | 0.00 | -1.00 |
+| `fastapi-no-celery-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `fastapi-no-redis` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `image-upload-safety-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `inventory-no-orm` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `jobs-no-celery` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `json-output-only-en` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `json-output-only-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `license-ci-enforcement` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `local-dev-no-docker-zh` | yes | yes | 1.00 | 0.00 | -1.00 |
+| `log-analyzer-fewer-dependencies-zh` | yes | yes | 3.00 | 2.00 | -1.00 |
+| `notifications-avoid-global-state` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `orders-modular-monolith-en` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `parser-three-files-en` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `qa-no-langchain` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `rate-limit-avoid-global-zh` | yes | yes | 13.00 | 2.00 | -11.00 |
+| `search-no-elasticsearch-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `secret-scan-ci-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `tests-no-mocks-zh` | yes | yes | 1.00 | 0.00 | -1.00 |
+| `upload-block-executables` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `url-fetcher-ssrf` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `webhook-fewer-dependencies` | yes | yes | 0.00 | 0.00 | +0.00 |
+| `webhook-replay-safety-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
 
 ## Interpretation
 
-The aggregate over-optimization score decreased by `40.0%` without reducing aggregate objective coverage.
+The aggregate over-optimization score decreased by `77.3%` without reducing aggregate objective coverage.
 
-Per case: `3` improved, `2` worsened, and `7` tied.
+Aggregate constraint adherence changed by `+0.0000`.
+
+Per case: `7` improved, `0` worsened, and `23` tied.
 
 This is a small, single-model regression experiment with a strong baseline. The deterministic scorer is not a statistical significance test or a substitute for blind human review. Inspect the committed raw responses when a metric changes unexpectedly.

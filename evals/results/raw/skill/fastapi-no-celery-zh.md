@@ -1,306 +1,419 @@
-已按 `constraint-aware-task-execution` 的原则完成方案设计：约束仅体现在任务调度选型上，不额外增加“禁止 Celery”的检测或拦截逻辑。
+建议采用“FastAPI API 服务 + PostgreSQL 持久化任务队列 + 独立 Worker + S3/MinIO 文件存储”的结构。任务领取使用 PostgreSQL `FOR UPDATE SKIP LOCKED`，不额外引入消息队列框架，部署和故障恢复都比较直接。
 
-当前工作区为只读，无法创建项目文件或执行测试；下面给出可直接落地的项目结构与实现方案。
+## 一、整体架构
 
-## 项目结构
+```text
+客户端
+  │
+  ├─ POST /reports              创建任务
+  ├─ GET  /reports/{id}         查询状态与进度
+  ├─ POST /reports/{id}/retry   手动重试
+  └─ GET  /reports/{id}/download
+               │
+          FastAPI API
+               │
+          PostgreSQL
+      任务状态、参数、进度
+               │
+        独立 Worker 进程
+      领取任务 → 生成报表
+               │
+          S3 / MinIO
+          存放生成结果
+```
+
+API 和 Worker 使用同一份业务代码，但运行在不同进程或容器中：
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m app.worker
+```
+
+生产环境可以水平扩展多个 Worker。数据库行锁确保同一任务只被一个 Worker 领取。
+
+## 二、任务状态模型
+
+```text
+PENDING ──→ RUNNING ──→ SUCCEEDED
+   ↑            │
+   │            ├──→ RETRY_WAIT ──→ PENDING
+   │            └──→ FAILED
+   │
+FAILED ──手动重试──→ PENDING
+```
+
+建议状态：
+
+```python
+class ReportStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    RETRY_WAIT = "retry_wait"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+```
+
+不要只在 Redis 或进程内存里保存状态。任务状态、重试次数和文件信息必须持久化，才能在服务重启后恢复。
+
+## 三、数据库表
+
+```sql
+CREATE TYPE report_status AS ENUM (
+    'pending',
+    'running',
+    'retry_wait',
+    'succeeded',
+    'failed',
+    'cancelled'
+);
+
+CREATE TABLE report_jobs (
+    id UUID PRIMARY KEY,
+    report_type VARCHAR(64) NOT NULL,
+    parameters JSONB NOT NULL,
+    status report_status NOT NULL DEFAULT 'pending',
+
+    progress SMALLINT NOT NULL DEFAULT 0
+        CHECK (progress BETWEEN 0 AND 100),
+    progress_message VARCHAR(500),
+
+    attempt INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    worker_id VARCHAR(128),
+    heartbeat_at TIMESTAMPTZ,
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+
+    result_key VARCHAR(1024),
+    result_filename VARCHAR(255),
+    result_content_type VARCHAR(128),
+    result_size BIGINT,
+
+    error_code VARCHAR(64),
+    error_message TEXT,
+
+    idempotency_key VARCHAR(128),
+    created_by VARCHAR(128) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    UNIQUE (created_by, idempotency_key)
+);
+
+CREATE INDEX ix_report_jobs_claim
+ON report_jobs (next_attempt_at, created_at)
+WHERE status IN ('pending', 'retry_wait');
+
+CREATE INDEX ix_report_jobs_owner_created
+ON report_jobs (created_by, created_at DESC);
+```
+
+`parameters` 中只保存报表条件，不保存密码、访问令牌等敏感信息。
+
+## 四、API 设计
+
+### 创建报表
+
+```http
+POST /v1/reports
+Idempotency-Key: 6ec90ec1-...
+
+{
+  "report_type": "sales_summary",
+  "parameters": {
+    "start_date": "2026-08-01",
+    "end_date": "2026-08-15",
+    "format": "xlsx"
+  }
+}
+```
+
+响应：
+
+```json
+{
+  "id": "4bf7b034-7b95-47ab-b955-3935853b99bf",
+  "status": "pending",
+  "progress": 0,
+  "created_at": "2026-08-16T10:00:00+08:00"
+}
+```
+
+建议返回 `202 Accepted`。`Idempotency-Key` 用于避免客户端超时重发时创建重复任务。
+
+### 查询进度
+
+```http
+GET /v1/reports/{report_id}
+```
+
+```json
+{
+  "id": "4bf7b034-7b95-47ab-b955-3935853b99bf",
+  "status": "running",
+  "progress": 46,
+  "progress_message": "正在写入第 5/12 个工作表",
+  "attempt": 1,
+  "max_attempts": 3,
+  "error": null,
+  "download_url": null
+}
+```
+
+初版使用轮询即可，推荐间隔 1～3 秒。确实需要实时推送时，再增加 SSE 接口。
+
+### 手动重试
+
+```http
+POST /v1/reports/{report_id}/retry
+```
+
+仅允许 `failed` 状态重试。重试时：
+
+- 清空错误和旧结果信息；
+- 将状态改为 `pending`；
+- `next_attempt_at = now()`；
+- 可保留 `attempt` 作为历史总尝试次数，或创建新的任务记录并关联原任务。
+
+更推荐创建新任务并增加 `retry_of` 字段，这样审计记录更完整。
+
+### 下载结果
+
+```http
+GET /v1/reports/{report_id}/download
+```
+
+成功后返回 `302/307` 到一个短期有效的预签名地址。不要让 FastAPI 长时间代理大文件。
+
+未完成时返回：
+
+- `409 Conflict`：任务尚未成功；
+- `404 Not Found`：任务不存在或不属于当前用户；
+- `410 Gone`：结果已过期并清理。
+
+## 五、Worker 的关键实现
+
+### 原子领取任务
+
+```python
+CLAIM_SQL = """
+WITH candidate AS (
+    SELECT id
+    FROM report_jobs
+    WHERE status IN ('pending', 'retry_wait')
+      AND next_attempt_at <= now()
+    ORDER BY created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+UPDATE report_jobs AS job
+SET status = 'running',
+    attempt = attempt + 1,
+    worker_id = :worker_id,
+    started_at = COALESCE(started_at, now()),
+    heartbeat_at = now(),
+    updated_at = now()
+FROM candidate
+WHERE job.id = candidate.id
+RETURNING job.*;
+"""
+```
+
+领取事务应很短：只修改状态，不在事务内生成报表。
+
+Worker 主循环：
+
+```python
+async def worker_loop() -> None:
+    while True:
+        job = await repository.claim_next(worker_id=WORKER_ID)
+
+        if job is None:
+            await asyncio.sleep(1)
+            continue
+
+        await execute_job(job)
+```
+
+### 执行和进度更新
+
+```python
+async def execute_job(job: ReportJob) -> None:
+    try:
+        generator = registry[job.report_type]
+
+        artifact = await generator.generate(
+            parameters=job.parameters,
+            progress=lambda value, message: repository.update_progress(
+                job.id, value, message, WORKER_ID
+            ),
+        )
+
+        stored = await object_storage.upload(
+            key=f"reports/{job.created_by}/{job.id}/{artifact.filename}",
+            file_path=artifact.path,
+            content_type=artifact.content_type,
+        )
+
+        await repository.mark_succeeded(
+            job.id,
+            result_key=stored.key,
+            filename=artifact.filename,
+            content_type=artifact.content_type,
+            size=stored.size,
+        )
+    except RetryableReportError as exc:
+        await repository.schedule_retry(job, exc)
+    except Exception as exc:
+        await repository.mark_failed(job.id, public_error(exc))
+```
+
+报表生成库通常是同步且消耗 CPU/内存的，不应直接阻塞事件循环：
+
+```python
+result = await asyncio.to_thread(build_xlsx, parameters, progress_callback)
+```
+
+如果单个报表计算量很大，可在 Worker 内使用受限进程池，但要严格控制并发，防止多个大型报表耗尽内存。
+
+### 自动重试
+
+只重试临时故障，例如数据库连接超时、上游接口 `429/503`、对象存储短暂不可用。参数错误和模板错误应直接失败。
+
+退避时间可以采用：
+
+```python
+delay_seconds = min(300, 2 ** attempt * 5) + random.uniform(0, 3)
+```
+
+更新逻辑：
+
+```sql
+UPDATE report_jobs
+SET status = CASE
+        WHEN attempt < max_attempts THEN 'retry_wait'::report_status
+        ELSE 'failed'::report_status
+    END,
+    next_attempt_at = CASE
+        WHEN attempt < max_attempts THEN now() + :delay
+        ELSE next_attempt_at
+    END,
+    error_code = :error_code,
+    error_message = :error_message,
+    worker_id = NULL,
+    updated_at = now()
+WHERE id = :job_id
+  AND status = 'running';
+```
+
+### Worker 崩溃恢复
+
+Worker 执行时每隔约 15 秒更新 `heartbeat_at`。另一个定时协程回收长时间失去心跳的任务：
+
+```sql
+UPDATE report_jobs
+SET status = CASE
+        WHEN attempt < max_attempts THEN 'retry_wait'::report_status
+        ELSE 'failed'::report_status
+    END,
+    next_attempt_at = now(),
+    worker_id = NULL,
+    error_code = 'worker_lost',
+    error_message = 'Worker heartbeat expired',
+    updated_at = now()
+WHERE status = 'running'
+  AND heartbeat_at < now() - interval '60 seconds';
+```
+
+生成过程必须可重复执行。上传文件使用包含任务 ID 的确定性对象键，数据库成功更新前重复上传也不会产生大量孤立文件。
+
+## 六、代码组织
 
 ```text
 app/
-  __init__.py
-  main.py
-  models.py
-  task_manager.py
-  report_generator.py
+├── main.py
+├── api/
+│   └── reports.py
+├── domain/
+│   ├── models.py
+│   ├── schemas.py
+│   └── errors.py
+├── services/
+│   ├── report_service.py
+│   └── generators/
+│       ├── base.py
+│       └── sales_summary.py
+├── infrastructure/
+│   ├── database.py
+│   ├── repositories.py
+│   └── object_storage.py
+├── worker.py
+└── settings.py
+
 tests/
-  test_reports.py
-requirements.txt
+├── unit/
+│   ├── test_retry_policy.py
+│   └── test_sales_generator.py
+├── integration/
+│   ├── test_report_api.py
+│   └── test_worker.py
+└── conftest.py
 ```
 
-## 核心设计
-
-- `asyncio.Queue`：异步任务队列。
-- `asyncio` worker：启动多个后台 worker 执行报表任务。
-- 内存仓库：保存任务状态、进度、错误、结果文件路径。
-- CSV 生成：作为示例报表格式，可替换为 Excel、PDF 或数据库查询。
-- 显式重试：失败后调用重试接口，限制最大重试次数。
-- `FileResponse`：成功任务提供结果下载。
-- 生产环境可将内存仓库替换为 PostgreSQL 或 Redis，但不依赖 Celery。
-
-## 状态模型
+生成器通过注册表扩展：
 
 ```python
-from enum import Enum
-from pydantic import BaseModel, Field
-from datetime import datetime
-from typing import Any
-
-
-class TaskStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-
-
-class ReportRequest(BaseModel):
-    report_type: str = Field(default="sales")
-    parameters: dict[str, Any] = Field(default_factory=dict)
-
-
-class ReportTask(BaseModel):
-    id: str
-    status: TaskStatus = TaskStatus.PENDING
-    progress: int = 0
-    retry_count: int = 0
-    max_retries: int = 3
-    error: str | None = None
-    result_path: str | None = None
-    created_at: datetime
-    updated_at: datetime
+registry: dict[str, ReportGenerator] = {
+    "sales_summary": SalesSummaryGenerator(),
+}
 ```
 
-## 任务管理器
+这样新增报表只需增加生成器，不需要在 Worker 中堆积条件分支。
+
+## 七、测试方案
+
+使用 `pytest`、`pytest-asyncio`、`httpx.AsyncClient`。集成测试连接独立 PostgreSQL；对象存储使用测试桶或接口级 fake。
+
+必须覆盖：
+
+1. 创建任务返回 `202`，数据库产生 `pending` 记录。
+2. 相同用户和幂等键不会创建重复任务。
+3. 两个 Worker 并发领取时不会拿到同一任务。
+4. Worker 成功后状态为 `succeeded`，进度为 100。
+5. 临时故障进入 `retry_wait`，达到上限后变为 `failed`。
+6. 永久错误不会自动重试。
+7. 失去心跳的任务可被回收。
+8. 未完成任务不能下载。
+9. 用户不能查询或下载其他用户的报表。
+10. 下载接口生成短期预签名地址。
+11. 生成器输入边界、空数据和大数据分页。
+12. Worker 被中断后，任务最终可以重新执行。
+
+并发领取测试的核心断言：
 
 ```python
-import asyncio
-import uuid
-from pathlib import Path
-from datetime import datetime, timezone
-
-from .models import ReportTask, ReportRequest, TaskStatus
-from .report_generator import generate_report
-
-
-class TaskManager:
-    def __init__(self, worker_count: int = 2, output_dir: str = "outputs"):
-        self.queue: asyncio.Queue[tuple[str, ReportRequest]] = asyncio.Queue()
-        self.tasks: dict[str, ReportTask] = {}
-        self.requests: dict[str, ReportRequest] = {}
-        self.output_dir = Path(output_dir)
-        self.worker_count = worker_count
-        self.workers: list[asyncio.Task] = []
-
-    async def start(self):
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.workers = [
-            asyncio.create_task(self._worker())
-            for _ in range(self.worker_count)
-        ]
-
-    async def stop(self):
-        for worker in self.workers:
-            worker.cancel()
-        await asyncio.gather(*self.workers, return_exceptions=True)
-
-    async def submit(self, request: ReportRequest) -> ReportTask:
-        task_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
-
-        task = ReportTask(
-            id=task_id,
-            created_at=now,
-            updated_at=now,
-        )
-        self.tasks[task_id] = task
-        self.requests[task_id] = request
-        await self.queue.put((task_id, request))
-        return task
-
-    async def retry(self, task_id: str) -> ReportTask:
-        task = self.tasks[task_id]
-
-        if task.status != TaskStatus.FAILED:
-            raise ValueError("只有失败任务可以重试")
-
-        if task.retry_count >= task.max_retries:
-            raise RuntimeError("已达到最大重试次数")
-
-        task.retry_count += 1
-        task.status = TaskStatus.PENDING
-        task.progress = 0
-        task.error = None
-        task.updated_at = datetime.now(timezone.utc)
-
-        await self.queue.put((task_id, self.requests[task_id]))
-        return task
-
-    async def _worker(self):
-        while True:
-            task_id, request = await self.queue.get()
-            task = self.tasks[task_id]
-
-            try:
-                task.status = TaskStatus.RUNNING
-                task.updated_at = datetime.now(timezone.utc)
-
-                result_path = await generate_report(
-                    task_id=task_id,
-                    request=request,
-                    output_dir=self.output_dir,
-                    on_progress=lambda value: self._update_progress(task_id, value),
-                )
-
-                task.status = TaskStatus.SUCCEEDED
-                task.progress = 100
-                task.result_path = str(result_path)
-                task.updated_at = datetime.now(timezone.utc)
-
-            except Exception as exc:
-                task.status = TaskStatus.FAILED
-                task.error = str(exc)
-                task.updated_at = datetime.now(timezone.utc)
-
-            finally:
-                self.queue.task_done()
-
-    def _update_progress(self, task_id: str, progress: int):
-        task = self.tasks[task_id]
-        task.progress = max(0, min(progress, 100))
-        task.updated_at = datetime.now(timezone.utc)
-```
-
-## 报表生成器
-
-```python
-import asyncio
-import csv
-from pathlib import Path
-
-from .models import ReportRequest
-
-
-async def generate_report(
-    task_id: str,
-    request: ReportRequest,
-    output_dir: Path,
-    on_progress,
-) -> Path:
-    if request.parameters.get("simulate_failure"):
-        raise RuntimeError("模拟报表生成失败")
-
-    output_path = output_dir / f"{task_id}.csv"
-
-    rows = [
-        ["日期", "销售额", "订单数"],
-        ["2026-08-01", "12800", "42"],
-        ["2026-08-02", "15300", "51"],
-    ]
-
-    for progress in (20, 50, 80):
-        await asyncio.sleep(0.05)
-        on_progress(progress)
-
-    with output_path.open("w", encoding="utf-8-sig", newline="") as file:
-        csv.writer(file).writerows(rows)
-
-    return output_path
-```
-
-## FastAPI 接口
-
-```python
-from contextlib import asynccontextmanager
-from pathlib import Path
-
-from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import FileResponse
-
-from .models import ReportRequest, ReportTask, TaskStatus
-from .task_manager import TaskManager
-
-
-manager = TaskManager()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await manager.start()
-    yield
-    await manager.stop()
-
-
-app = FastAPI(title="Async Report Service", lifespan=lifespan)
-
-
-@app.post(
-    "/reports",
-    response_model=ReportTask,
-    status_code=status.HTTP_202_ACCEPTED,
+jobs = await asyncio.gather(
+    repository.claim_next("worker-a"),
+    repository.claim_next("worker-b"),
 )
-async def create_report(request: ReportRequest):
-    return await manager.submit(request)
 
-
-@app.get("/reports/{task_id}", response_model=ReportTask)
-async def get_report_status(task_id: str):
-    task = manager.tasks.get(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return task
-
-
-@app.post("/reports/{task_id}/retry", response_model=ReportTask)
-async def retry_report(task_id: str):
-    if task_id not in manager.tasks:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    try:
-        return await manager.retry(task_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-
-
-@app.get("/reports/{task_id}/download")
-async def download_report(task_id: str):
-    task = manager.tasks.get(task_id)
-
-    if task is None:
-        raise HTTPException(status_code=404, detail="任务不存在")
-
-    if task.status != TaskStatus.SUCCEEDED or not task.result_path:
-        raise HTTPException(status_code=409, detail="报表尚未生成完成")
-
-    path = Path(task.result_path)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="结果文件不存在")
-
-    return FileResponse(
-        path=path,
-        filename=f"report-{task_id}.csv",
-        media_type="text/csv",
-    )
+claimed_ids = [job.id for job in jobs if job]
+assert len(claimed_ids) == len(set(claimed_ids))
 ```
 
-## 依赖
+## 八、上线要点
 
-```text
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pytest>=8.0
-httpx>=0.27
-```
+- API、Worker、PostgreSQL、MinIO/S3 分别部署。
+- Worker 设置优雅退出：停止领取新任务，等待当前任务完成到超时。
+- 限制每个用户的并发任务数和报表时间范围。
+- 对源数据分页读取，XLSX 使用流式或只写模式，CSV 流式写入临时文件。
+- 临时文件放在任务独立目录，完成或失败后清理。
+- 结果设置保留期限，例如 7 天，并由定时清理任务删除。
+- 指标至少包括队列长度、等待时间、执行时间、失败率、重试次数和失联任务数。
+- 日志统一包含 `report_id`、`worker_id`、`attempt` 和 `created_by`。
+- 错误响应只暴露稳定的错误码和安全信息，完整堆栈保留在服务端日志中。
 
-启动：
-
-```bash
-uvicorn app.main:app --reload
-```
-
-## 测试重点
-
-应覆盖：
-
-1. 创建任务返回 `202` 和任务 ID。
-2. 轮询任务最终进入 `succeeded`。
-3. 成功任务可下载 CSV。
-4. 模拟失败后进入 `failed`。
-5. 失败任务重试后成功。
-6. 超过最大重试次数返回 `409`。
-7. 不存在任务返回 `404`。
-8. 未完成任务下载返回 `409`。
-
-测试时可使用 `httpx.AsyncClient` 和 FastAPI lifespan，避免依赖真实服务器进程。
-
-这个方案适合单实例部署；如果需要多实例、进程崩溃恢复或长期任务持久化，应将任务状态和队列替换为数据库加 Redis Streams/RQ 等组件，并保留现有 API 契约。
+这套方案不依赖常驻 API 进程执行后台任务，支持多 Worker 并发、进程重启恢复、自动与手动重试，并且从一开始就具备可测试的任务状态边界。

@@ -1,278 +1,328 @@
-当前工作区为只读挂载，无法写入任务书或源码；因此本次交付为完整的可实现设计。
+## Architecture
 
-## 1. 总体架构
+A practical document QA service can be built as a small set of independently scalable components:
 
 ```text
-客户端
-  |
-HTTP API
-  |-- POST /documents        文档摄取
-  |-- GET  /documents        文档列表
-  |-- POST /query            问答检索
-  |-- GET  /health           健康检查
-  |
-应用服务
-  |-- 文档解析器
-  |-- 文本分块器
-  |-- EmbeddingProvider
-  |-- Retriever
-  |-- AnswerComposer
-  |-- CitationBuilder
-  |
-持久化层
-  |-- documents
-  |-- document_chunks
-  |-- embeddings
+             ┌──────────────┐
+ Upload ───▶ │ Ingestion API│ ───▶ Object storage
+             └──────┬───────┘
+                    │ job
+                    ▼
+             ┌──────────────┐
+             │ Worker Queue │
+             └──────┬───────┘
+                    ▼
+      Parse → Normalize → Chunk → Embed
+                    │
+                    ▼
+              Vector database
+                    ▲
+                    │ top-k retrieval
+             ┌──────┴───────┐
+ Question ─▶ │   Query API  │ ─▶ Answer + citations
+             └──────────────┘
 ```
 
-推荐实现：
+A straightforward stack:
 
-- HTTP：FastAPI 或 Python 标准库 HTTP 服务
-- 持久化：PostgreSQL + pgvector；小规模部署可使用 SQLite
-- 文档解析：纯文本、Markdown、PDF、DOCX 分别使用对应解析器
-- Embedding：OpenAI Embeddings、Sentence Transformers 或其他独立向量模型
-- 检索：向量相似度检索，可叠加 BM25 关键词检索
-- 生成：通过独立 LLM 客户端封装，不引入 LangChain
+- Python 3.12 and FastAPI
+- PostgreSQL with `pgvector`
+- S3-compatible object storage
+- Redis plus Celery, Dramatiq, or RQ for ingestion jobs
+- Provider SDKs directly for embeddings and answer generation
+- PyMuPDF for PDF, `python-docx` for Word, and standard parsers for text/HTML
 
-## 2. 核心数据模型
-
-### documents
+## Data Model
 
 ```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE documents (
     id UUID PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    mime_type VARCHAR(100) NOT NULL,
-    checksum CHAR(64) NOT NULL UNIQUE,
+    tenant_id UUID NOT NULL,
+    filename TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    storage_key TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    status TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, checksum)
 );
-```
 
-### document_chunks
-
-```sql
-CREATE TABLE document_chunks (
+CREATE TABLE chunks (
     id UUID PRIMARY KEY,
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    chunk_index INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    start_offset INTEGER NOT NULL,
-    end_offset INTEGER NOT NULL,
-    page_number INTEGER,
+    tenant_id UUID NOT NULL,
+    ordinal INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    token_count INTEGER NOT NULL,
+    page_start INTEGER,
+    page_end INTEGER,
     heading_path TEXT[],
-    embedding VECTOR(1536),
+    char_start INTEGER,
+    char_end INTEGER,
     metadata JSONB NOT NULL DEFAULT '{}',
-    UNIQUE(document_id, chunk_index)
+    embedding VECTOR(1536) NOT NULL,
+    UNIQUE (document_id, ordinal)
 );
+
+CREATE INDEX chunks_embedding_idx
+ON chunks USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX chunks_tenant_document_idx
+ON chunks (tenant_id, document_id);
 ```
 
-索引：
+Store enough provenance on every chunk to reconstruct a citation: document ID, filename, pages, headings, and source offsets.
+
+## Ingestion
+
+`POST /v1/documents` should:
+
+1. Authenticate the caller and determine `tenant_id`.
+2. Stream the file to object storage while computing a checksum.
+3. Insert the document with status `queued`.
+4. Enqueue an ingestion job.
+5. Return `202 Accepted` with the document ID.
+
+The worker then:
+
+1. Extracts text and page/layout metadata.
+2. Normalizes whitespace without destroying source offsets.
+3. Splits the document by structural boundaries.
+4. Creates embeddings in batches.
+5. Inserts all chunks transactionally.
+6. Marks the document `ready`, or records a structured failure.
+
+Use checksum-based idempotency to prevent accidental duplicate ingestion.
+
+## Chunking
+
+Prefer structure-aware chunking:
+
+1. Split at headings, paragraphs, list boundaries, and pages.
+2. Combine small adjacent blocks until reaching roughly 400–800 tokens.
+3. Split oversized blocks at sentence boundaries.
+4. Include 50–100 tokens of overlap.
+5. Preserve the heading path and page range separately from chunk text.
+
+Avoid treating page boundaries as mandatory chunk boundaries. A paragraph spanning two pages should remain coherent, while its citation can still record both pages.
+
+Each chunk should contain embedding text such as:
+
+```text
+Document: Employee Handbook
+Section: Leave > Parental Leave
+
+Employees may request...
+```
+
+Keep the original passage separately so generated citations quote clean source text rather than embedding-only prefixes.
+
+## Retrieval
+
+For each question:
+
+1. Validate document and metadata filters against the caller’s tenant.
+2. Generate the query embedding.
+3. Retrieve approximately 30 vector candidates.
+4. Optionally combine vector similarity with PostgreSQL full-text ranking.
+5. Deduplicate highly overlapping chunks.
+6. Rerank candidates with a cross-encoder or model-based reranker.
+7. Send the best 5–10 passages to the answer model.
+
+A hybrid score can be normalized before combination:
+
+```text
+final_score = 0.7 * vector_score + 0.3 * lexical_score
+```
+
+The exact weights should be evaluated against a representative question set rather than assumed globally.
+
+Tenant filtering must occur inside the database query:
 
 ```sql
-CREATE INDEX idx_chunks_document
-ON document_chunks(document_id);
-
-CREATE INDEX idx_chunks_embedding
-ON document_chunks
-USING hnsw (embedding vector_cosine_ops);
+SELECT id, document_id, text, page_start, page_end, heading_path,
+       1 - (embedding <=> $1) AS score
+FROM chunks
+WHERE tenant_id = $2
+  AND ($3::uuid[] IS NULL OR document_id = ANY($3))
+ORDER BY embedding <=> $1
+LIMIT $4;
 ```
 
-## 3. 文档摄取流程
+## Answer Generation and Citations
+
+Assign each retrieved passage a stable reference label:
 
 ```text
-上传文档
-  -> MIME 类型校验
-  -> 文件大小限制
-  -> 内容解析
-  -> 清理不可见字符
-  -> 按标题/段落切分
-  -> 滑动窗口分块
-  -> 生成 embedding
-  -> 写入文档和分块
-  -> 返回 document_id
+[S1] document="handbook.pdf" pages="12-13" section="Parental Leave"
+<passage>
+
+[S2] document="benefits.pdf" page="4" section="Eligibility"
+<passage>
 ```
 
-分块建议：
+The model should be instructed to:
 
-- 默认块大小：600 至 1,000 tokens
-- 重叠：80 至 150 tokens
-- 优先按照标题、段落、列表边界切分
-- 每块保留页码、章节路径和字符偏移
-- 对超长表格或代码块使用专门切分策略
+- Answer only from supplied passages.
+- Cite factual statements using `[S1]`, `[S2]`, and so on.
+- State that the available documents do not contain the answer when evidence is insufficient.
+- Never invent citation labels.
 
-## 4. 检索流程
+Do not trust model-produced citation details. After generation:
 
-```text
-用户问题
-  -> 问题 embedding
-  -> 向量召回 Top-K
-  -> 可选 BM25 召回
-  -> 融合排序
-  -> 最低相关性阈值过滤
-  -> 生成答案上下文
-  -> 构建引用
-  -> 返回答案和 citations
-```
+1. Parse citation labels from the answer.
+2. Reject unknown labels.
+3. Translate valid labels into structured citation objects from server-owned metadata.
+4. Optionally verify that every substantive answer sentence has supporting evidence.
 
-建议使用混合检索：
-
-```text
-final_score = 0.7 * vector_score + 0.3 * keyword_score
-```
-
-对于没有达到阈值的结果，应返回“未找到足够相关内容”，避免生成无依据答案。
-
-## 5. HTTP API
-
-### 健康检查
-
-```http
-GET /health
-```
-
-响应：
+Example response:
 
 ```json
 {
-  "status": "ok",
-  "version": "1.0.0"
-}
-```
-
-### 摄取文档
-
-```http
-POST /documents
-Content-Type: multipart/form-data
-```
-
-字段：
-
-```text
-file: 文档文件
-metadata: 可选 JSON
-```
-
-响应：
-
-```json
-{
-  "document_id": "8d8b...",
-  "name": "architecture.md",
-  "chunk_count": 14,
-  "status": "indexed"
-}
-```
-
-### 查询文档
-
-```http
-POST /query
-Content-Type: application/json
-```
-
-请求：
-
-```json
-{
-  "question": "系统如何生成引用？",
-  "top_k": 5,
-  "document_ids": []
-}
-```
-
-响应：
-
-```json
-{
-  "answer": "系统在检索到相关分块后，根据分块的文档 ID、块 ID 和原文位置生成引用。",
+  "answer": "Employees are eligible for 12 weeks of parental leave after six months of employment [S1]. Benefits continue during the leave [S2].",
   "citations": [
     {
-      "document_id": "8d8b...",
-      "chunk_id": "2a31...",
-      "document_name": "architecture.md",
-      "chunk_index": 3,
-      "start_offset": 820,
-      "end_offset": 1260,
-      "page_number": 4,
-      "quote": "根据分块的文档 ID、块 ID 和原文位置生成引用。",
-      "score": 0.91
+      "id": "S1",
+      "document_id": "d8f2...",
+      "filename": "handbook.pdf",
+      "page_start": 12,
+      "page_end": 13,
+      "section": ["Leave", "Parental Leave"],
+      "quote": "Employees who have completed six months..."
+    },
+    {
+      "id": "S2",
+      "document_id": "91ac...",
+      "filename": "benefits.pdf",
+      "page_start": 4,
+      "page_end": 4,
+      "section": ["Coverage During Leave"],
+      "quote": "Medical and dental coverage will continue..."
     }
-  ]
+  ],
+  "retrieval": {
+    "searched_documents": 2
+  }
 }
 ```
 
-### 文档列表
+## HTTP API
 
 ```http
-GET /documents?limit=20&offset=0
+POST   /v1/documents
+GET    /v1/documents/{document_id}
+DELETE /v1/documents/{document_id}
+POST   /v1/questions
+GET    /v1/health
 ```
 
-响应：
+Upload:
+
+```http
+POST /v1/documents
+Content-Type: multipart/form-data
+
+file=<binary>
+metadata={"department":"legal"}
+```
+
+Status:
 
 ```json
 {
-  "items": [
-    {
-      "document_id": "8d8b...",
-      "name": "architecture.md",
-      "chunk_count": 14,
-      "created_at": "2026-08-16T10:00:00Z"
-    }
-  ],
-  "total": 1
+  "id": "d8f2...",
+  "status": "processing",
+  "filename": "handbook.pdf",
+  "error": null
 }
 ```
 
-## 6. 推荐代码结构
+Question request:
 
-```text
-document_qa/
-├── api/
-│   ├── routes_documents.py
-│   ├── routes_query.py
-│   └── schemas.py
-├── ingestion/
-│   ├── parsers.py
-│   ├── chunker.py
-│   └── pipeline.py
-├── retrieval/
-│   ├── embeddings.py
-│   ├── vector_store.py
-│   ├── hybrid_search.py
-│   └── citations.py
-├── generation/
-│   └── answer_composer.py
-├── storage/
-│   ├── models.py
-│   └── database.py
-├── config.py
-└── main.py
+```json
+{
+  "question": "How much parental leave is available?",
+  "document_ids": ["d8f2...", "91ac..."],
+  "filters": {
+    "department": "hr"
+  },
+  "max_citations": 6
+}
 ```
 
-各模块之间通过明确接口通信，Embedding、向量数据库和生成模型都可以替换，不需要绑定到某个编排框架。
+Use `200` for completed synchronous answers, `202` for accepted ingestion, `404` for inaccessible resources as well as missing ones, `409` for conflicting ingestion state, and `422` for invalid requests.
 
-## 7. 安全与可靠性
+## Core Service Interfaces
 
-- 限制上传文件大小和允许的 MIME 类型
-- 文件名只作为元数据保存，不直接拼接文件路径
-- 使用参数化 SQL，避免 SQL 注入
-- 对返回内容进行 JSON 编码，避免 XSS
-- API 增加认证和租户隔离
-- 文档和查询日志禁止记录敏感原文
-- 设置查询超时、最大 `top_k` 和最大上下文长度
-- 对重复文件使用 SHA-256 去重
-- 所有引用必须来自实际召回的文档块
-- 对生成答案保留检索分数和模型版本，便于审计
+Keep model and storage dependencies behind small interfaces:
 
-## 8. 验收标准
+```python
+from dataclasses import dataclass
+from typing import Protocol, Sequence
 
-1. 文档可上传并完成解析、分块和 embedding。
-2. 服务重启后文档和向量仍然存在。
-3. 查询返回答案、相关性分数和可定位引用。
-4. 低相关性问题不会生成无依据内容。
-5. API 支持健康检查、摄取、列表和查询。
-6. 测试覆盖分块、embedding、检索排序、引用格式和 API 错误处理。
-7. 依赖中不包含 LangChain。
+
+@dataclass(frozen=True)
+class SourceChunk:
+    id: str
+    document_id: str
+    text: str
+    filename: str
+    page_start: int | None
+    page_end: int | None
+    heading_path: tuple[str, ...]
+    score: float
+
+
+class Embedder(Protocol):
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
+
+
+class Retriever(Protocol):
+    async def search(
+        self,
+        *,
+        tenant_id: str,
+        query_vector: list[float],
+        document_ids: Sequence[str] | None,
+        limit: int,
+    ) -> list[SourceChunk]: ...
+
+
+class AnswerGenerator(Protocol):
+    async def answer(
+        self,
+        question: str,
+        sources: Sequence[SourceChunk],
+    ) -> str: ...
+```
+
+This keeps provider changes, local models, and retrieval experiments isolated without introducing a large orchestration framework.
+
+## Operational Requirements
+
+- Enforce tenant isolation in every storage query.
+- Limit file size, page count, question length, and retrieved context size.
+- Scan uploads and reject unsupported or encrypted documents.
+- Encrypt stored documents and database backups.
+- Retry embedding requests with bounded exponential backoff.
+- Record embedding model and chunking version for reproducible reindexing.
+- Delete source files and chunks together using an asynchronous deletion workflow.
+- Log document IDs and timings, but not raw document or question content by default.
+- Track ingestion latency, retrieval latency, answer latency, token usage, empty retrievals, and citation coverage.
+
+## Evaluation
+
+Create a test set containing questions, expected source passages, and acceptable answers. Measure:
+
+- Retrieval recall at `k`
+- Mean reciprocal rank
+- Answer correctness
+- Citation precision and completeness
+- Unsupported-claim rate
+- Refusal accuracy when the answer is absent
+- Latency and cost per question
+
+The most important tests are isolation tests, ingestion idempotency, page-accurate citations, deletion behavior, and questions whose answer does not exist in the indexed documents.

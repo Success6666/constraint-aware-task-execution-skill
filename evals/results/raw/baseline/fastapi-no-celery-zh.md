@@ -1,119 +1,195 @@
-建议采用以下生产可落地方案：
+建议采用“FastAPI API + PostgreSQL 任务队列 + 独立 Worker + S3/MinIO”架构。任务状态以 PostgreSQL 为准，利用 `FOR UPDATE SKIP LOCKED` 抢占任务，无需 Celery，也不会因 API 进程重启而丢任务。
 
-**技术架构**
+## 架构
 
 ```text
-FastAPI API
-    │
-    ├── PostgreSQL：任务状态、进度、重试记录
-    ├── Redis + ARQ：异步任务调度
-    └── S3/MinIO：报表结果存储
-                         ▲
-                         │
-                    ARQ Worker
+Client
+  │ POST /reports
+  ▼
+FastAPI ───── PostgreSQL（任务、进度、重试、租约）
+  │
+  │ GET /reports/{id}
+  │ GET /reports/{id}/download
+  ▼
+Worker 进程 ── 生成 CSV/XLSX/PDF ── S3/MinIO
 ```
 
-ARQ 原生支持 asyncio、延迟执行和自动重试，适合 FastAPI。任务状态以 PostgreSQL 为准，Redis 只负责调度，避免队列数据和业务状态耦合。开发环境可使用 SQLite 和本地文件目录。
+API 与 Worker 使用同一代码镜像、不同启动命令：
 
-**任务模型**
-
-`report_jobs` 表主要字段：
-
-- `id`：UUID
-- `status`：`queued/running/succeeded/failed`
-- `progress`：0-100，单调递增
-- `request_payload`、`idempotency_key`
-- `attempts`、`max_attempts`
-- `error_code`、`error_message`
-- `result_key`、`result_size`、`checksum`
-- `started_at`、`finished_at`、`expires_at`
-- `worker_heartbeat`
-- `created_at`、`updated_at`
-
-对 `idempotency_key` 建唯一索引，避免客户端重复提交产生多个任务。
-
-**接口设计**
-
-```http
-POST /api/v1/reports
-GET  /api/v1/reports/{job_id}
-POST /api/v1/reports/{job_id}/retry
-GET  /api/v1/reports/{job_id}/download
-GET  /health/live
-GET  /health/ready
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m app.worker
 ```
 
-创建任务返回 `202 Accepted`：
+## 数据模型
+
+```sql
+CREATE TYPE report_status AS ENUM (
+  'pending', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'
+);
+
+CREATE TABLE report_jobs (
+  id UUID PRIMARY KEY,
+  report_type VARCHAR(64) NOT NULL,
+  parameters JSONB NOT NULL,
+  status report_status NOT NULL DEFAULT 'pending',
+  progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  attempts INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 3,
+  next_run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked_by VARCHAR(128),
+  lease_expires_at TIMESTAMPTZ,
+  error_code VARCHAR(64),
+  error_message TEXT,
+  result_key TEXT,
+  result_filename TEXT,
+  result_content_type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX report_jobs_claim_idx
+ON report_jobs (next_run_at, created_at)
+WHERE status IN ('pending', 'retrying');
+```
+
+`parameters` 中只保存查询条件和业务 ID，不保存 SQL、访问令牌或大块数据。
+
+## API
+
+```text
+POST   /v1/reports
+GET    /v1/reports/{job_id}
+POST   /v1/reports/{job_id}/retry
+DELETE /v1/reports/{job_id}
+GET    /v1/reports/{job_id}/download
+```
+
+创建任务：
 
 ```json
+POST /v1/reports
 {
-  "job_id": "019...",
-  "status": "queued",
-  "progress": 0
+  "report_type": "monthly_sales",
+  "parameters": {
+    "month": "2026-08",
+    "department_ids": [10, 20]
+  }
 }
 ```
 
-查询接口返回当前进度、尝试次数和结构化错误。下载接口只允许下载 `succeeded` 状态的任务，通过服务流式返回文件或生成短期签名 URL。
+返回 `202 Accepted`：
 
-**执行流程**
+```json
+{
+  "id": "b697…",
+  "status": "pending",
+  "progress": 0,
+  "status_url": "/v1/reports/b697…"
+}
+```
 
-1. API 校验报表类型、查询条件和数据规模。
-2. 数据库事务内创建任务，通过事务提交钩子投递 ARQ。
-3. Worker 原子认领任务并更新为 `running`。
-4. 查询数据时使用分页或服务端游标，生成文件时使用流式写入。
-5. 进度按阶段或固定时间间隔写库，避免高频更新。
-6. 先写临时对象，完成后原子发布最终文件。
-7. 成功后保存大小和 SHA-256；失败时记录结构化错误。
-8. 可重试异常执行指数退避；达到上限后进入 `failed`。
-9. Worker 心跳超时后由恢复任务重新入队。
-10. 定时清理过期任务和结果文件。
+建议支持 `Idempotency-Key`，并以 `(tenant_id, idempotency_key)` 唯一约束防止重复提交。下载接口验证租户和权限后返回 302 到短期预签名 URL，避免 FastAPI 转发大文件。
 
-手动重试仅允许最终失败的任务，并使用数据库条件更新防止并发重复重试。
+## Worker 核心机制
 
-**安全边界**
+任务抢占必须在短事务内完成：
 
-- 报表类型使用白名单映射，禁止客户端提交 SQL、模板路径或任意 URL。
-- 所有查询使用参数绑定。
-- 下载按任务所有者鉴权；不存在或无权限统一返回 `404`。
-- 对时间跨度、结果行数、并发任务数和文件大小设置上限。
-- 对下载文件名进行清洗，存储层只使用服务端生成的对象键。
-- CSV 对以 `= + - @` 开头的单元格进行公式注入防护。
-- 错误响应不返回堆栈、SQL 或存储路径。
+```sql
+WITH candidate AS (
+  SELECT id
+  FROM report_jobs
+  WHERE status IN ('pending', 'retrying')
+    AND next_run_at <= now()
+  ORDER BY next_run_at, created_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+UPDATE report_jobs j
+SET status = 'running',
+    attempts = attempts + 1,
+    locked_by = :worker_id,
+    lease_expires_at = now() + interval '2 minutes',
+    started_at = COALESCE(started_at, now()),
+    updated_at = now()
+FROM candidate
+WHERE j.id = candidate.id
+RETURNING j.*;
+```
 
-**工程结构**
+处理期间每 30 秒续租，并按阶段更新进度，例如：
+
+```text
+5  校验参数
+15 查询数据
+40 分批读取
+70 生成文件
+90 上传对象存储
+100 完成
+```
+
+大数据应使用数据库游标或分页读取，CSV/XLSX 使用流式写入临时文件，上传成功后再把任务置为 `succeeded`。不要把完整报表留在内存中。
+
+## 失败与重试
+
+仅自动重试临时故障，例如数据库连接中断、对象存储超时和限流。参数错误、权限错误、模板错误直接失败。
+
+```python
+delay = min(300, 2 ** attempts * 5) + random.uniform(0, 3)
+```
+
+失败时：
+
+- `attempts < max_attempts`：置为 `retrying`，写入 `next_run_at`
+- 达到上限：置为 `failed`，记录脱敏后的错误摘要
+- Worker 崩溃：巡检器将租约过期的 `running` 任务重新置为 `retrying`
+- 手动重试：仅允许 `failed` 状态，并清理原错误信息
+- 生成逻辑保持幂等，结果对象键使用 `reports/{tenant_id}/{job_id}/output.xlsx`
+
+进度和状态更新应包含 `WHERE locked_by = :worker_id`，防止租约失效后的旧 Worker 覆盖新 Worker 的结果。
+
+## 代码边界
 
 ```text
 app/
-  api/routes/reports.py
-  core/config.py
-  db/models.py
-  db/repositories.py
-  schemas/reports.py
-  services/report_service.py
-  reports/generators.py
-  storage/base.py
-  storage/local.py
-  workers/tasks.py
-  main.py
+  main.py              FastAPI 生命周期与路由
+  api/reports.py       HTTP 接口
+  schemas/reports.py   Pydantic 请求/响应
+  models/report_job.py SQLAlchemy 模型
+  services/reports.py  创建、查询、授权、重试
+  reports/registry.py  report_type 到生成器的白名单映射
+  reports/sales.py     具体报表生成器
+  storage.py           S3/MinIO 接口
+  worker.py            抢占、续租、执行、退避
+  recovery.py          过期租约恢复
 tests/
-  unit/
-  integration/
-alembic/
-docker-compose.yml
-pyproject.toml
 ```
 
-**测试范围**
+生成器统一协议：
 
-- 创建任务返回 `202`，重复幂等键只创建一个任务。
-- 状态正确流转，进度不会倒退。
-- Worker 异常后自动重试，达到上限后失败。
-- 手动重试的状态和次数正确。
-- Worker 重启后能够恢复超时任务。
-- 多 Worker 并发时同一任务只执行一次。
-- 成功结果可以流式下载，内容、文件名和校验和正确。
-- 未完成、失败、过期、越权任务不能下载。
-- SQL 注入、路径穿越、CSV 公式注入和超大参数被拦截。
-- PostgreSQL、Redis、Worker、API 完整集成链路通过。
+```python
+class ReportGenerator(Protocol):
+    async def generate(
+        self,
+        parameters: dict,
+        output_path: Path,
+        progress: Callable[[int], Awaitable[None]],
+    ) -> ReportArtifact: ...
+```
 
-当前仓库只有空的 `.git`。运行环境是只读沙箱，首次创建任务书即被策略拒绝，因此本轮无法落盘实现、安装依赖、运行测试或提交版本。外部 Edge 调研也被环境策略拦截。
+## 测试策略
+
+- 单元测试：参数校验、生成器、退避计算、错误分类、状态转换
+- API 测试：提交、查询、越权访问、手动重试、下载前置条件
+- Worker 集成测试：抢占并发、生成成功、自动重试、达到上限
+- 故障测试：Worker 被终止后租约恢复、上传成功但状态写回失败
+- 存储测试：使用 MinIO 或 fake storage，验证对象键和预签名下载
+- 数据库测试：使用真实 PostgreSQL 容器，因为 SQLite 不支持等价的 `SKIP LOCKED`
+
+关键并发测试应同时启动两个 Worker，断言同一任务只被成功领取一次。
+
+## 部署要求
+
+至少运行 2 个 API 实例、2 个 Worker 实例和 1 个租约恢复进程。配置连接池上限、单 Worker 并发数、任务超时、报表行数上限、文件大小上限及对象生命周期清理。指标至少包括队列长度、等待时间、执行耗时、成功率、重试率和租约过期数，并以 `job_id` 贯穿结构化日志。

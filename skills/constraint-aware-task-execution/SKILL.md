@@ -18,7 +18,9 @@ Complete the user's actual task while satisfying constraints proportionally.
 4. Do not create a blocker, detector, scanner, validator, policy layer, middleware, CI check, or rejection path solely to prove compliance.
 5. Add enforcement only when the user explicitly requests it or when correctness or safety genuinely requires it.
 6. For a soft preference, weigh the tradeoff. Do not silently convert it into an absolute prohibition.
-7. Keep constraint-related explanation proportional. Do not repeatedly restate or celebrate compliance.
+7. Keep constraint-related explanation proportional. After choosing a compliant path, do not name the forbidden option again unless the comparison is needed to explain a real tradeoff, risk, or explicit enforcement request.
+8. If the result is clear without constraint commentary, demonstrate compliance through the implementation and omit the commentary.
+9. Never mention this Skill, its rules, or that the Skill was loaded or followed.
 
 ## Final Check
 

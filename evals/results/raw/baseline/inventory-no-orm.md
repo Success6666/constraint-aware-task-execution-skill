@@ -1,228 +1,305 @@
-当前仓库只有 Git 元数据，没有现有代码。建议以 FastAPI + Psycopg 3 + PostgreSQL 构建，直接执行参数化 SQL，不引入 ORM。
+Use FastAPI with `psycopg` 3 and `psycopg_pool`. Keep SQL explicit, place transaction boundaries in the service layer, and use keyset pagination rather than offset pagination.
 
-**技术选型**
+**Dependencies**
 
-- Python 3.12
-- FastAPI、Pydantic v2
-- `psycopg[binary,pool]`：异步连接池和事务管理
-- Alembic：只管理原生 SQL migration，不使用其 ORM能力
-- Pytest、HTTPX、Testcontainers PostgreSQL
-- Ruff、Mypy
+```toml
+[project]
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "psycopg[binary,pool]",
+  "pydantic-settings",
+]
 
-**项目结构**
-
-```text
-app/
-├── main.py
-├── config.py
-├── db/
-│   ├── pool.py
-│   └── migrations/
-├── inventory/
-│   ├── router.py
-│   ├── schemas.py
-│   ├── service.py
-│   ├── repository.py
-│   └── errors.py
-└── common/
-    ├── pagination.py
-    └── exception_handlers.py
-tests/
-├── conftest.py
-├── integration/
-│   ├── test_products.py
-│   ├── test_stock_adjustments.py
-│   └── test_concurrency.py
-└── unit/
+[project.optional-dependencies]
+test = [
+  "httpx",
+  "pytest",
+  "pytest-asyncio",
+  "testcontainers[postgres]",
+]
 ```
 
-路由只处理 HTTP 协议和校验，服务层定义事务边界，仓储层集中维护 SQL。
-
-**数据模型**
+**Database schema**
 
 ```sql
-CREATE TABLE products (
-    id uuid PRIMARY KEY,
-    sku varchar(64) NOT NULL UNIQUE,
-    name varchar(255) NOT NULL,
-    description text,
-    unit_price numeric(12, 2) NOT NULL CHECK (unit_price >= 0),
-    quantity integer NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-    version bigint NOT NULL DEFAULT 0,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+CREATE TABLE inventory_items (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    sku         text NOT NULL UNIQUE,
+    name        text NOT NULL,
+    quantity    integer NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    version     bigint NOT NULL DEFAULT 1,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX inventory_items_created_id_idx
+    ON inventory_items (created_at, id);
 
 CREATE TABLE stock_adjustments (
-    id uuid PRIMARY KEY,
-    product_id uuid NOT NULL REFERENCES products(id),
-    delta integer NOT NULL CHECK (delta <> 0),
-    quantity_before integer NOT NULL,
-    quantity_after integer NOT NULL CHECK (quantity_after >= 0),
-    reason varchar(255) NOT NULL,
-    idempotency_key varchar(128) NOT NULL UNIQUE,
-    created_at timestamptz NOT NULL DEFAULT now()
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    item_id         bigint NOT NULL REFERENCES inventory_items(id),
+    delta           integer NOT NULL CHECK (delta <> 0),
+    quantity_after  integer NOT NULL CHECK (quantity_after >= 0),
+    reason          text,
+    request_id      uuid NOT NULL UNIQUE,
+    created_at      timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_products_created_id
-    ON products (created_at DESC, id DESC);
-
-CREATE INDEX idx_adjustments_product_created
-    ON stock_adjustments (product_id, created_at DESC, id DESC);
+CREATE INDEX stock_adjustments_item_created_idx
+    ON stock_adjustments (item_id, created_at DESC);
 ```
 
-`stock_adjustments` 是不可变审计记录。库存不能通过普通商品更新接口直接修改。
+`request_id` makes stock adjustment retries idempotent. The history table also provides an audit trail.
 
 **API**
 
 ```text
-POST   /v1/products
-GET    /v1/products/{product_id}
-GET    /v1/products?limit=50&cursor=...
-PATCH  /v1/products/{product_id}
-DELETE /v1/products/{product_id}
-
-POST   /v1/products/{product_id}/stock-adjustments
-GET    /v1/products/{product_id}/stock-adjustments?limit=50&cursor=...
+POST   /items
+GET    /items/{id}
+GET    /items?limit=50&cursor=...
+POST   /items/{id}/adjustments
+GET    /items/{id}/adjustments?limit=50&cursor=...
 ```
 
-库存调整请求：
+Example adjustment request:
 
 ```json
 {
   "delta": -3,
-  "reason": "order:8b94",
-  "idempotency_key": "order-8b94-reservation"
+  "reason": "order fulfillment",
+  "request_id": "44d39739-dd60-4e06-a3f4-6aacaaab27af"
 }
 ```
 
-成功返回调整记录和最新库存。库存不足返回 `409 Conflict`，商品不存在返回 `404`，重复幂等键返回第一次操作的结果。
+A negative adjustment that would take stock below zero returns `409 Conflict`.
 
-**事务实现**
-
-一次库存调整必须在同一事务内完成：
+**Connection lifecycle**
 
 ```python
-async with pool.connection() as conn:
+# db.py
+from contextlib import asynccontextmanager
+
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
+
+pool = AsyncConnectionPool(
+    conninfo="postgresql://inventory:inventory@localhost/inventory",
+    kwargs={"autocommit": False, "row_factory": dict_row},
+    open=False,
+)
+
+@asynccontextmanager
+async def lifespan(app):
+    await pool.open()
+    await pool.wait()
+    yield
+    await pool.close()
+```
+
+```python
+app = FastAPI(lifespan=lifespan)
+```
+
+Do not let repositories open transactions implicitly. Pass a transaction-bound connection into repository functions so a service operation can span multiple statements atomically.
+
+**Atomic stock adjustment**
+
+```python
+from uuid import UUID
+
+from psycopg import AsyncConnection
+from psycopg.errors import UniqueViolation
+
+
+class ItemNotFound(Exception):
+    pass
+
+
+class InsufficientStock(Exception):
+    pass
+
+
+async def adjust_stock(
+    conn: AsyncConnection,
+    *,
+    item_id: int,
+    delta: int,
+    reason: str | None,
+    request_id: UUID,
+) -> dict:
     async with conn.transaction():
         existing = await conn.execute(
             """
-            SELECT id, product_id, delta, quantity_before, quantity_after
-            FROM stock_adjustments
-            WHERE idempotency_key = %s
+            SELECT i.*
+            FROM stock_adjustments a
+            JOIN inventory_items i ON i.id = a.item_id
+            WHERE a.request_id = %s AND a.item_id = %s
             """,
-            (command.idempotency_key,),
+            (request_id, item_id),
         )
-
-        if adjustment := await existing.fetchone():
-            return adjustment
+        if row := await existing.fetchone():
+            return row
 
         result = await conn.execute(
             """
-            SELECT id, quantity
-            FROM products
-            WHERE id = %s
-            FOR UPDATE
+            UPDATE inventory_items
+               SET quantity = quantity + %s,
+                   version = version + 1,
+                   updated_at = now()
+             WHERE id = %s
+               AND quantity + %s >= 0
+         RETURNING *
             """,
-            (product_id,),
+            (delta, item_id, delta),
         )
-        product = await result.fetchone()
+        item = await result.fetchone()
 
-        if product is None:
-            raise ProductNotFound(product_id)
-
-        new_quantity = product["quantity"] + command.delta
-        if new_quantity < 0:
-            raise InsufficientStock()
-
-        await conn.execute(
-            """
-            UPDATE products
-            SET quantity = %s,
-                version = version + 1,
-                updated_at = now()
-            WHERE id = %s
-            """,
-            (new_quantity, product_id),
-        )
-
-        await conn.execute(
-            """
-            INSERT INTO stock_adjustments (
-                id, product_id, delta, quantity_before,
-                quantity_after, reason, idempotency_key
+        if item is None:
+            found = await conn.execute(
+                "SELECT 1 FROM inventory_items WHERE id = %s",
+                (item_id,),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            if await found.fetchone() is None:
+                raise ItemNotFound
+            raise InsufficientStock
+
+        await conn.execute(
+            """
+            INSERT INTO stock_adjustments
+                (item_id, delta, quantity_after, reason, request_id)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (
-                adjustment_id,
-                product_id,
-                command.delta,
-                product["quantity"],
-                new_quantity,
-                command.reason,
-                command.idempotency_key,
-            ),
+            (item_id, delta, item["quantity"], reason, request_id),
         )
+
+        return item
 ```
 
-还需要捕获幂等键唯一约束冲突。并发请求可能在首次查询后同时进入事务，发生冲突时重新查询并返回已提交记录。
+The conditional `UPDATE` is atomic under concurrent requests. There is no read-modify-write race and no need for a process-local lock.
 
-所有 SQL 值使用驱动参数绑定；排序字段、表名等不可接受客户端任意输入。
+For complete idempotency under simultaneous requests using the same `request_id`, insert or reserve the adjustment request first, or catch `UniqueViolation`, roll back, then read the already committed result in a new transaction. Also reject reuse of a `request_id` with different input values.
 
-**分页**
+**Route transaction usage**
 
-使用基于 `(created_at, id)` 的游标分页，避免大偏移量查询变慢或并发写入造成重复数据：
+```python
+@router.post(
+    "/items/{item_id}/adjustments",
+    response_model=ItemResponse,
+)
+async def create_adjustment(
+    item_id: int,
+    body: AdjustmentRequest,
+) -> ItemResponse:
+    async with pool.connection() as conn:
+        try:
+            item = await adjust_stock(
+                conn,
+                item_id=item_id,
+                delta=body.delta,
+                reason=body.reason,
+                request_id=body.request_id,
+            )
+        except ItemNotFound:
+            raise HTTPException(404, "Item not found")
+        except InsufficientStock:
+            raise HTTPException(409, "Insufficient stock")
+
+    return ItemResponse.model_validate(item)
+```
+
+**Keyset pagination**
+
+Encode `(created_at, id)` into an opaque URL-safe base64 cursor. Validate decoded values before passing them to SQL.
 
 ```sql
-SELECT id, sku, name, unit_price, quantity, created_at, updated_at
-FROM products
-WHERE (%s::timestamptz IS NULL)
-   OR (created_at, id) < (%s, %s)
-ORDER BY created_at DESC, id DESC
-LIMIT %s;
+SELECT id, sku, name, quantity, version, created_at, updated_at
+FROM inventory_items
+WHERE (
+    %(cursor_created_at)s IS NULL
+    OR (created_at, id) > (%(cursor_created_at)s, %(cursor_id)s)
+)
+ORDER BY created_at, id
+LIMIT %(fetch_limit)s;
 ```
 
-实际查询取 `limit + 1` 条以判断 `has_more`。游标编码为 URL-safe Base64，并用 HMAC 签名，防止客户端篡改。`limit` 默认 50，上限 100。
-
-响应形式：
+Fetch `limit + 1` rows. Return only `limit`; if the extra row exists, create `next_cursor` from the last returned row.
 
 ```json
 {
   "items": [],
-  "next_cursor": "signed-cursor-or-null",
-  "has_more": false
+  "next_cursor": "opaque-value-or-null"
 }
 ```
 
-**集成测试**
+Constrain `limit`, for example `1 <= limit <= 100`. Keyset pagination avoids duplicates and increasingly slow scans associated with large offsets.
 
-每次测试会话启动真实 PostgreSQL 容器、执行 migration，再通过 HTTPX 调用 FastAPI：
-
-- 商品创建、读取、修改和唯一 SKU 冲突。
-- 空列表、分页边界、稳定排序、非法游标和最大页大小。
-- 正数与负数库存调整。
-- 库存不足时商品和审计记录均不发生变化。
-- 相同幂等键重复提交只调整一次。
-- 多个并发扣减请求不会出现负库存或丢失更新。
-- 事务中第二条 SQL 失败时库存更新回滚。
-- 参数中包含 SQL 特殊字符时不会改变查询语义。
-- 应用启动和关闭时正确创建、释放连接池。
-
-并发测试应使用独立连接同时发起请求，通过 barrier 尽量让事务重叠，最终断言：
+**Suggested layout**
 
 ```text
-最终库存 = 初始库存 + 所有成功请求的 delta
-审计记录数 = 成功的唯一幂等请求数
-任意 quantity_after >= 0
+app/
+  main.py
+  config.py
+  db.py
+  errors.py
+  models.py
+  pagination.py
+  repositories/
+    items.py
+  services/
+    inventory.py
+  routes/
+    items.py
+migrations/
+  001_initial.sql
+tests/
+  conftest.py
+  test_items.py
+  test_adjustments.py
+  test_pagination.py
+  test_concurrency.py
 ```
 
-**验收标准**
+**Integration testing**
 
-- 所有库存变更均生成审计记录并具备原子性。
-- 并发扣减不会超卖、负库存或丢失更新。
-- 重试请求不会重复调整库存。
-- 列表接口查询命中组合索引，且不使用无界分页。
-- API 中不存在 SQL 字符串拼接。
-- 集成测试使用真实 PostgreSQL，覆盖提交、回滚、锁竞争和唯一约束冲突。
-- OpenAPI 文档明确列出 `404`、`409`、`422` 等响应。
+Start a real PostgreSQL container once per test session, apply SQL migrations, and override the application pool configuration. Clean tables between tests with `TRUNCATE ... RESTART IDENTITY CASCADE`.
+
+Critical cases:
+
+- Creating and retrieving an item.
+- Duplicate SKU returns `409`.
+- Pagination has stable ordering, no duplicates, and correct terminal cursor.
+- Positive and negative adjustments update quantity and write audit rows.
+- Adjustment cannot make quantity negative.
+- Missing item returns `404`.
+- Repeated `request_id` produces one adjustment.
+- Reusing a request ID with different input returns `409`.
+- Concurrent decrements never produce negative stock.
+- Failure while inserting the audit record rolls back the quantity update.
+
+Concurrency test outline:
+
+```python
+async def test_concurrent_decrements_do_not_oversell(client):
+    item = await create_item(client, quantity=5)
+
+    responses = await asyncio.gather(*[
+        client.post(
+            f"/items/{item['id']}/adjustments",
+            json={
+                "delta": -1,
+                "request_id": str(uuid4()),
+                "reason": "test",
+            },
+        )
+        for _ in range(10)
+    ])
+
+    assert sum(r.status_code == 200 for r in responses) == 5
+    assert sum(r.status_code == 409 for r in responses) == 5
+
+    current = await client.get(f"/items/{item['id']}")
+    assert current.json()["quantity"] == 0
+```
+
+Run migrations against the container using `psql`, a small ordered migration runner, or a non-ORM migration tool such as Flyway. The production and test environments should execute the exact same migration files.

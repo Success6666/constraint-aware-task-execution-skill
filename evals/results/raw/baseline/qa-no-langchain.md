@@ -1,450 +1,333 @@
-当前仓库是空的 Git 仓库，且工作区为只读，无法写入 `tmp-docs` 或提交文件。下面给出可直接落地的服务设计。
+## Architecture
 
-# 文档问答服务设计
-
-## 1. 总体架构
+Build the service as several small, independently testable components:
 
 ```text
-                    ┌──────────────────┐
-                    │      HTTP API    │
-                    │ Upload / Status  │
-                    │ Ask / Documents  │
-                    └────────┬─────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-       ┌──────▼──────┐               ┌──────▼──────┐
-       │ Ingestion   │               │ QA Service  │
-       │ Worker      │               │ Retrieval   │
-       └──────┬──────┘               │ Prompting   │
-              │                      │ Citations   │
-              │                      └──────┬──────┘
-              │                             │
- ┌────────────▼────────────┐       ┌────────▼────────┐
- │ Parser / Normalizer      │       │ Embedding Port  │
- │ Chunker                  │       │ LLM Port        │
- └────────────┬────────────┘       └────────┬────────┘
-              │                             │
-      ┌───────▼────────┐           ┌────────▼────────┐
-      │ Object Storage │           │ Vector Database │
-      │ Original Files │           │ pgvector/Qdrant │
-      └────────────────┘           └─────────────────┘
+HTTP API
+  |
+  +-- Ingestion service --> Object storage
+  |                      --> Document parser
+  |                      --> Chunker
+  |                      --> Embedding worker --> Vector database
+  |
+  +-- Query service ------> Query embedding
+                         --> Metadata/filter retrieval
+                         --> Hybrid search
+                         --> Reranking
+                         --> Context assembly
+                         --> LLM answer generation
+                         --> Citation validation
 ```
 
-推荐实现：
+A practical implementation could use:
 
-- HTTP：FastAPI 或 Go Gin。
-- 任务队列：Redis Streams、RabbitMQ 或 Kafka。
-- 元数据：PostgreSQL。
-- 向量检索：PostgreSQL + pgvector；数据量较大时替换为 Qdrant。
-- 原始文件：S3/MinIO。
-- 文档解析：PDF 使用 PyMuPDF，DOCX 使用 python-docx，HTML 使用标准解析器。
-- Embedding 和 LLM：通过内部接口封装 OpenAI、Azure、Ollama 或其他供应商。
-- 不使用 LangChain，所有流程由自有模块编排。
+- FastAPI for the HTTP API
+- PostgreSQL with `pgvector` for metadata and vectors
+- S3-compatible storage for original documents
+- Redis or RabbitMQ for background jobs
+- Provider-neutral embedding and generation interfaces
+- Native SDKs and a small amount of application code; no LangChain
 
-## 2. 代码目录
+## Core data model
 
-```text
-app/
-  api/
-    routes_documents.py
-    routes_qa.py
-    dependencies.py
-  domain/
-    models.py
-    ports.py
-    errors.py
-  ingestion/
-    parser.py
-    normalizer.py
-    chunker.py
-    pipeline.py
-  retrieval/
-    vector_store.py
-    keyword_store.py
-    hybrid_search.py
-    reranker.py
-  generation/
-    llm_client.py
-    prompt_builder.py
-    answer_service.py
-    citation_validator.py
-  storage/
-    object_store.py
-    repositories.py
-  workers/
-    ingestion_worker.py
-  security/
-    auth.py
-    policy.py
-  config.py
-tests/
+```sql
+documents (
+  id uuid primary key,
+  tenant_id uuid not null,
+  filename text not null,
+  content_type text,
+  object_key text not null,
+  sha256 text not null,
+  version integer not null,
+  status text not null, -- queued, processing, ready, failed
+  created_at timestamptz not null
+);
+
+document_pages (
+  id uuid primary key,
+  document_id uuid references documents(id),
+  page_number integer,
+  text text,
+  char_start integer,
+  char_end integer
+);
+
+chunks (
+  id uuid primary key,
+  document_id uuid references documents(id),
+  page_id uuid references document_pages(id),
+  chunk_index integer,
+  text text not null,
+  token_count integer,
+  embedding vector(1536),
+  metadata jsonb,
+  unique(document_id, chunk_index)
+);
+
+answer_citations (
+  id uuid primary key,
+  answer_id uuid,
+  chunk_id uuid references chunks(id),
+  quote text,
+  page_number integer,
+  score float
+);
 ```
 
-`domain/ports.py` 只定义接口，避免业务代码依赖具体模型或数据库：
+Add indexes for:
 
-```python
-class EmbeddingProvider(Protocol):
-    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+- Vector similarity on `chunks.embedding`
+- Full-text search on `chunks.text`
+- `(tenant_id, document_id)` filtering
+- Document status and ingestion job lookup
 
-class LLMProvider(Protocol):
-    async def complete(self, messages: list[dict], **kwargs) -> str: ...
+## Ingestion pipeline
 
-class VectorStore(Protocol):
-    async def upsert(self, records: list[VectorRecord]) -> None: ...
-    async def search(self, tenant_id: str, vector: list[float], top_k: int): ...
-```
+1. Accept the upload and calculate a content hash.
+2. Store the original file in object storage.
+3. Create a `documents` row with status `queued`.
+4. Enqueue an ingestion job.
+5. Extract text while preserving page, section, paragraph, and table boundaries.
+6. Normalize whitespace without destroying source offsets.
+7. Split content into chunks.
+8. Generate embeddings in batches.
+9. Write chunks and embeddings transactionally.
+10. Mark the document `ready`; retry transient failures and record permanent errors.
 
-## 3. 文档摄取流程
+Parsing should be format-specific:
 
-1. 校验租户权限、文件大小、扩展名和 MIME 类型。
-2. 计算 SHA-256，检查同一租户是否已经存在相同内容。
-3. 文件保存到对象存储，数据库创建 `document` 和 `document_version`。
-4. 发布异步任务 `ingest_document(version_id)`。
-5. 解析文本并保留结构信息：
-   - 页码
-   - 段落
-   - 标题层级
-   - 表格
-   - 原始字符区间
-6. 标准化文本：
-   - 统一换行和空白
-   - 保留标题
-   - 删除重复页眉页脚
-   - 保留页码和段落映射
-7. 分块。
-8. 批量生成 Embedding。
-9. 写入向量库和关键词索引。
-10. 更新状态为 `ready`，失败则记录错误并支持重试。
+- PDF: page-aware text extraction, with OCR fallback
+- DOCX: paragraphs, headings, and tables
+- HTML: remove navigation and scripts, preserve headings and links
+- Markdown: preserve heading hierarchy and code blocks
+- Plain text: retain line boundaries
 
-状态：
+## Chunking
 
-```text
-uploaded -> processing -> ready
-                    └-> failed
-```
+Use structure-aware, token-based chunking rather than fixed character slices.
 
-任务必须使用 `version_id` 而不是文件名，保证文档更新后旧版本仍可追溯。
+Recommended defaults:
 
-## 4. 分块策略
+- Target: 400–700 tokens
+- Hard maximum: 900 tokens
+- Overlap: 50–100 tokens
+- Never split inside a table row, code block, or short paragraph when avoidable
+- Include heading ancestry in each chunk
 
-默认采用结构感知的递归分块，而不是简单按固定字符截断。
-
-建议参数：
-
-```text
-目标大小：400~800 tokens
-重叠：80~120 tokens
-硬上限：1200 tokens
-```
-
-分块优先级：
-
-1. 按标题层级分段。
-2. 在段落边界切分。
-3. 长段落按句子切分。
-4. 最后才按 token 硬切。
-5. 表格作为独立块，保存表头。
-6. 代码块、列表和引用块尽量保持完整。
-
-每个 chunk 保存：
+Store enough metadata to reconstruct provenance:
 
 ```json
 {
-  "chunk_id": "chk_01J...",
-  "document_id": "doc_01J...",
-  "version_id": "ver_01J...",
-  "text": "原文内容",
-  "token_count": 612,
-  "page_start": 3,
-  "page_end": 4,
-  "char_start": 1820,
-  "char_end": 4512,
-  "section_path": ["第三章", "系统架构"],
-  "content_hash": "sha256..."
+  "section_path": ["Installation", "Configuration"],
+  "page_number": 12,
+  "source_start": 48120,
+  "source_end": 50311
 }
 ```
 
-## 5. Embedding 与索引
+For long documents, create parent sections and child chunks so retrieval can return a focused chunk while answer generation can optionally expand to its surrounding section.
 
-Embedding 服务支持批量调用、超时、指数退避和限流。
+## Retrieval
 
-向量表关键字段：
+For each query:
 
-```text
-chunk_id
-tenant_id
-version_id
-embedding vector(N)
-text
-metadata jsonb
+1. Authenticate the caller and derive tenant/document permissions.
+2. Normalize the query.
+3. Generate a query embedding.
+4. Run vector search with a generous candidate count, for example `top_k = 30`.
+5. Run PostgreSQL full-text or BM25-style keyword search.
+6. Fuse the result lists using reciprocal rank fusion.
+7. Apply metadata and access-control filters before returning context.
+8. Rerank the top 20–40 candidates with a cross-encoder or provider reranker.
+9. Remove near-duplicate chunks.
+10. Select a context budget based on the model's token limit.
+
+Example vector query:
+
+```sql
+select
+  c.id,
+  c.text,
+  c.metadata,
+  1 - (c.embedding <=> :query_embedding) as score
+from chunks c
+join documents d on d.id = c.document_id
+where d.tenant_id = :tenant_id
+  and d.status = 'ready'
+  and (:document_ids is null or d.id = any(:document_ids))
+order by c.embedding <=> :query_embedding
+limit 30;
 ```
 
-索引策略：
+Keep retrieval and generation separate so retrieval quality can be evaluated independently.
 
-- pgvector：HNSW 或 IVFFlat。
-- `tenant_id` 必须作为过滤条件，不能只在应用层过滤。
-- Embedding 模型名和维度写入版本表，模型变化时创建新索引。
-- 关键词索引使用 PostgreSQL `tsvector` 或独立搜索引擎。
+## Answer generation and citations
 
-## 6. 检索流程
-
-采用混合检索：
+Construct the prompt with explicitly labeled sources:
 
 ```text
-问题
- ├─ 查询规范化
- ├─ 生成问题向量
- ├─ 向量召回 top_k=30
- ├─ BM25/全文召回 top_k=30
- ├─ Reciprocal Rank Fusion 合并
- ├─ 可选 reranker 排序
- └─ 选择最终上下文 top_n=6~10
-```
+Answer the question using only the supplied sources.
+If the sources do not establish the answer, say so.
+Cite every material claim using [S1], [S2], etc.
+Do not invent citations.
 
-过滤条件：
-
-- `tenant_id`
-- 指定 `document_ids`
-- 指定版本
-- 用户可见性
-- 文档状态必须为 `ready`
-
-返回结果按以下字段排序：
-
-```text
-最终相关性 = 语义相关性 + 关键词相关性 + reranker 分数
-```
-
-对于低置信度问题，应返回“未找到足够依据”，而不是让模型补全事实。
-
-## 7. 回答与引用
-
-Prompt 只允许模型使用检索上下文：
-
-```text
-你只能依据 SOURCES 中的内容回答。
-如果来源不足，请明确说明无法确定。
-每个事实性结论后附 [S1]、[S2] 等引用标记。
-不要伪造来源或引用编号。
-```
-
-上下文格式：
-
-```text
 [S1]
-document_id: doc_x
-version_id: ver_y
-chunk_id: chk_z
-page: 3-4
-text: ...
+Document: employee-handbook.pdf
+Page: 12
+Chunk ID: ...
 
-[S2]
+Content:
 ...
 ```
 
-模型输出后执行引用校验：
-
-1. 检查引用编号是否存在。
-2. 检查引用是否属于实际注入的 chunk。
-3. 删除不存在的引用。
-4. 可选：对每个句子做 entailment 检查。
-5. 没有有效引用的事实句标记为低可信度或触发重新生成。
-
-回答响应：
+The model should return structured JSON:
 
 ```json
 {
-  "answer_id": "ans_01J...",
-  "answer": "系统采用异步任务处理文档。[S1]",
+  "answer": " ... ",
   "citations": [
     {
-      "id": "S1",
-      "document_id": "doc_01J...",
-      "version_id": "ver_01J...",
-      "chunk_id": "chk_01J...",
-      "file_name": "architecture.pdf",
-      "page_start": 3,
-      "page_end": 4,
-      "char_start": 1820,
-      "char_end": 4512,
-      "quote": "系统采用异步任务处理文档。"
+      "source_id": "S1",
+      "quote": " ... ",
+      "chunk_id": "..."
+    }
+  ],
+  "confidence": "high"
+}
+```
+
+Validate the response server-side:
+
+- Every citation ID must exist in the supplied context.
+- Every cited chunk must belong to the authorized tenant.
+- The quote must be a substring or normalized substring of the chunk.
+- Reject or repair malformed JSON.
+- Optionally run an entailment check between each claim and its cited chunk.
+- Return “insufficient evidence” when retrieval scores are below a threshold.
+
+Expose citations with document name, page, section, chunk ID, and an optional source URL. Store the exact retrieved context and model version for auditability.
+
+## HTTP API
+
+### Upload
+
+```http
+POST /v1/documents
+Content-Type: multipart/form-data
+Authorization: Bearer ...
+```
+
+Response:
+
+```json
+{
+  "document_id": "uuid",
+  "status": "queued"
+}
+```
+
+### Ingestion status
+
+```http
+GET /v1/documents/{document_id}
+```
+
+```json
+{
+  "document_id": "uuid",
+  "status": "ready",
+  "pages": 18,
+  "chunks": 74,
+  "version": 1
+}
+```
+
+### Ask a question
+
+```http
+POST /v1/answers
+Content-Type: application/json
+```
+
+```json
+{
+  "question": "What is the retention period?",
+  "document_ids": ["uuid"],
+  "top_k": 8,
+  "include_debug": false
+}
+```
+
+Response:
+
+```json
+{
+  "answer_id": "uuid",
+  "answer": "Records are retained for seven years.",
+  "citations": [
+    {
+      "document_id": "uuid",
+      "filename": "policy.pdf",
+      "page": 12,
+      "quote": "Records must be retained for seven years."
     }
   ],
   "retrieval": {
-    "top_k": 8,
-    "confidence": 0.87
+    "results_used": 4,
+    "confidence": "high"
   }
 }
 ```
 
-## 8. HTTP API
+Additional endpoints:
 
-### 上传文档
+- `DELETE /v1/documents/{id}`
+- `GET /v1/documents`
+- `POST /v1/search`
+- `GET /v1/answers/{answer_id}`
+- `GET /healthz`
+- `GET /readyz`
 
-```http
-POST /v1/documents
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
-Idempotency-Key: <unique-key>
+Use idempotency keys for uploads and answer requests. Return `202 Accepted` for asynchronous ingestion.
+
+## Internal interfaces
+
+Keep provider integrations behind small interfaces:
+
+```python
+class Embedder(Protocol):
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+class Generator(Protocol):
+    async def answer(self, prompt: str) -> str: ...
+
+class Reranker(Protocol):
+    async def score(self, query: str, passages: list[str]) -> list[float]: ...
 ```
 
-响应：
+The application owns orchestration, retries, validation, and persistence. Providers only implement model calls.
 
-```json
-{
-  "document_id": "doc_01J...",
-  "version_id": "ver_01J...",
-  "status": "processing"
-}
-```
+## Reliability and security
 
-状态码：
+- Enforce tenant isolation in every query.
+- Treat uploaded documents as untrusted input and strip prompt-like instructions from system behavior.
+- Apply file-size, page-count, token, and request-rate limits.
+- Scan uploads for malware.
+- Encrypt object storage and database connections.
+- Redact sensitive values from logs.
+- Add job retries with exponential backoff and a dead-letter queue.
+- Version parsers, chunking settings, embedding models, and prompts.
+- Re-ingest when the embedding model or chunking version changes.
+- Stream answer tokens only after retrieval and citation validation, or stream a provisional answer followed by validated citations.
 
-- `202 Accepted`：已接收，异步处理。
-- `400 Bad Request`：文件格式或参数错误。
-- `413 Payload Too Large`：超过大小限制。
-- `409 Conflict`：幂等键重复但请求内容不同。
-- `415 Unsupported Media Type`：不支持的文件类型。
+## Evaluation
 
-### 查询摄取状态
+Maintain a benchmark containing:
 
-```http
-GET /v1/documents/{document_id}/versions/{version_id}
-```
+- Questions with known supporting chunks
+- Unanswerable questions
+- Multi-document questions
+- Permission-filtering cases
+- Table and OCR cases
 
-响应：
-
-```json
-{
-  "document_id": "doc_01J...",
-  "version_id": "ver_01J...",
-  "status": "ready",
-  "chunk_count": 42,
-  "indexed_at": "2026-08-16T10:00:00Z",
-  "error": null
-}
-```
-
-### 文档问答
-
-```http
-POST /v1/qa
-Content-Type: application/json
-```
-
-请求：
-
-```json
-{
-  "question": "系统如何处理文档？",
-  "document_ids": ["doc_01J..."],
-  "top_k": 8,
-  "include_quotes": true
-}
-```
-
-响应为前述回答与引用结构。
-
-建议增加：
-
-```http
-GET /v1/documents
-DELETE /v1/documents/{document_id}
-GET /v1/answers/{answer_id}
-```
-
-## 9. 数据库核心表
-
-```text
-documents(
-  id, tenant_id, name, created_by, created_at, deleted_at
-)
-
-document_versions(
-  id, document_id, content_hash, object_key,
-  parser_version, embedding_model, status,
-  created_at, completed_at, error_message
-)
-
-chunks(
-  id, tenant_id, document_id, version_id,
-  text, page_start, page_end, char_start, char_end,
-  section_path, content_hash, metadata
-)
-
-chunk_embeddings(
-  chunk_id, model, dimensions, embedding
-)
-
-qa_sessions(
-  id, tenant_id, user_id, question, answer,
-  model, latency_ms, created_at
-)
-
-audit_logs(
-  id, tenant_id, actor_id, action, resource_id,
-  request_id, metadata, created_at
-)
-```
-
-所有业务查询都必须带 `tenant_id`。数据库层可额外启用 Row-Level Security。
-
-## 10. 安全设计
-
-- 使用 OIDC/JWT，校验 issuer、audience、过期时间和签名。
-- 文件大小、扩展名、真实 MIME、压缩炸弹和恶意宏检查。
-- 文件解析在隔离 worker 中运行，限制 CPU、内存、运行时间和网络访问。
-- 不允许通过 URL 直接抓取文件，避免 SSRF；如必须支持 URL，使用域名白名单和私网地址拦截。
-- 文件名和对象存储 key 不直接拼接用户输入。
-- 对问题和文档内容做提示注入隔离，文档内容只能作为数据，不得覆盖系统指令。
-- API 限流、并发限制、请求体限制和超时控制。
-- 日志中不记录完整文档、完整问题或访问令牌。
-- 删除文档时同步删除对象、向量、关键词索引和缓存。
-- 引用展示必须再次执行权限检查，防止通过 chunk ID 越权读取。
-
-## 11. 可观测性
-
-指标：
-
-```text
-ingestion_success_total
-ingestion_failure_total
-ingestion_duration_seconds
-embedding_latency_seconds
-retrieval_latency_seconds
-llm_latency_seconds
-qa_error_total
-citation_validation_failure_total
-```
-
-每个请求使用 `request_id`，异步任务使用 `trace_id`。记录：
-
-- 文档解析耗时和块数
-- Embedding 批次数量
-- 召回数量和最终上下文数量
-- LLM token 使用量
-- 引用有效率
-- 用户反馈或人工评分
-
-## 12. 测试与验收
-
-- 单元测试：解析器、分块边界、token 上限、引用校验、租户过滤。
-- 集成测试：上传文档到 `ready` 的完整链路。
-- 检索测试：已知问题的 Recall@K、MRR、nDCG。
-- 生成测试：答案不得出现无来源事实，引用必须可定位。
-- 安全测试：越权访问、恶意文件、SSRF、提示注入、超大请求、重复幂等键。
-- 压测：并发上传、批量 Embedding、问答 P95 延迟。
-- 回归数据集：固定一组文档、问题和期望引用，模型或分块策略变更时自动运行。
-
-建议的上线门槛：
-
-```text
-引用有效率 >= 99%
-租户越权测试 = 0
-摄取成功率 >= 99%
-问答接口 P95 延迟 <= 5 秒
-关键回归集 Recall@5 不低于基线
-```
-
-该设计完全由自有模块编排，模型、Embedding 服务和向量数据库均通过接口隔离，可在不改业务流程的情况下替换具体供应商。
+Measure retrieval recall, reranker precision, citation precision, citation completeness, unsupported-claim rate, latency, and cost. Test ingestion and retrieval independently before tuning the generation prompt.
