@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0-rc.6 - 2026-08-17
+
+- Added a grounded minimal plan fallback that can only use frozen case metadata and records every synthesized field.
+- Removed model-invented hard constraints when a case declares a soft-only preference, using path-scoped deterministic normalization.
+- Added plan-fallback telemetry to matrix reports and made candidate-only fallback a capability-regression signal.
+- Added regression tests for fallback grounding, soft-preference preservation, and report visibility.
+- Verified 95 unit tests, compilation, and representative Ollama safety/soft-preference runs.
+
 ## 0.4.0-rc.5 - 2026-08-17
 
 - Added deterministic path-scoped normalization for validated plan classification errors.

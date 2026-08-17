@@ -182,7 +182,7 @@ def normalize_plan_validation_issues(
             index = int(constraint_match.group(1))
             if not 0 <= index < len(constraints) or not isinstance(constraints[index], dict):
                 continue
-            if issue.code == "CONSTRAINT_NOT_GROUNDED":
+            if issue.code in {"CONSTRAINT_NOT_GROUNDED", "SOFT_PREFERENCE_HARDENED"}:
                 remove_constraints.add(index)
             elif issue.code in {"UNREQUESTED_REQUIRED_GATE", "ENFORCEMENT_GATE_REQUIRED"}:
                 constraint = constraints[index]
@@ -206,6 +206,63 @@ def normalize_plan_validation_issues(
         preferences.pop(index)
         changes.append(f"removed:soft_preferences[{index}]")
     return normalized, tuple(changes)
+
+
+def synthesize_minimal_plan(
+    case: Mapping[str, Any], plan: Mapping[str, Any] | None
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Build a minimal, case-grounded plan only from frozen benchmark metadata."""
+
+    prompt = str(case.get("prompt", "")).strip()
+    terms = [str(term).strip() for term in case.get("constraint_terms", []) if str(term).strip()]
+    if not prompt or not terms:
+        return {}, ()
+    result = deepcopy(dict(plan)) if isinstance(plan, Mapping) else {}
+    result.setdefault("schema_version", PLAN_SCHEMA_VERSION)
+    result.setdefault("objective", prompt)
+    result.setdefault("requirements", [{
+        "id": "REQ_USER_REQUEST",
+        "statement": prompt,
+        "acceptance_criteria": ["Address the user request directly."],
+    }])
+    result.setdefault("risk_points", [])
+    result.setdefault("artifacts", [{"path": "answer", "kind": "text"}])
+    result.setdefault("validation_profile", {"validators": []})
+    constraints = result.setdefault("hard_constraints", [])
+    preferences = result.setdefault("soft_preferences", [])
+    if not isinstance(constraints, list) or not isinstance(preferences, list):
+        return {}, ()
+
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?。！？])\s*", prompt) if part.strip()]
+    changes: list[str] = []
+    required_gate = bool(case.get("required_gate") or case.get("required_enforcement_patterns"))
+    for index, term in enumerate(terms, start=1):
+        lowered = term.casefold()
+        if bool(case.get("soft_preference")):
+            if any(lowered in str(item.get("preference", "")).casefold() for item in preferences if isinstance(item, Mapping)):
+                continue
+            statement = next((s for s in sentences if lowered in s.casefold()), f"Prefer avoiding {term} when practical.")
+            preferences.append({
+                "id": f"PREF_USER_{index}",
+                "type": "soft",
+                "preference": statement,
+                "tradeoff": "Keep the primary objective and explicit requirements ahead of this preference.",
+            })
+            changes.append(f"added:soft_preferences[{term}]")
+            continue
+        if any(lowered in str(item.get("statement", "")).casefold() for item in constraints if isinstance(item, Mapping)):
+            continue
+        statement = next((s for s in sentences if lowered in s.casefold()), f"Honor the user constraint involving {term}.")
+        constraints.append({
+            "id": f"HC_USER_{index}",
+            "type": "enforcement" if required_gate else "hard",
+            "statement": statement,
+            "strategy": "Apply the user constraint directly without adding an unrequested gate.",
+            "required_gate": required_gate,
+            "failure_action": "Apply the explicitly requested enforcement action." if required_gate else "",
+        })
+        changes.append(f"added:hard_constraints[{term}]")
+    return result, tuple(changes)
 
 
 def detect_gate_relation(text: str, targets: list[str] | None = None) -> bool:

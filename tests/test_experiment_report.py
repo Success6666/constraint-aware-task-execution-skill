@@ -59,6 +59,25 @@ class ExperimentReportTests(unittest.TestCase):
         self.assertEqual(summary["repair_success_rate"], 1.0)
         self.assertFalse(summary["complete"])
 
+    def test_plan_fallback_is_reported_and_capability_regression_is_visible(self) -> None:
+        payload = {
+            "experiment": "matrix",
+            "models": ["model"],
+            "variants": ["baseline", "full-v2"],
+            "repeats": 1,
+            "cases": ["a"],
+            "results": [
+                {"model": "model", "repeat": 1, "variant": "baseline", "case_id": "a", "success": True, "score": score(1.0)},
+                {"model": "model", "repeat": 1, "variant": "full-v2", "case_id": "a", "success": True, "plan_fallback_used": True, "score": score(1.0)},
+            ],
+        }
+        summary = summarize_matrix(payload)
+        self.assertEqual(summary["plan_fallback_count"], 1)
+        self.assertEqual(summary["plan_fallback_rate"], 0.5)
+        candidate = summary["capability_retention"]["by_variant"]["full-v2"]
+        self.assertEqual(candidate["plan_fallback_regression_hits"], 1)
+        self.assertTrue(candidate["capability_regression_hit"])
+
     def test_complete_status_requires_matrix_runtime_and_validator(self) -> None:
         matrix = {
             "experiment": "matrix", "models": ["model"], "variants": ["baseline"],

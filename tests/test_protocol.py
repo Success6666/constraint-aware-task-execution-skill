@@ -17,6 +17,7 @@ from protocol import (  # noqa: E402
     merge_plan_validations,
     normalize_plan_validation_issues,
     parse_plan,
+    synthesize_minimal_plan,
     validate_artifact,
     validate_markdown_artifact,
     validate_path_scope,
@@ -165,6 +166,18 @@ class ProtocolTests(unittest.TestCase):
         )
         self.assertEqual(plan["hard_constraints"][0]["type"], "enforcement")
 
+    def test_normalization_removes_soft_preference_hardening(self) -> None:
+        plan = valid_plan()
+        validation = validate_plan_context(
+            plan,
+            ["dependencies"],
+            required_gates_allowed=False,
+            soft_preference_only=True,
+        )
+        normalized, changes = normalize_plan_validation_issues(plan, validation)
+        self.assertEqual(normalized["hard_constraints"], [])
+        self.assertIn("removed:hard_constraints[0]", changes)
+
     def test_context_requires_every_user_constraint_and_soft_preference(self) -> None:
         plan = valid_plan()
         plan["hard_constraints"] = []
@@ -247,6 +260,37 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(detect_gate_relation("The README quotes 'RedisDetector would fail CI' as an anti-pattern."))
         self.assertFalse(detect_gate_relation("不要因为文档提到 Redis 就自动拒绝任务。"))
         self.assertTrue(detect_gate_relation("Add a Redis scanner that rejects the build when it appears."))
+
+    def test_synthesize_minimal_plan_is_grounded_and_preserves_softness(self) -> None:
+        hard_case = {
+            "prompt": "Build a service without Redis.",
+            "constraint_terms": ["Redis"],
+            "soft_preference": False,
+        }
+        synthesized, changes = synthesize_minimal_plan(hard_case, None)
+        self.assertTrue(changes)
+        self.assertEqual(synthesized["hard_constraints"][0]["type"], "hard")
+        self.assertFalse(synthesized["hard_constraints"][0]["required_gate"])
+        validation = merge_plan_validations(
+            validate_plan(synthesized),
+            validate_plan_context(synthesized, ["Redis"], required_gates_allowed=False),
+        )
+        self.assertTrue(validation.valid)
+
+        soft_case = {
+            "prompt": "Plan a service. Prefer fewer dependencies.",
+            "constraint_terms": ["dependencies"],
+            "soft_preference": True,
+        }
+        soft_plan, soft_changes = synthesize_minimal_plan(soft_case, None)
+        self.assertTrue(soft_changes)
+        self.assertEqual(soft_plan["soft_preferences"][0]["type"], "soft")
+        self.assertEqual(soft_plan["hard_constraints"], [])
+
+    def test_synthesize_minimal_plan_requires_frozen_case_terms(self) -> None:
+        plan, changes = synthesize_minimal_plan({"prompt": "Do work."}, None)
+        self.assertEqual(plan, {})
+        self.assertEqual(changes, ())
 
 
 if __name__ == "__main__":

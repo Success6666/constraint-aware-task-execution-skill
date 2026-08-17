@@ -11,6 +11,7 @@
     "run_id": {"type": "string", "maxLength": 128},
     "generated_at": {"type": "string", "format": "date-time"},
     "success": {"type": "boolean"},
+    "plan_fallback_used": {"type": "boolean"},
     "termination_reason": {"type": ["string", "null"]},
     "executor": {
       "type": "object",

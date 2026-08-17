@@ -226,6 +226,10 @@ def score_capability_pair(
     policy = policy or CapabilityPolicy()
     component_rows: dict[str, dict[str, Any]] = {}
     regressions: list[str] = []
+    baseline_plan_fallback = bool(baseline.get("plan_fallback_used", False))
+    variant_plan_fallback = bool(variant.get("plan_fallback_used", False))
+    if variant_plan_fallback and not baseline_plan_fallback:
+        regressions.append("plan_fallback")
     for name in QUALITY_COMPONENTS:
         baseline_value = _component(baseline, name)
         variant_value = _component(variant, name)
@@ -402,6 +406,8 @@ def score_capability_pair(
         "non_constraint_requirement_retention": non_constraint_requirement_retention,
         "component_retention": component_rows,
         "behavioral_regressions": behavioral_regressions,
+        "plan_fallback_used": variant_plan_fallback,
+        "plan_fallback_regression": variant_plan_fallback and not baseline_plan_fallback,
         "valid_information_retention": {
             "status": semantic_status,
             "value": information_ratio,
@@ -531,6 +537,18 @@ def aggregate_capability_metrics(
             ),
             "cost_ratio": _mean_observed(item["cost_ratio"] for item in items),
             "latency_ratio": _mean_observed(item["latency_ratio"] for item in items),
+            "plan_fallback_rows": sum(item["plan_fallback_used"] for item in items),
+            "plan_fallback_rate": (
+                sum(item["plan_fallback_used"] for item in items) / len(items)
+                if items else None
+            ),
+            "plan_fallback_regression_hits": sum(
+                item["plan_fallback_regression"] for item in items
+            ),
+            "plan_fallback_regression_rate": (
+                sum(item["plan_fallback_regression"] for item in items) / len(items)
+                if items else None
+            ),
         }
 
     aggregate = summarize(scored)

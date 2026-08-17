@@ -160,6 +160,7 @@ def summarize_matrix(
     repaired = [row for row in retry_rows if row.get("repair_success")]
     plan_retry_rows = [row for row in indexed.values() if int(row.get("plan_retry_count", 0) or 0) > 0]
     artifact_retry_rows = [row for row in indexed.values() if int(row.get("artifact_retry_count", 0) or 0) > 0]
+    plan_fallback_rows = [row for row in indexed.values() if row.get("plan_fallback_used")]
     observed = len(indexed)
     semantic_review = (manifest or {}).get("semantic_review", {})
     minimum_reviewers = (
@@ -239,6 +240,8 @@ def summarize_matrix(
         "plan_retry_rate": round(len(plan_retry_rows) / observed, 4) if observed else None,
         "artifact_retry_count": sum(int(row.get("artifact_retry_count", 0) or 0) for row in indexed.values()),
         "artifact_retry_rate": round(len(artifact_retry_rows) / observed, 4) if observed else None,
+        "plan_fallback_count": len(plan_fallback_rows),
+        "plan_fallback_rate": round(len(plan_fallback_rows) / observed, 4) if observed else None,
         "usage": usage,
         "capability_retention": capability,
         "capability_accepted": capability_accepted,
@@ -426,6 +429,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
             "Broad semantic preservation requires explicit evaluator observations; deterministic regex metrics provide only partial evidence.",
             f"Final-candidate capability acceptance: `{capability.get('acceptance', {}).get('status', 'unsupported')}`.",
             f"Semantic review coverage required: `{capability.get('acceptance', {}).get('semantic_review_required', False)}`.",
+            f"Plan fallback usage: `{item.get('plan_fallback_count', 0)}/{item.get('observed', 0)}` "
+            f"({show_capability(item.get('plan_fallback_rate'))}); any candidate-only fallback is a capability regression.",
             "",
         ])
         acceptance_failures = capability.get("acceptance", {}).get("failures", [])

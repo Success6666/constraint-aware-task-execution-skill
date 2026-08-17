@@ -21,6 +21,7 @@ from protocol import (
     merge_plan_validations,
     normalize_plan_validation_issues,
     parse_plan,
+    synthesize_minimal_plan,
     validate_plan_context,
 )
 from validators import validate_workspace_contract
@@ -427,9 +428,11 @@ def run_runtime_job(
         }
     plan_text = None
     plan_retry_count = 0
+    plan_fallback_used = False
     if mode == "full-v2":
         previous = None
         issues: list[dict[str, str]] = []
+        last_parsed: dict[str, Any] | None = None
         for index in range(plan_attempts):
             plan_path = root / "plans" / base.with_suffix(f".a{index + 1}.json")
             trace_path = root / "traces" / "plans" / base.with_suffix(f".a{index + 1}.jsonl")
@@ -450,6 +453,8 @@ def run_runtime_job(
                 continue
             previous = plan_path.read_text(encoding="utf-8")
             parsed, structural_validation = parse_plan(previous, allow_legacy_aliases=False)
+            if parsed is not None:
+                last_parsed = parsed
             contextual_validation = validate_plan_context(
                 parsed or {},
                 case.get("constraint_terms", []),
@@ -488,6 +493,8 @@ def run_runtime_job(
                         f".a{index + 1}.normalized.json"
                     )
                     normalized_path.write_text(previous + "\n", encoding="utf-8")
+            if parsed is not None:
+                last_parsed = parsed
             attempt["validation"] = validation.to_dict()
             state.add_attempt(
                 Stage.PLAN,
@@ -503,16 +510,51 @@ def run_runtime_job(
                 time.sleep(inter_stage_delay)
         plan_retry_count = max(0, sum(item["phase"] == "plan" for item in attempts) - 1)
         if plan_text is None:
-            state.finish(False, "plan_validation_exhausted")
-            return {
-                "case_id": case["id"], "mode": mode, "model": model, "executor": executor_name, "repeat": repeat,
-                "success": False, "contract_pass": False,
-                "termination_reason": "plan_validation_exhausted", "attempts": attempts,
-                "plan_retry_count": plan_retry_count, "artifact_retry_count": 0,
-                "retry_count": plan_retry_count,
-                "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
-                "usage": usage, "state": state.to_dict(), "signature": job_signature,
-            }
+            fallback, fallback_changes = synthesize_minimal_plan(case, last_parsed)
+            if fallback_changes:
+                fallback_structural = parse_plan(
+                    json.dumps(fallback, ensure_ascii=False), allow_legacy_aliases=False
+                )[1]
+                fallback_contextual = validate_plan_context(
+                    fallback,
+                    case.get("constraint_terms", []),
+                    required_gates_allowed=bool(
+                        case.get("required_gate") or case.get("required_enforcement_patterns")
+                    ),
+                    soft_preference_only=bool(case.get("soft_preference")),
+                )
+                fallback_validation = merge_plan_validations(fallback_structural, fallback_contextual)
+                if fallback_validation.valid:
+                    fallback_text = json.dumps(fallback, ensure_ascii=False, indent=2)
+                    fallback_path = root / "plans" / base.with_suffix(".fallback.json")
+                    fallback_path.write_text(fallback_text + "\n", encoding="utf-8")
+                    attempts.append({
+                        "phase": "plan_fallback",
+                        "attempt": 1,
+                        "success": True,
+                        "normalization": {"changes": list(fallback_changes)},
+                        "validation": fallback_validation.to_dict(),
+                    })
+                    state.add_attempt(
+                        Stage.PLAN,
+                        "fallback",
+                        errors=[],
+                        evidence={"changes": list(fallback_changes), "validation": fallback_validation.to_dict()},
+                    )
+                    plan_text = fallback_text
+                    plan_fallback_used = True
+            if plan_text is None:
+                state.finish(False, "plan_validation_exhausted")
+                return {
+                    "case_id": case["id"], "mode": mode, "model": model, "executor": executor_name, "repeat": repeat,
+                    "success": False, "contract_pass": False,
+                    "termination_reason": "plan_validation_exhausted", "attempts": attempts,
+                    "plan_retry_count": plan_retry_count, "artifact_retry_count": 0,
+                    "retry_count": plan_retry_count,
+                    "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
+                    "plan_fallback_used": False,
+                    "usage": usage, "state": state.to_dict(), "signature": job_signature,
+                }
 
     if plan_text is not None and inter_stage_delay > 0:
         time.sleep(inter_stage_delay)
@@ -650,6 +692,7 @@ def run_runtime_job(
         "retry_count": plan_retry_count + repair_count, "artifact_retry_count": repair_count,
         "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
         "plan_retry_count": plan_retry_count, "repair_success": repair_success, "usage": usage,
+        "plan_fallback_used": plan_fallback_used,
         "state": state.to_dict(), "signature": job_signature,
     }
 
