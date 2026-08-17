@@ -24,7 +24,13 @@ from executors import (
     generate_with_transport_retries,
 )
 from experiment_variants import VARIANTS, Variant, select_variants
-from protocol import choose_retry, merge_plan_validations, parse_plan, validate_plan_context
+from protocol import (
+    choose_retry,
+    merge_plan_validations,
+    normalize_plan_validation_issues,
+    parse_plan,
+    validate_plan_context,
+)
 from scorer import score_response
 
 
@@ -486,6 +492,34 @@ def run_job(
                 soft_preference_only=bool(case.get("soft_preference")),
             )
             validation = merge_plan_validations(structural_validation, contextual_validation)
+            normalized_changes: tuple[str, ...] = ()
+            if parsed is not None and structural_validation.valid and not validation.valid:
+                normalized, normalized_changes = normalize_plan_validation_issues(parsed, validation)
+                if normalized_changes:
+                    normalized_structural = parse_plan(
+                        json.dumps(normalized, ensure_ascii=False), allow_legacy_aliases=False
+                    )[1]
+                    normalized_contextual = validate_plan_context(
+                        normalized,
+                        case.get("constraint_terms", []),
+                        required_gates_allowed=bool(case.get("required_enforcement_patterns")),
+                        soft_preference_only=bool(case.get("soft_preference")),
+                    )
+                    normalized_validation = merge_plan_validations(
+                        normalized_structural, normalized_contextual
+                    )
+                    stage["normalization"] = {
+                        "changes": list(normalized_changes),
+                        "validation": normalized_validation.to_dict(),
+                    }
+                    parsed = normalized
+                    validation = normalized_validation
+                    previous = json.dumps(normalized, ensure_ascii=False, indent=2)
+                    normalized_path = raw_root / "plans" / base.with_suffix(
+                        f".a{attempt + 1}.normalized.json"
+                    )
+                    normalized_path.write_text(previous + "\n", encoding="utf-8")
+                    plan_path = normalized_path
             issues = [{"code": issue.code, "path": issue.path} for issue in validation.issues]
             stage["validation"] = validation.to_dict()
             state.add_attempt(

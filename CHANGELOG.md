@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0-rc.5 - 2026-08-17
+
+- Added deterministic path-scoped normalization for validated plan classification errors.
+- Reclassified only reported unrequested enforcement constraints and removed only reported ungrounded constraints.
+- Preserved raw model plans and recorded normalized plans, changes, and second-pass validation evidence separately.
+- Applied the same normalization contract to answer matrices and real workspace Runtime execution.
+- Fixed local-model full-v2 plan exhaustion without increasing retry budgets or weakening validation.
+- Verified the fix on two independent Ollama full-v2 cases and 91 repository tests.
+
 ## 0.4.0-rc.4 - 2026-08-17
 
 - Replaced writable model workspaces with a strict read-only artifact-bundle generation protocol.

@@ -14,6 +14,8 @@ from protocol import (  # noqa: E402
     RetryTelemetry,
     choose_retry,
     detect_gate_relation,
+    merge_plan_validations,
+    normalize_plan_validation_issues,
     parse_plan,
     validate_artifact,
     validate_markdown_artifact,
@@ -124,6 +126,44 @@ class ProtocolTests(unittest.TestCase):
             required_gates_allowed=True,
         )
         self.assertTrue(result.valid)
+
+    def test_normalization_is_limited_to_reported_plan_paths(self) -> None:
+        plan = valid_plan()
+        plan["hard_constraints"] = [
+            {
+                "id": "redis",
+                "type": "enforcement",
+                "statement": "Do not use Redis",
+                "strategy": "Use SQLite",
+                "required_gate": False,
+                "failure_action": "",
+            },
+            {
+                "id": "invented",
+                "type": "hard",
+                "statement": "Require Alembic",
+                "strategy": "Add migrations",
+                "required_gate": False,
+                "failure_action": "",
+            },
+        ]
+        validation = merge_plan_validations(
+            validate_plan(plan),
+            validate_plan_context(
+                plan,
+                ["redis"],
+                required_gates_allowed=False,
+            ),
+        )
+        normalized, changes = normalize_plan_validation_issues(plan, validation)
+        self.assertEqual(len(normalized["hard_constraints"]), 1)
+        self.assertEqual(normalized["hard_constraints"][0]["type"], "hard")
+        self.assertFalse(normalized["hard_constraints"][0]["required_gate"])
+        self.assertEqual(
+            set(changes),
+            {"reclassified:hard_constraints[0]", "removed:hard_constraints[1]"},
+        )
+        self.assertEqual(plan["hard_constraints"][0]["type"], "enforcement")
 
     def test_context_requires_every_user_constraint_and_soft_preference(self) -> None:
         plan = valid_plan()

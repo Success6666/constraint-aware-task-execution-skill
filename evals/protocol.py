@@ -6,6 +6,7 @@ judge semantic quality that cannot be established from the supplied artifact.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 import ast
 import json
@@ -160,6 +161,51 @@ def validate_plan_context(
 def merge_plan_validations(*validations: PlanValidation) -> PlanValidation:
     issues = tuple(issue for validation in validations for issue in validation.issues)
     return PlanValidation(not issues, issues)
+
+
+def normalize_plan_validation_issues(
+    plan: Mapping[str, Any], validation: PlanValidation
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Apply only deterministic, path-scoped repairs identified by validation."""
+
+    normalized = deepcopy(dict(plan))
+    changes: list[str] = []
+    constraints = normalized.get("hard_constraints")
+    preferences = normalized.get("soft_preferences")
+    remove_constraints: set[int] = set()
+    remove_preferences: set[int] = set()
+
+    for issue in validation.issues:
+        constraint_match = re.match(r"^hard_constraints\[(\d+)\]", issue.path)
+        preference_match = re.match(r"^soft_preferences\[(\d+)\]", issue.path)
+        if constraint_match and isinstance(constraints, list):
+            index = int(constraint_match.group(1))
+            if not 0 <= index < len(constraints) or not isinstance(constraints[index], dict):
+                continue
+            if issue.code == "CONSTRAINT_NOT_GROUNDED":
+                remove_constraints.add(index)
+            elif issue.code in {"UNREQUESTED_REQUIRED_GATE", "ENFORCEMENT_GATE_REQUIRED"}:
+                constraint = constraints[index]
+                constraint["type"] = "hard"
+                constraint["required_gate"] = False
+                constraint["failure_action"] = ""
+                changes.append(f"reclassified:hard_constraints[{index}]")
+        elif (
+            preference_match
+            and isinstance(preferences, list)
+            and issue.code == "PREFERENCE_NOT_GROUNDED"
+        ):
+            index = int(preference_match.group(1))
+            if 0 <= index < len(preferences):
+                remove_preferences.add(index)
+
+    for index in sorted(remove_constraints, reverse=True):
+        constraints.pop(index)
+        changes.append(f"removed:hard_constraints[{index}]")
+    for index in sorted(remove_preferences, reverse=True):
+        preferences.pop(index)
+        changes.append(f"removed:soft_preferences[{index}]")
+    return normalized, tuple(changes)
 
 
 def detect_gate_relation(text: str, targets: list[str] | None = None) -> bool:

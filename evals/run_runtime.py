@@ -17,7 +17,12 @@ from typing import Any
 from execution_state import ExecutionState, Stage
 from executors import create_executor, execution_runtime_policy
 from experiment_variants import VARIANTS
-from protocol import merge_plan_validations, parse_plan, validate_plan_context
+from protocol import (
+    merge_plan_validations,
+    normalize_plan_validation_issues,
+    parse_plan,
+    validate_plan_context,
+)
 from validators import validate_workspace_contract
 from run_matrix import (
     DEFAULT_OUTPUT_ROOT,
@@ -454,6 +459,35 @@ def run_runtime_job(
                 soft_preference_only=bool(case.get("soft_preference")),
             )
             validation = merge_plan_validations(structural_validation, contextual_validation)
+            normalized_changes: tuple[str, ...] = ()
+            if parsed is not None and structural_validation.valid and not validation.valid:
+                normalized, normalized_changes = normalize_plan_validation_issues(parsed, validation)
+                if normalized_changes:
+                    normalized_structural = parse_plan(
+                        json.dumps(normalized, ensure_ascii=False), allow_legacy_aliases=False
+                    )[1]
+                    normalized_contextual = validate_plan_context(
+                        normalized,
+                        case.get("constraint_terms", []),
+                        required_gates_allowed=bool(
+                            case.get("required_gate") or case.get("required_enforcement_patterns")
+                        ),
+                        soft_preference_only=bool(case.get("soft_preference")),
+                    )
+                    normalized_validation = merge_plan_validations(
+                        normalized_structural, normalized_contextual
+                    )
+                    attempt["normalization"] = {
+                        "changes": list(normalized_changes),
+                        "validation": normalized_validation.to_dict(),
+                    }
+                    parsed = normalized
+                    validation = normalized_validation
+                    previous = json.dumps(normalized, ensure_ascii=False, indent=2)
+                    normalized_path = root / "plans" / base.with_suffix(
+                        f".a{index + 1}.normalized.json"
+                    )
+                    normalized_path.write_text(previous + "\n", encoding="utf-8")
             attempt["validation"] = validation.to_dict()
             state.add_attempt(
                 Stage.PLAN,
