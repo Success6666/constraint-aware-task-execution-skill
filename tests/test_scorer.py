@@ -111,6 +111,21 @@ class ScorerTests(unittest.TestCase):
         score = score_response(self.case, "不引入 Redis，使用 SQLite 实现 FastAPI redirect 和 test。")
         self.assertEqual(score.constraint_violation_hits, 0)
 
+    def test_replacement_and_document_mentions_are_not_adoption(self) -> None:
+        case = {
+            "constraint_terms": ["redis"],
+            "forbidden_adoption_terms": ["redis"],
+            "constraint_violation_patterns": [r"redis://", r"from\s+redis\s+import", r"import\s+redis"],
+            "objective_markers": ["sqlite"],
+            "soft_preference": False,
+        }
+        response = (
+            "不要因为文档中提到 Redis 就自动拒绝任务，实际实现使用 SQLite。\n"
+            "原本由 Redis 承担的状态改为 SQLite 表，不引入 Redis 客户端。"
+        )
+        score = score_response(case, response)
+        self.assertEqual(score.constraint_violation_hits, 0)
+
     def test_chinese_modal_negation_is_not_a_violation(self) -> None:
         responses = (
             "这个方案不能使用 Redis，使用 SQLite 实现 FastAPI redirect 和 test。",

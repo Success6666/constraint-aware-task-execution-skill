@@ -174,6 +174,11 @@ def mask_negated_adoption(text: str, terms: list[str]) -> str:
             rf"禁止采用|不得采用|不引入|不能引入|不可引入|不会引入|不要引入|避免引入|"
             rf"禁止引入|不得引入|无需引入|不依赖|不能依赖|不可依赖|不会依赖|无需依赖|而非)\s*{escaped}",
             rf"{escaped}\s*(?:未使用|不使用|未采用|不采用|不是必需|无需)",
+            # A mention can describe the user prohibition or a replacement plan,
+            # not adoption of the forbidden technology.
+            rf"(?:不要|不应|无需|避免|不将|不把|不因|不要因为|不因為)[^。！？\n]{{0,180}}{escaped}[^。！？\n]{{0,180}}",
+            rf"(?:文档|文檔|documentation|docs?)[^。！？\n.]*?(?:提到|提及|mentions?|quotes?)[^。！？\n.]*?{escaped}[^。！？\n.]*",
+            rf"(?:由|从|從)\s*{escaped}[^。！？\n]{{0,80}}(?:改为|改成|替换为|替換為|迁移到|遷移到|instead of|replaced by)",
         )
         for pattern in patterns:
             masked = re.sub(pattern, " ", masked, flags=re.IGNORECASE)
@@ -192,8 +197,8 @@ def adoption_hits(text: str, terms: list[str], custom_patterns: list[str]) -> in
             rf"\b{escaped}(?:-backed|-based)\b",
             rf"\b(?:storage|cache|queue|broker|database|framework|scheduler)\s*:\s*{escaped}\b",
             rf"(?:使用|采用|引入|安装|部署|依赖|基于)\s*{escaped}",
-            rf"由\s*{escaped}.{{0,16}}(?:负责|承担|提供|处理|存储)",
-            rf"{escaped}.{{0,16}}(?:负责|承担|作为|提供|处理|存储)",
+            rf"由\s*{escaped}\s*(?:负责|承担|提供|处理|存储)",
+            rf"{escaped}\s*(?:负责|承担|作为|提供|处理|存储)",
         )
         hits += count_patterns(masked, patterns)
     return hits

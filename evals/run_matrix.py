@@ -41,6 +41,7 @@ SCHEMA_PATH = ROOT / "evals" / "schemas" / "execution-plan.schema.json"
 OUTPUT_SCHEMA_PATH = ROOT / "evals" / "schemas" / "execution-plan.output.schema.json"
 SKILL_PATH = ROOT / "skills" / "constraint-exec" / "SKILL.md"
 PROTOCOL_PATH = ROOT / "evals" / "protocol.py"
+SCORER_PATH = ROOT / "evals" / "scorer.py"
 DEFAULT_OUTPUT_ROOT = ROOT / "evals" / "experiments"
 RUNNER_PROTOCOL = "orthogonal-v2-matrix-v1"
 EVALUATION_RULES = """# Evaluation Workspace
@@ -415,6 +416,7 @@ def signature(
         "plan_schema": hashlib.sha256(SCHEMA_PATH.read_bytes()).hexdigest(),
         "plan_output_schema": hashlib.sha256(OUTPUT_SCHEMA_PATH.read_bytes()).hexdigest(),
         "protocol_digest": hashlib.sha256(PROTOCOL_PATH.read_bytes()).hexdigest(),
+        "scorer_digest": hashlib.sha256(SCORER_PATH.read_bytes()).hexdigest(),
         "skill_digest": hashlib.sha256(SKILL_PATH.read_bytes()).hexdigest() if variant.use_skill else None,
     }
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()

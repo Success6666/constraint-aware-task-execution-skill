@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0-rc.8 - 2026-08-17
+
+- Fixed multilingual adoption false positives for negated, quoted, documented, and replacement mentions of forbidden technologies.
+- Added the scorer digest to matrix signatures so scoring changes invalidate prior evidence instead of silently reusing it.
+- Added regression coverage for Chinese replacement/documentation phrasing.
+
 ## 0.4.0-rc.7 - 2026-08-17
 
 - Bounded release matrix concurrency to reduce wall-clock time while retaining provider-level call limits and resumable checkpoints.
