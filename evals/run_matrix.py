@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", action="append", dest="models", required=True)
     parser.add_argument("--variant", action="append", dest="variants")
     parser.add_argument("--case", action="append", dest="case_ids")
-    parser.add_argument("--cases", type=Path, default=CASES_PATH)
+    parser.add_argument("--cases", type=Path, action="append", dest="case_paths")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=360)
@@ -69,8 +69,22 @@ def slug(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-")
 
 
-def load_cases(path: Path, case_ids: list[str] | None) -> list[dict]:
-    cases = json.loads(path.read_text(encoding="utf-8"))
+def load_cases(paths: Path | list[Path], case_ids: list[str] | None) -> list[dict]:
+    selected_paths = [paths] if isinstance(paths, Path) else paths
+    cases: list[dict] = []
+    seen: set[str] = set()
+    for path in selected_paths:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, list):
+            raise ValueError(f"cases file must contain an array: {path}")
+        for case in value:
+            case_id = str(case.get("id", "")) if isinstance(case, dict) else ""
+            if not case_id:
+                raise ValueError(f"case without id in {path}")
+            if case_id in seen:
+                raise ValueError(f"duplicate case id across case files: {case_id}")
+            seen.add(case_id)
+            cases.append(case)
     if not case_ids:
         return cases
     wanted = set(case_ids)
@@ -81,13 +95,21 @@ def load_cases(path: Path, case_ids: list[str] | None) -> list[dict]:
     return selected
 
 
-def prepare_workspace(root: Path, model: str, repeat: int, variant: Variant, case_id: str) -> Path:
+def prepare_workspace(
+    root: Path,
+    model: str,
+    repeat: int,
+    variant: Variant,
+    case_id: str,
+    *,
+    workspace_rules: str = EVALUATION_RULES,
+) -> Path:
     workspace = root / "workspaces" / slug(model) / f"r{repeat}" / variant.name / case_id
     if workspace.exists():
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workspace, check=True)
-    (workspace / "AGENTS.md").write_text(EVALUATION_RULES, encoding="utf-8")
+    (workspace / "AGENTS.md").write_text(workspace_rules, encoding="utf-8")
     if variant.use_skill:
         skill = workspace / ".codex" / "skills" / "constraint-exec" / "SKILL.md"
         skill.parent.mkdir(parents=True)
@@ -270,7 +292,7 @@ def plan_prompt(case: dict, variant: Variant, previous: str | None = None, error
                 "Represent the user's explicit enforcement requirement as a hard constraint with "
                 "required_gate=true and a concrete failure_action."
             )
-        if "ENFORCEMENT_GATE_REQUIRED" in error_codes:
+        if error_codes & {"UNREQUESTED_REQUIRED_GATE", "ENFORCEMENT_GATE_REQUIRED"}:
             repair_rules.append(
                 "For a normal prohibition that does not explicitly require rejection or a safety gate, change "
                 "type from enforcement to hard and keep required_gate=false with an empty failure_action. Only "
@@ -292,7 +314,9 @@ def plan_prompt(case: dict, variant: Variant, previous: str | None = None, error
         "List every independent non-constraint requirement with observable acceptance criteria. Separate each "
         "constraint statement from its implementation strategy. Set required_gate=true only when the "
         "user explicitly requires rejection/enforcement or safety requires it; otherwise use false and an empty "
-        "failure_action. Hard constraints must come only from the USER_REQUEST. Do not encode instructions about "
+        "failure_action. Use type=hard for ordinary output, path, dependency, technology, and architecture "
+        "constraints. Use type=enforcement only for an explicit reject, block, fail, or quarantine action. Hard "
+        "constraints must come only from the USER_REQUEST. Do not encode instructions about "
         "this planning step, schema formatting, the workspace, tools, or later answer stages as user requirements "
         "or constraints. List only deterministic validators for observable contracts. Return only the schema object."
         f"\n\nUSER_REQUEST:\n{case['prompt']}"
@@ -623,7 +647,8 @@ def main() -> int:
         raise ValueError("--transport-attempts must be positive")
     if args.inter_stage_delay < 0:
         raise ValueError("--inter-stage-delay must be non-negative")
-    cases = load_cases(args.cases, args.case_ids)
+    case_paths = args.case_paths or [CASES_PATH]
+    cases = load_cases(case_paths, args.case_ids)
     variants = select_variants(args.variants)
     experiment_root = args.output_root / args.experiment
     results_path = experiment_root / "results.json"
@@ -668,6 +693,17 @@ def main() -> int:
         "variants": [variant.name for variant in variants],
         "repeats": args.repeat,
         "cases": [case["id"] for case in cases],
+        "case_sources": [
+            {
+                "path": (
+                    path.resolve().relative_to(ROOT).as_posix()
+                    if path.resolve().is_relative_to(ROOT)
+                    else str(path.resolve())
+                ),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for path in case_paths
+        ],
     }
     write_checkpoint(results_path, rows, metadata)
     print(f"Running {len(jobs)} jobs in {experiment_root}", flush=True)

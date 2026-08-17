@@ -130,12 +130,14 @@ class RunMatrixTests(unittest.TestCase):
             previous,
             [
                 {"code": "USER_CONSTRAINT_MISSING", "path": "hard_constraints"},
+                {"code": "UNREQUESTED_REQUIRED_GATE", "path": "hard_constraints[0].required_gate"},
                 {"code": "ENFORCEMENT_GATE_REQUIRED", "path": "hard_constraints[0].required_gate"},
             ],
         )
         self.assertIn("Preserve its objective, complete requirement set", prompt_text)
         self.assertIn("Move every explicit user constraint into hard_constraints", prompt_text)
         self.assertIn("change type from enforcement to hard", prompt_text)
+        self.assertIn("Use type=hard for ordinary output, path, dependency", prompt_text)
         self.assertIn(previous, prompt_text)
         self.assertNotIn("objective_coverage", prompt_text)
 

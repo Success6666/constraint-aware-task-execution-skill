@@ -111,6 +111,42 @@ class OllamaExecutorTests(unittest.TestCase):
         self.assertEqual(result.failure_kind, FailureKind.INVALID_REQUEST)
 
 
+class CodexExecutorTests(unittest.TestCase):
+    def test_command_binds_workspace_write_sandbox_to_request_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            request = GenerationRequest(
+                prompt="Create config.json",
+                model="model",
+                cwd=cwd,
+                sandbox="workspace-write",
+            )
+            command = codex_cli._build_command(
+                ["codex"], request, cwd / "last-message.txt", None
+            )
+
+        sandbox_index = command.index("--sandbox")
+        cwd_index = command.index("--cd")
+        self.assertEqual(command[sandbox_index + 1], "workspace-write")
+        self.assertEqual(command[cwd_index + 1], str(cwd.resolve()))
+
+    def test_read_only_router_error_invalidates_workspace_write_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            request = GenerationRequest(
+                prompt="Create config.json",
+                model="model",
+                cwd=Path(directory),
+                sandbox="workspace-write",
+            )
+
+        self.assertTrue(
+            codex_cli._workspace_write_denied(
+                request,
+                "patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings",
+            )
+        )
+
+
 class _SequenceExecutor(GenerationExecutor):
     name = "sequence"
     capabilities = ExecutorCapabilities()

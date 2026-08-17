@@ -29,6 +29,9 @@ base_url = "https://relay.example.test"
 [features]
 plugins = true
 
+[windows]
+sandbox = "elevated"
+
 [mcp_servers.unsafe]
 command = "ignored.exe"
 """.strip()
@@ -50,6 +53,8 @@ command = "ignored.exe"
             copied["model_providers"]["Relay"]["base_url"],
             "https://relay.example.test",
         )
+        self.assertEqual(copied["approval_policy"], "never")
+        self.assertEqual(copied["windows"]["sandbox"], "elevated")
         self.assertNotIn("features", copied)
         self.assertNotIn("mcp_servers", copied)
         self.assertNotIn("notify", copied)

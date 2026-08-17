@@ -298,7 +298,22 @@ def command(spec: Mapping[str, Any], context: ValidationContext, validator_id: s
     except subprocess.TimeoutExpired:
         return _result("command", validator_id, ["COMMAND_TIMEOUT"])
     output = (completed.stdout + completed.stderr)[-context.max_output_chars:]
-    return _result("command", validator_id, [] if completed.returncode == 0 else [f"COMMAND_FAILED:{completed.returncode}"], returncode=completed.returncode, output=output)
+    errors = [] if completed.returncode == 0 else [f"COMMAND_FAILED:{completed.returncode}"]
+    patterns = spec.get("output_patterns", [])
+    if not isinstance(patterns, list) or not all(isinstance(pattern, str) and pattern for pattern in patterns):
+        return ValidatorResult("unsupported", "command", validator_id, ("COMMAND_OUTPUT_PATTERNS_INVALID",))
+    for pattern in patterns:
+        try:
+            matched = re.search(pattern, output) is not None
+        except re.error as exc:
+            return ValidatorResult(
+                "unsupported", "command", validator_id, (f"COMMAND_OUTPUT_PATTERN_INVALID:{exc}",)
+            )
+        if not matched:
+            errors.append(f"COMMAND_OUTPUT_MISSING:{pattern}")
+    return _result(
+        "command", validator_id, errors, returncode=completed.returncode, output=output
+    )
 
 
 def javascript_syntax(spec: Mapping[str, Any], context: ValidationContext, validator_id: str) -> ValidatorResult:

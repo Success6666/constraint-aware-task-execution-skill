@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0-rc.4 - 2026-08-17
+
+- Replaced writable model workspaces with a strict read-only artifact-bundle generation protocol.
+- Added validated atomic file application with path, symlink, duplicate, encoding, file-count, and size boundaries.
+- Bound Runtime resume evidence to protocol, Skill, runner, and artifact-schema digests.
+- Required command validators to observe actual test execution instead of accepting zero-test discovery.
+- Clarified Python runtime contracts to require standard-library `unittest.TestCase` coverage.
+- Preserved explicitly requested safety gates while rejecting unrequested enforcement classifications during plan repair.
+- Completed 12/12 real workspace runtime cases across direct and full-v2 execution.
+
 ## 0.4.0-rc.3 - 2026-08-17
 
 - Replaced the local-model shell adapter with a bounded Ollama HTTP executor and normalized usage evidence.

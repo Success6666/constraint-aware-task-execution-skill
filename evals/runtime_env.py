@@ -106,7 +106,7 @@ def _secure_copy(source: Path, destination: Path) -> None:
 
 
 def _write_minimal_codex_config(source: Path, destination: Path) -> None:
-    """Copy only the active provider routing needed by an isolated CLI run."""
+    """Copy provider routing and the minimal non-interactive Windows sandbox settings."""
 
     config_file = source / "config.toml"
     if not config_file.is_file():
@@ -130,7 +130,11 @@ def _write_minimal_codex_config(source: Path, destination: Path) -> None:
         "requires_openai_auth",
         "env_key",
     )
-    lines = [f"model_provider = {json.dumps(provider_name)}", ""]
+    lines = [
+        f"model_provider = {json.dumps(provider_name)}",
+        'approval_policy = "never"',
+        "",
+    ]
     lines.append(f"[model_providers.{json.dumps(provider_name)}]")
     for key in allowed_provider_keys:
         value = provider.get(key)
@@ -138,7 +142,11 @@ def _write_minimal_codex_config(source: Path, destination: Path) -> None:
             lines.append(f"{key} = {'true' if value else 'false'}")
         elif isinstance(value, str):
             lines.append(f"{key} = {json.dumps(value)}")
-    if len(lines) == 3:
+    windows = config.get("windows")
+    windows_sandbox = windows.get("sandbox") if isinstance(windows, dict) else None
+    if windows_sandbox in {"elevated", "unelevated"}:
+        lines.extend(["", "[windows]", f"sandbox = {json.dumps(windows_sandbox)}"])
+    if len(lines) == 4:
         return
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     try:

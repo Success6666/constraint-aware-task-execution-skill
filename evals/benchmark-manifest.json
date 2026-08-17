@@ -3,7 +3,7 @@
   "schema_version": "1.0",
   "benchmark_id": "constraint-exec",
   "benchmark_version": "1.1.0",
-  "repository_version": "0.4.0-rc.3",
+  "repository_version": "0.4.0-rc.4",
   "protocols": {
     "execution": "constraint-exec/v1",
     "generation": "constraint-exec-generation/v1"
@@ -27,7 +27,7 @@
     {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30, "sha256": "c07ef057bef0d9fe912c91285b6c39e49c99253e27fd0e37f181f961840e5471"},
     {"id": "gate-adversarial-v1", "path": "gate_cases.json", "kind": "classification", "declared_cases": 32, "sha256": "01a3564c2a6da6dc7ef262fa5b9dd3364deb4ddbbc995d619a0d4a1cd8f0c4c9"},
     {"id": "constraint-adversarial-v1", "path": "adversarial_cases.json", "kind": "answer", "declared_cases": 6, "sha256": "11770920f8d86933afb9cff5754ecb5f1c0cafe874d7a335248b002c567743fa"},
-    {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6, "sha256": "c6e0d59a07a7fa828dd24ecc4ca1085b910e0ce47e0f52c50e7ed8468a8cc117"}
+    {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6, "sha256": "a955b47797a62eaad36389f9decc66db01a372965ebd39c3839bb063a3c66507"}
   ],
   "variants": [
     "baseline",

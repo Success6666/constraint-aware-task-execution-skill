@@ -86,6 +86,50 @@ def codex_scheduler_policy() -> dict[str, float | int]:
     }
 
 
+def _build_command(
+    launcher: list[str],
+    request: GenerationRequest,
+    final_output: Path,
+    schema_path: Path | None,
+) -> list[str]:
+    command = launcher + [
+        "exec",
+        "--ephemeral",
+        "--config",
+        "features.plugins=false",
+        "--config",
+        "features.apps=false",
+    ]
+    if request.reasoning_effort:
+        command.extend(["--config", f'model_reasoning_effort="{request.reasoning_effort}"'])
+    command.extend([
+        "--model",
+        request.model,
+        "--sandbox",
+        request.sandbox,
+        "--cd",
+        str(request.cwd.resolve()),
+        "--skip-git-repo-check",
+        "--output-last-message",
+        str(final_output),
+        "--json",
+        "-",
+    ])
+    if schema_path is not None:
+        command[-1:-1] = ["--output-schema", str(schema_path)]
+    return command
+
+
+def _workspace_write_denied(request: GenerationRequest, stderr: str) -> bool:
+    if request.sandbox != "workspace-write":
+        return False
+    normalized = stderr.casefold()
+    return (
+        "writing is blocked by read-only sandbox" in normalized
+        or "patch rejected: writing is blocked" in normalized
+    )
+
+
 @contextmanager
 def _codex_call_slot() -> Iterator[None]:
     """Bound concurrent CLI calls and leave recovery time between them."""
@@ -173,31 +217,7 @@ class CodexCliExecutor(GenerationExecutor):
                     json.dumps(dict(request.output_schema), ensure_ascii=False),
                     encoding="utf-8",
                 )
-            command = launcher + [
-                "exec",
-                "--ephemeral",
-                "--config",
-                "features.plugins=false",
-                "--config",
-                "features.apps=false",
-            ]
-            if request.reasoning_effort:
-                command.extend(
-                    ["--config", f'model_reasoning_effort="{request.reasoning_effort}"']
-                )
-            command.extend([
-                "--model",
-                request.model,
-                "--sandbox",
-                request.sandbox,
-                "--skip-git-repo-check",
-                "--output-last-message",
-                str(final_output),
-                "--json",
-                "-",
-            ])
-            if schema_path is not None:
-                command[-1:-1] = ["--output-schema", str(schema_path)]
+            command = _build_command(launcher, request, final_output, schema_path)
             env = clean_subprocess_environment(request.environment)
             env["CODEX_HOME"] = str(codex_home)
             creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
@@ -240,12 +260,18 @@ class CodexCliExecutor(GenerationExecutor):
             output = final_output.read_text(encoding="utf-8") if final_output.is_file() else ""
             combined = f"{stdout}\n{stderr}".strip()
             returncode = process.returncode if process is not None else None
-            success = not timed_out and returncode == 0 and bool(output.strip())
-            failure_kind = FailureKind.NONE if success else classify_failure(
-                combined or "empty model output",
-                returncode=returncode,
-                timed_out=timed_out,
-            )
+            write_denied = _workspace_write_denied(request, stderr)
+            success = not timed_out and not write_denied and returncode == 0 and bool(output.strip())
+            if success:
+                failure_kind = FailureKind.NONE
+            elif write_denied:
+                failure_kind = FailureKind.INVALID_REQUEST
+            else:
+                failure_kind = classify_failure(
+                    combined or "empty model output",
+                    returncode=returncode,
+                    timed_out=timed_out,
+                )
             trace = redact_text(combined)
             safe_output = redact_text(output)
             if request.trace_path:
@@ -254,7 +280,11 @@ class CodexCliExecutor(GenerationExecutor):
                 atomic_write_text(request.output_path, safe_output)
             failure_message = None
             if not success:
-                failure_message = self._failure_message(failure_kind, combined)
+                failure_message = (
+                    "workspace-write request ran under a read-only sandbox"
+                    if write_denied
+                    else self._failure_message(failure_kind, combined)
+                )
                 if timed_out:
                     failure_message = (
                         f"timeout after {request.timeout_seconds:g}s"

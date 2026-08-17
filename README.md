@@ -2,7 +2,7 @@
 
 An Agent Skill that keeps the user's primary objective ahead of negative constraints and soft preferences. It reduces the tendency to replace useful work with extra guards, scanners, policy layers, rejection paths, or repeated compliance commentary.
 
-Current repository version: `0.4.0-rc.3`. This prerelease stabilizes real Codex and Ollama execution, strict structured planning, contextual plan validation, and paired capability-retention measurement; final promotion remains gated by the full model matrix and blinded semantic review.
+Current repository version: `0.4.0-rc.4`. This prerelease adds a read-only structured artifact protocol, validated atomic file application, observable test-execution checks, and a 12-case runtime acceptance run; final promotion remains gated by the full model matrix and blinded semantic review.
 
 ## Measured Result
 
