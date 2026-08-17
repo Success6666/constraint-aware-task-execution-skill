@@ -1,0 +1,396 @@
+{
+  "protocol": "runtime-validator-fixtures-v1",
+  "generated_at": "2026-08-17T02:43:10.413981+00:00",
+  "cases": 12,
+  "results": [
+    {
+      "case_id": "json-config",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "json_exact",
+          "status": "pass",
+          "errors": []
+        }
+      ]
+    },
+    {
+      "case_id": "json-config",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "json_exact",
+          "status": "fail",
+          "errors": [
+            "JSON_VALUE:config.json"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "parser-regression",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "command",
+          "status": "pass",
+          "errors": [],
+          "returncode": 0,
+          "output": "test_invalid (test_parser.ParserTests.test_invalid) ... ok\ntest_values (test_parser.ParserTests.test_values) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+        }
+      ]
+    },
+    {
+      "case_id": "parser-regression",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "fail",
+          "errors": [
+            "PYTHON_COMPILE:app/parser.py:invalid syntax (app/parser.py, line 1)"
+          ]
+        },
+        {
+          "type": "command",
+          "status": "fail",
+          "errors": [
+            "COMMAND_FAILED:python -m unittest discover -s tests -v"
+          ],
+          "returncode": 1,
+          "output": "test_parser (unittest.loader._FailedTest.test_parser) ... ERROR\n\n======================================================================\nERROR: test_parser (unittest.loader._FailedTest.test_parser)\n----------------------------------------------------------------------\nImportError: Failed to import test module: test_parser\nTraceback (most recent call last):\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 426, in _find_test_path\n    module = self._get_module_from_name(name)\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 367, in _get_module_from_name\n    __import__(name)\n    ~~~~~~~~~~^^^^^^\n  File \"D:\\temp\\kylin-agent\\tmp31j01zp4\\tests\\test_parser.py\", line 6, in <module>\n    from app.parser import parse_numbers\n  File \"D:\\temp\\kylin-agent\\tmp31j01zp4\\app\\parser.py\", line 1\n    def parse_numbers(:\n                      ^\nSyntaxError: invalid syntax\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)\n"
+        }
+      ]
+    },
+    {
+      "case_id": "markdown-contract",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "markdown_headings",
+          "status": "pass",
+          "errors": []
+        }
+      ]
+    },
+    {
+      "case_id": "markdown-contract",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "markdown_headings",
+          "status": "fail",
+          "errors": [
+            "MARKDOWN:missing heading: Usage",
+            "MARKDOWN:missing heading: Tests"
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "csv-report-no-pandas",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "forbidden_imports",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "command",
+          "status": "pass",
+          "errors": [],
+          "returncode": 0,
+          "output": "test_totals (test_report.ReportTests.test_totals) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.002s\n\nOK\n"
+        }
+      ]
+    },
+    {
+      "case_id": "csv-report-no-pandas",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "forbidden_imports",
+          "status": "fail",
+          "errors": [
+            "FORBIDDEN_IMPORT:report.py:pandas"
+          ]
+        },
+        {
+          "type": "command",
+          "status": "fail",
+          "errors": [
+            "COMMAND_FAILED:python -m unittest discover -s tests -v"
+          ],
+          "returncode": 1,
+          "output": "test_report (unittest.loader._FailedTest.test_report) ... ERROR\n\n======================================================================\nERROR: test_report (unittest.loader._FailedTest.test_report)\n----------------------------------------------------------------------\nImportError: Failed to import test module: test_report\nTraceback (most recent call last):\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 426, in _find_test_path\n    module = self._get_module_from_name(name)\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 367, in _get_module_from_name\n    __import__(name)\n    ~~~~~~~~~~^^^^^^\n  File \"D:\\temp\\kylin-agent\\tmp3pfr16to\\tests\\test_report.py\", line 7, in <module>\n    from report import summarize\nImportError: cannot import name 'summarize' from 'report' (D:\\temp\\kylin-agent\\tmp3pfr16to\\report.py)\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)\n"
+        }
+      ]
+    },
+    {
+      "case_id": "upload-signature-guard",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "command",
+          "status": "pass",
+          "errors": [],
+          "returncode": 0,
+          "output": "test_signatures (test_upload_guard.UploadTests.test_signatures) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+        }
+      ]
+    },
+    {
+      "case_id": "upload-signature-guard",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "fail",
+          "errors": [
+            "PYTHON_COMPILE:upload_guard.py:invalid syntax (upload_guard.py, line 1)"
+          ]
+        },
+        {
+          "type": "command",
+          "status": "fail",
+          "errors": [
+            "COMMAND_FAILED:python -m unittest discover -s tests -v"
+          ],
+          "returncode": 1,
+          "output": "test_upload_guard (unittest.loader._FailedTest.test_upload_guard) ... ERROR\n\n======================================================================\nERROR: test_upload_guard (unittest.loader._FailedTest.test_upload_guard)\n----------------------------------------------------------------------\nImportError: Failed to import test module: test_upload_guard\nTraceback (most recent call last):\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 426, in _find_test_path\n    module = self._get_module_from_name(name)\n  File \"C:\\Python314\\Lib\\unittest\\loader.py\", line 367, in _get_module_from_name\n    __import__(name)\n    ~~~~~~~~~~^^^^^^\n  File \"D:\\temp\\kylin-agent\\tmpauyvi3tv\\tests\\test_upload_guard.py\", line 2, in <module>\n    from upload_guard import validate_upload\n  File \"D:\\temp\\kylin-agent\\tmpauyvi3tv\\upload_guard.py\", line 1\n    def validate_upload(:\n                        ^\nSyntaxError: invalid syntax\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)\n"
+        }
+      ]
+    },
+    {
+      "case_id": "client-no-global-singleton",
+      "mode": "positive",
+      "expected_contract_pass": true,
+      "observed_contract_pass": true,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "forbidden_pattern",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "command",
+          "status": "pass",
+          "errors": [],
+          "returncode": 0,
+          "output": "test_url (test_client.ClientTests.test_url) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+        }
+      ]
+    },
+    {
+      "case_id": "client-no-global-singleton",
+      "mode": "negative",
+      "expected_contract_pass": false,
+      "observed_contract_pass": false,
+      "conformance_pass": true,
+      "validations": [
+        {
+          "type": "path_scope",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "files_exist",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "python_compile",
+          "status": "pass",
+          "errors": []
+        },
+        {
+          "type": "forbidden_pattern",
+          "status": "fail",
+          "errors": [
+            "FORBIDDEN_PATTERN:src/client.py"
+          ]
+        },
+        {
+          "type": "command",
+          "status": "pass",
+          "errors": [],
+          "returncode": 0,
+          "output": "test_url (test_client.ClientTests.test_url) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 12,
+    "failed": 0,
+    "retry_rate": 0.0,
+    "average_retries": 0.0
+  }
+}

@@ -51,7 +51,7 @@ class ResultArtifactTests(unittest.TestCase):
         self.assertEqual(summary["comparison"], {"completed_pairs": 30, "qualified_pairs": 30})
         self.assertEqual(summary["baseline"]["evaluation_pass"], 1.0)
         self.assertEqual(summary["skill"]["evaluation_pass"], 1.0)
-        self.assertIn("decreased by `77.3%`", report)
+        self.assertIn("decreased by `80.0%`", report)
         self.assertIn("`7` improved, `0` worsened, and `23` tied", report)
 
 

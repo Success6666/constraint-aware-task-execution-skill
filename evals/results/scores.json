@@ -1076,11 +1076,11 @@
         "under_enforcement_hits": 0,
         "response_format_compliance": 1.0,
         "path_scope_compliance": 1.0,
-        "failure_gate_hits": 0,
+        "failure_gate_hits": 1,
         "constraint_component_hits": 0,
         "constraint_echo": 2,
         "soft_preference_hardening": 0,
-        "overoptimization_score": 2.0
+        "overoptimization_score": 5.0
       }
     },
     {

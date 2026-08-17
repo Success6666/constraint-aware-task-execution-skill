@@ -1,0 +1,323 @@
+{
+  "protocol": "deterministic-v2-fixtures-v1",
+  "generated_at": "2026-08-17T02:43:09.133543+00:00",
+  "cases": 6,
+  "results": [
+    {
+      "case_id": "clean-pass",
+      "termination_reason": "success",
+      "expected_termination": "success",
+      "conformance_pass": true,
+      "retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "retry_levels": [],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "pass",
+            "validator": "json",
+            "errors": [],
+            "details": {
+              "type": "dict"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "plan-regeneration",
+      "termination_reason": "success",
+      "expected_termination": "success",
+      "conformance_pass": true,
+      "retry_count": 1,
+      "plan_retry_count": 1,
+      "artifact_retry_count": 0,
+      "retry_levels": [
+        "level_3"
+      ],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": false,
+            "issues": [
+              {
+                "code": "SCHEMA_VERSION",
+                "path": "schema_version",
+                "message": "expected 1.0"
+              }
+            ]
+          },
+          "decision": {
+            "level": "level_3",
+            "attempt": 0,
+            "max_attempts": 2,
+            "reason": "plan structure is invalid",
+            "next_action": "regenerate_plan"
+          }
+        },
+        {
+          "phase": "plan",
+          "attempt": 2,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "pass",
+            "validator": "json",
+            "errors": [],
+            "details": {
+              "type": "dict"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "unrequested-gate-repair",
+      "termination_reason": "success",
+      "expected_termination": "success",
+      "conformance_pass": true,
+      "retry_count": 1,
+      "plan_retry_count": 1,
+      "artifact_retry_count": 0,
+      "retry_levels": [
+        "level_2"
+      ],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": false,
+            "issues": [
+              {
+                "code": "UNREQUESTED_FAILURE_GATE",
+                "path": "hard_constraints[0]",
+                "message": "strategy creates a target/enforcement/failure gate without an explicit requirement"
+              }
+            ]
+          },
+          "decision": {
+            "level": "level_2",
+            "attempt": 0,
+            "max_attempts": 2,
+            "reason": "current artifact needs regeneration",
+            "next_action": "regenerate_artifact"
+          }
+        },
+        {
+          "phase": "plan",
+          "attempt": 2,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "pass",
+            "validator": "json",
+            "errors": [],
+            "details": {
+              "type": "dict"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "localized-artifact-repair",
+      "termination_reason": "success",
+      "expected_termination": "success",
+      "conformance_pass": true,
+      "retry_count": 1,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 1,
+      "retry_levels": [
+        "level_1"
+      ],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "fail",
+            "validator": "json",
+            "errors": [
+              "Expecting value: line 1 column 7 (char 6)"
+            ],
+            "details": {}
+          },
+          "decision": {
+            "level": "level_1",
+            "attempt": 0,
+            "max_attempts": 2,
+            "reason": "localized artifact validation failed",
+            "next_action": "repair_section"
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 2,
+          "validation": {
+            "status": "pass",
+            "validator": "json",
+            "errors": [],
+            "details": {
+              "type": "dict"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "unsupported-artifact",
+      "termination_reason": "unsupported",
+      "expected_termination": "unsupported",
+      "conformance_pass": true,
+      "retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "retry_levels": [],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "unsupported",
+            "validator": "binary",
+            "errors": [
+              "no deterministic validator for binary"
+            ],
+            "details": {}
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "retry-exhausted",
+      "termination_reason": "artifact_validation_exhausted",
+      "expected_termination": "artifact_validation_exhausted",
+      "conformance_pass": true,
+      "retry_count": 2,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 2,
+      "retry_levels": [
+        "level_1",
+        "level_1",
+        "stop"
+      ],
+      "events": [
+        {
+          "phase": "plan",
+          "attempt": 1,
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 1,
+          "validation": {
+            "status": "fail",
+            "validator": "json",
+            "errors": [
+              "Expecting value: line 1 column 7 (char 6)"
+            ],
+            "details": {}
+          },
+          "decision": {
+            "level": "level_1",
+            "attempt": 0,
+            "max_attempts": 2,
+            "reason": "localized artifact validation failed",
+            "next_action": "repair_section"
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 2,
+          "validation": {
+            "status": "fail",
+            "validator": "json",
+            "errors": [
+              "Expecting value: line 1 column 7 (char 6)"
+            ],
+            "details": {}
+          },
+          "decision": {
+            "level": "level_1",
+            "attempt": 1,
+            "max_attempts": 2,
+            "reason": "localized artifact validation failed",
+            "next_action": "repair_section"
+          }
+        },
+        {
+          "phase": "artifact",
+          "attempt": 3,
+          "validation": {
+            "status": "fail",
+            "validator": "json",
+            "errors": [
+              "Expecting value: line 1 column 7 (char 6)"
+            ],
+            "details": {}
+          },
+          "decision": {
+            "level": "stop",
+            "attempt": 2,
+            "max_attempts": 2,
+            "reason": "retry budget exhausted",
+            "next_action": "return_failure"
+          }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "retry_rate": 0.6667,
+    "average_retries": 0.8333,
+    "plan_retry_rate": 0.3333,
+    "artifact_retry_rate": 0.3333
+  }
+}

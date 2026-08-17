@@ -1,0 +1,29 @@
+{
+  "cases": 32,
+  "confusion": {
+    "tp": 16,
+    "tn": 16
+  },
+  "precision": 1.0,
+  "recall": 1.0,
+  "accuracy": 1.0,
+  "by_language": {
+    "en": {
+      "tp": 4,
+      "tn": 4
+    },
+    "es": {
+      "tp": 4,
+      "tn": 4
+    },
+    "ja": {
+      "tp": 4,
+      "tn": 4
+    },
+    "zh": {
+      "tp": 4,
+      "tn": 4
+    }
+  },
+  "failures": []
+}

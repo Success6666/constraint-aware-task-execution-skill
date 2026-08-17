@@ -11,7 +11,7 @@ The committed A/B run used `gpt-5.6-sol` with medium reasoning effort on 30 matc
 | Evaluation pass rate | 100% | 100% | unchanged |
 | Objective coverage | 1.0000 | 1.0000 | unchanged |
 | Constraint adherence | 1.0000 | 1.0000 | unchanged |
-| Over-optimization score | 0.7333 | 0.1667 | **77.3% lower** |
+| Over-optimization score | 0.8333 | 0.1667 | **80.0% lower** |
 | Unnecessary constraint echo | 0.4333 | 0.1667 | **61.5% lower** |
 | Constraint-only components | 0.1000 | 0.0000 | **100% lower** |
 
@@ -30,9 +30,15 @@ The repository now includes deterministic execution primitives in [`evals/protoc
 - explicit `pass`, `fail`, and `unsupported` artifact states;
 - bounded Level 1 artifact repair, Level 2 artifact regeneration, and Level 3 replanning decisions.
 
-`evals/run_ab.py` supports the original `baseline`/`skill` comparison plus `--variant ablation` for positive framing,
-structured planning, plan validation, and full V2 prompt variants. `evals/ablation.py` summarizes completed rows while
-keeping missing variants visible. Validation errors are machine feedback; over-optimization scores are evaluation-only
+`evals/run_ab.py` preserves the released `baseline`/`skill` comparison. `evals/run_matrix.py` runs eight orthogonal
+variants: baseline, full V1, two V1 rule removals, positive framing, structured planning, plan validation, and full V2.
+Structured variants use separate plan and execution calls; full V2 adds deterministic artifact validation and bounded
+repair. `evals/run_runtime.py` validates actual workspace artifacts with allowlisted validators and tests.
+
+`evals/run_protocol_fixtures.py`, `evals/run_runtime_fixtures.py`, and `evals/evaluate_validators.py` provide deterministic
+conformance evidence. `evals/build_experiment_report.py` reports failed and missing rows explicitly instead of converting
+them into zero-valued metric samples. See [`evals/experiments/EXPERIMENT_STATUS.md`](evals/experiments/EXPERIMENT_STATUS.md)
+for the current completion state. Validation errors are machine feedback; over-optimization scores are evaluation-only
 and are never included in model repair prompts.
 
 The artifact validators prove observable contracts only. Unsupported semantic checks remain explicitly `unsupported`.
@@ -99,6 +105,16 @@ python evals/run_ab.py --variant both --model gpt-5.6-sol --reasoning-effort med
 python evals/run_ab.py --variant both --resume --model gpt-5.6-sol --reasoning-effort medium --jobs 3
 python evals/rescore.py
 python evals/build_report.py
+python evals/evaluate_validators.py --output evals/experiments/validator-v1/results.json
+python evals/run_protocol_fixtures.py
+python evals/run_runtime_fixtures.py
+```
+
+Run an isolated orthogonal matrix or workspace-artifact experiment:
+
+```bash
+python evals/run_matrix.py --experiment full-matrix --model MODEL --variant baseline --variant full-v2
+python evals/run_runtime.py --experiment runtime-matrix --model MODEL --mode direct --mode full-v2
 ```
 
 Each case uses an isolated temporary Git repository and a temporary `CODEX_HOME` containing only a copied authentication file. The authentication copy is deleted after the subprocess exits. Checkpoints are written atomically after each result, and one failed case does not discard completed results.
@@ -117,7 +133,10 @@ The deterministic scorer measures:
 skills/constraint-aware-task-execution/  Skill package
 evals/cases.json                         30-case bilingual benchmark
 evals/run_ab.py                          Isolated concurrent A/B runner
+evals/run_matrix.py                      Orthogonal plan/execute/repair matrix runner
+evals/run_runtime.py                     Real workspace artifact runner
 evals/scorer.py                          Deterministic scorer
+evals/build_experiment_report.py         Strict completeness and metric report
 evals/results/                           Raw responses, scores, and report
 scripts/verify-install.py                Cross-agent installation verifier
 tests/                                   Unit and distribution tests

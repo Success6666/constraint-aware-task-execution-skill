@@ -1,0 +1,203 @@
+{
+  "generated_at": "2026-08-17T02:44:09.981966+00:00",
+  "status": "incomplete",
+  "matrices": [
+    {
+      "experiment": "published-ab",
+      "expected": 60,
+      "observed": 60,
+      "completed": 60,
+      "failed": 0,
+      "missing": 0,
+      "complete": true,
+      "missing_keys": [],
+      "failures": [],
+      "variant_metrics": {
+        "baseline": {
+          "completed": 30,
+          "evaluation_pass": 1,
+          "objective_coverage": 1.0,
+          "constraint_adherence": 1.0,
+          "required_enforcement_coverage": 1.0,
+          "under_enforcement_hits": 0,
+          "overoptimization_score": 0.8333
+        },
+        "skill": {
+          "completed": 30,
+          "evaluation_pass": 1,
+          "objective_coverage": 1.0,
+          "constraint_adherence": 1.0,
+          "required_enforcement_coverage": 1.0,
+          "under_enforcement_hits": 0,
+          "overoptimization_score": 0.1667
+        }
+      },
+      "retry_count": 0,
+      "retry_rows": 0,
+      "retry_rate": 0.0,
+      "repair_success_rate": null,
+      "plan_retry_count": 0,
+      "plan_retry_rate": 0.0,
+      "artifact_retry_count": 0,
+      "artifact_retry_rate": 0.0,
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "experiment": "model-probe-extended",
+      "expected": 1,
+      "observed": 1,
+      "completed": 0,
+      "failed": 1,
+      "missing": 0,
+      "complete": false,
+      "missing_keys": [],
+      "failures": [
+        {
+          "model": "gpt-5.6-sol",
+          "variant": "baseline",
+          "case_id": "fastapi-no-redis",
+          "failure_stage": "execute",
+          "termination_reason": null
+        }
+      ],
+      "variant_metrics": {
+        "baseline": {
+          "completed": 0,
+          "evaluation_pass": null,
+          "objective_coverage": null,
+          "constraint_adherence": null,
+          "required_enforcement_coverage": null,
+          "under_enforcement_hits": null,
+          "overoptimization_score": null
+        }
+      },
+      "retry_count": 0,
+      "retry_rows": 0,
+      "retry_rate": 0.0,
+      "repair_success_rate": null,
+      "plan_retry_count": 0,
+      "plan_retry_rate": 0.0,
+      "artifact_retry_count": 0,
+      "artifact_retry_rate": 0.0,
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "experiment": "secondary-model-probes",
+      "expected": 2,
+      "observed": 2,
+      "completed": 0,
+      "failed": 2,
+      "missing": 0,
+      "complete": false,
+      "missing_keys": [],
+      "failures": [
+        {
+          "model": "gpt-5.6-terra",
+          "variant": "baseline",
+          "case_id": "fastapi-no-redis",
+          "failure_stage": "execute",
+          "termination_reason": null
+        },
+        {
+          "model": "gpt-5.5",
+          "variant": "baseline",
+          "case_id": "fastapi-no-redis",
+          "failure_stage": "execute",
+          "termination_reason": null
+        }
+      ],
+      "variant_metrics": {
+        "baseline": {
+          "completed": 0,
+          "evaluation_pass": null,
+          "objective_coverage": null,
+          "constraint_adherence": null,
+          "required_enforcement_coverage": null,
+          "under_enforcement_hits": null,
+          "overoptimization_score": null
+        }
+      },
+      "retry_count": 0,
+      "retry_rows": 0,
+      "retry_rate": 0.0,
+      "repair_success_rate": null,
+      "plan_retry_count": 0,
+      "plan_retry_rate": 0.0,
+      "artifact_retry_count": 0,
+      "artifact_retry_rate": 0.0,
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ],
+  "runtimes": [],
+  "protocols": [
+    {
+      "protocol": "deterministic-v2-fixtures-v1",
+      "expected": 6,
+      "observed": 6,
+      "passed": 6,
+      "failed": 0,
+      "missing": 0,
+      "complete": true,
+      "retry_rate": 0.6667,
+      "average_retries": 0.8333,
+      "plan_retry_rate": 0.3333,
+      "artifact_retry_rate": 0.3333
+    },
+    {
+      "protocol": "runtime-validator-fixtures-v1",
+      "expected": 12,
+      "observed": 12,
+      "passed": 12,
+      "failed": 0,
+      "missing": 0,
+      "complete": true,
+      "retry_rate": 0.0,
+      "average_retries": 0.0
+    }
+  ],
+  "validator": {
+    "cases": 32,
+    "confusion": {
+      "tp": 16,
+      "tn": 16
+    },
+    "precision": 1.0,
+    "recall": 1.0,
+    "accuracy": 1.0,
+    "by_language": {
+      "en": {
+        "tp": 4,
+        "tn": 4
+      },
+      "es": {
+        "tp": 4,
+        "tn": 4
+      },
+      "ja": {
+        "tp": 4,
+        "tn": 4
+      },
+      "zh": {
+        "tp": 4,
+        "tn": 4
+      }
+    },
+    "failures": []
+  },
+  "validator_complete": true
+}

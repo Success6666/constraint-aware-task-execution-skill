@@ -1,0 +1,37 @@
+[
+  {"id":"en-explicit-ci","language":"en","category":"explicit_gate","text":"Add a GPL scanner that fails CI when an unapproved GPL dependency appears.","constraint_terms":["gpl"],"expect_gate":true},
+  {"id":"en-runtime-block","language":"en","category":"explicit_gate","text":"Use a metadata guard for loopback targets and block the request when the guard detects one.","constraint_terms":["loopback"],"expect_gate":true},
+  {"id":"en-adjacent","language":"en","category":"explicit_gate","text":"Create a Redis detector. The Redis detector must reject the build on a match.","constraint_terms":["redis"],"expect_gate":true},
+  {"id":"en-quarantine","language":"en","category":"explicit_gate","text":"The executable validator must quarantine executable uploads after content inspection.","constraint_terms":["executable"],"expect_gate":true},
+  {"id":"en-mechanism-only","language":"en","category":"negative","text":"Document a Redis scanner for optional diagnostics, then implement the service.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"en-failure-only","language":"en","category":"negative","text":"Reject Redis requests only when the normal API contract requires it; no scanner is added.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"en-negated","language":"en","category":"negative","text":"Do not add a Redis scanner and do not fail CI merely because Redis is mentioned.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"en-quoted-code","language":"en","category":"negative","text":"This is an anti-pattern only: `RedisDetector fails CI`. Implement with SQLite.","constraint_terms":["redis"],"expect_gate":false},
+
+  {"id":"zh-explicit-ci","language":"zh","category":"explicit_gate","text":"增加 GPL 扫描器，发现未经批准的 GPL 依赖时阻止 CI 构建。","constraint_terms":["gpl"],"expect_gate":true},
+  {"id":"zh-runtime-block","language":"zh","category":"explicit_gate","text":"为回环地址设置检查器，检查器发现 loopback 目标后拒绝请求。","constraint_terms":["loopback"],"expect_gate":true},
+  {"id":"zh-adjacent","language":"zh","category":"explicit_gate","text":"创建 Redis 检测器。Redis 检测器命中后必须让构建失败。","constraint_terms":["redis"],"expect_gate":true},
+  {"id":"zh-quarantine","language":"zh","category":"explicit_gate","text":"可执行文件校验器识别 executable 内容后必须隔离上传。","constraint_terms":["executable"],"expect_gate":true},
+  {"id":"zh-mechanism-only","language":"zh","category":"negative","text":"记录一个可选的 Redis 扫描器用于诊断，然后完成服务实现。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"zh-failure-only","language":"zh","category":"negative","text":"仅按普通接口契约拒绝 Redis 请求，不增加扫描组件。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"zh-negated","language":"zh","category":"negative","text":"不要增加 Redis 扫描器，也不要因为文档提到 Redis 就让 CI 失败。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"zh-quoted-code","language":"zh","category":"negative","text":"这只是反例：`Redis 检测器命中后阻止构建`。实际使用 SQLite。","constraint_terms":["redis"],"expect_gate":false},
+
+  {"id":"es-explicit-ci","language":"es","category":"explicit_gate","text":"Añade un escáner GPL que debe bloquear CI cuando aparece una dependencia GPL no aprobada.","constraint_terms":["gpl"],"expect_gate":true},
+  {"id":"es-runtime-block","language":"es","category":"explicit_gate","text":"Usa un validador para loopback y rechaza la solicitud cuando detecte un destino loopback.","constraint_terms":["loopback"],"expect_gate":true},
+  {"id":"es-adjacent","language":"es","category":"explicit_gate","text":"Crea un detector de Redis. El detector de Redis debe fallar la compilación si hay coincidencia.","constraint_terms":["redis"],"expect_gate":true},
+  {"id":"es-quarantine","language":"es","category":"explicit_gate","text":"El validador de contenido executable debe aislar la carga cuando detecta un archivo executable.","constraint_terms":["executable"],"expect_gate":true},
+  {"id":"es-mechanism-only","language":"es","category":"negative","text":"Documenta un escáner Redis opcional para diagnóstico y termina el servicio.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"es-failure-only","language":"es","category":"negative","text":"Rechaza una solicitud Redis solo por el contrato normal; no se agrega un escáner.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"es-negated","language":"es","category":"negative","text":"No se debe crear un escáner Redis ni bloquear CI solo por mencionar Redis.","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"es-quoted-code","language":"es","category":"negative","text":"Solo como ejemplo: `el detector Redis bloquea CI`. La implementación usa SQLite.","constraint_terms":["redis"],"expect_gate":false},
+
+  {"id":"ja-explicit-ci","language":"ja","category":"explicit_gate","text":"未承認の GPL 依存関係を検出した場合、GPL スキャナーで CI をブロックする。","constraint_terms":["gpl"],"expect_gate":true},
+  {"id":"ja-runtime-block","language":"ja","category":"explicit_gate","text":"loopback ガードが loopback 宛先を検出したらリクエストを拒否する。","constraint_terms":["loopback"],"expect_gate":true},
+  {"id":"ja-adjacent","language":"ja","category":"explicit_gate","text":"Redis 検出器を作成する。Redis 検出器が一致したらビルドを失敗させる。","constraint_terms":["redis"],"expect_gate":true},
+  {"id":"ja-quarantine","language":"ja","category":"explicit_gate","text":"executable バリデーターが executable 内容を検出したらアップロードを隔離する。","constraint_terms":["executable"],"expect_gate":true},
+  {"id":"ja-mechanism-only","language":"ja","category":"negative","text":"診断用の任意 Redis スキャナーを文書化してサービスを完成させる。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"ja-failure-only","language":"ja","category":"negative","text":"通常の API 契約に従って Redis リクエストを拒否するが、スキャナーは追加しない。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"ja-negated","language":"ja","category":"negative","text":"Redis スキャナーを追加しない。Redis に言及しただけで CI をブロックしてはいけない。","constraint_terms":["redis"],"expect_gate":false},
+  {"id":"ja-quoted-code","language":"ja","category":"negative","text":"アンチパターンの例として `Redis 検出器が CI をブロックする` と記載する。実装は SQLite を使う。","constraint_terms":["redis"],"expect_gate":false}
+]

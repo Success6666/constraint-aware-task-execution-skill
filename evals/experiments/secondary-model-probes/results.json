@@ -1,0 +1,79 @@
+{
+  "experiment": "secondary-model-probes",
+  "generated_at": "2026-08-17T02:31:04.501509+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "low",
+  "models": [
+    "gpt-5.6-terra",
+    "gpt-5.5"
+  ],
+  "variants": [
+    "baseline"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "model": "gpt-5.6-terra",
+      "repeat": 1,
+      "success": false,
+      "failure_stage": "execute",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": false,
+          "returncode": 124,
+          "error": "TIMEOUT\n2026-08-17T02:31:04.894636Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell\n2026-08-17T02:31:35.014389Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (1/5 in 200ms)...\n2026-08-17T02:31:50.220857Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (2/5 in 394ms)...\n2026-08-17T02:32:05.635853Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (3/5 in 824ms)...\n2026-08-17T02:32:21.479607Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (4/5 in 1.732s)...\n2026-08-17T02:32:38.229649Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (5/5 in 2.938s)...\n2026-08-17T02:32:56.193026Z  WARN codex_core::client: falling back to HTTP\n",
+          "elapsed_seconds": 180.238,
+          "usage": {
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_output_tokens": 0
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "model": "gpt-5.5",
+      "repeat": 1,
+      "success": false,
+      "failure_stage": "execute",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": false,
+          "returncode": 124,
+          "error": "TIMEOUT\n2026-08-17T02:31:04.908989Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell\n2026-08-17T02:31:35.030057Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (1/5 in 207ms)...\n2026-08-17T02:31:50.252600Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (2/5 in 414ms)...\n2026-08-17T02:32:05.681933Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (3/5 in 868ms)...\n2026-08-17T02:32:21.573287Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (4/5 in 1.46s)...\n2026-08-17T02:32:38.059018Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (5/5 in 3.417s)...\n2026-08-17T02:32:56.505593Z  WARN codex_core::client: falling back to HTTP\n",
+          "elapsed_seconds": 180.227,
+          "usage": {
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_output_tokens": 0
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ]
+}

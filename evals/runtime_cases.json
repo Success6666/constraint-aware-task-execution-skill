@@ -1,0 +1,62 @@
+[
+  {
+    "id": "json-config",
+    "prompt": "Create config.json as the only project file. It must be a JSON object with service_name='catalog', port=8080, and debug=false.",
+    "allowed_paths": ["config.json"],
+    "validators": [
+      {"type": "files_exist", "paths": ["config.json"]},
+      {"type": "json_exact", "path": "config.json", "value": {"service_name": "catalog", "port": 8080, "debug": false}}
+    ]
+  },
+  {
+    "id": "parser-regression",
+    "prompt": "Implement app/parser.py with parse_numbers(text) that returns comma-separated integers and raises ValueError for empty or malformed items. Add regression tests in tests/test_parser.py. Modify only those two files.",
+    "allowed_paths": ["app/parser.py", "tests/test_parser.py"],
+    "validators": [
+      {"type": "files_exist", "paths": ["app/parser.py", "tests/test_parser.py"]},
+      {"type": "python_compile", "paths": ["app/parser.py", "tests/test_parser.py"]},
+      {"type": "command", "command": ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]}
+    ]
+  },
+  {
+    "id": "markdown-contract",
+    "prompt": "Create README.md with useful Overview, Usage, and Tests sections for a small command-line checksum tool. Modify only README.md.",
+    "allowed_paths": ["README.md"],
+    "validators": [
+      {"type": "files_exist", "paths": ["README.md"]},
+      {"type": "markdown_headings", "path": "README.md", "headings": ["Overview", "Usage", "Tests"]}
+    ]
+  },
+  {
+    "id": "csv-report-no-pandas",
+    "prompt": "Implement report.py with summarize(path) that reads CSV rows containing product and amount, returns totals per product, and uses the standard library. Add tests/test_report.py. Modify only those files.",
+    "allowed_paths": ["report.py", "tests/test_report.py"],
+    "validators": [
+      {"type": "files_exist", "paths": ["report.py", "tests/test_report.py"]},
+      {"type": "python_compile", "paths": ["report.py", "tests/test_report.py"]},
+      {"type": "forbidden_imports", "paths": ["report.py"], "imports": ["pandas"]},
+      {"type": "command", "command": ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]}
+    ]
+  },
+  {
+    "id": "upload-signature-guard",
+    "prompt": "Implement upload_guard.py with validate_upload(data) that raises ValueError for Windows MZ and ELF executable signatures and returns true for ordinary data. Add tests/test_upload_guard.py. Modify only those files.",
+    "allowed_paths": ["upload_guard.py", "tests/test_upload_guard.py"],
+    "validators": [
+      {"type": "files_exist", "paths": ["upload_guard.py", "tests/test_upload_guard.py"]},
+      {"type": "python_compile", "paths": ["upload_guard.py", "tests/test_upload_guard.py"]},
+      {"type": "command", "command": ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]}
+    ]
+  },
+  {
+    "id": "client-no-global-singleton",
+    "prompt": "Implement src/client.py with an injectable ApiClient class that stores base_url and exposes build_url(path). Do not create a module-level client instance. Add tests/test_client.py. Modify only those files.",
+    "allowed_paths": ["src/client.py", "tests/test_client.py"],
+    "validators": [
+      {"type": "files_exist", "paths": ["src/client.py", "tests/test_client.py"]},
+      {"type": "python_compile", "paths": ["src/client.py", "tests/test_client.py"]},
+      {"type": "forbidden_pattern", "paths": ["src/client.py"], "patterns": ["(?m)^\\s*(?:client|api_client)\\s*=\\s*ApiClient\\("]},
+      {"type": "command", "command": ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]}
+    ]
+  }
+]

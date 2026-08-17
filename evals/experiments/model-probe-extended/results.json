@@ -1,0 +1,48 @@
+{
+  "experiment": "model-probe-extended",
+  "generated_at": "2026-08-17T02:17:17.342548+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "low",
+  "models": [
+    "gpt-5.6-sol"
+  ],
+  "variants": [
+    "baseline"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "model": "gpt-5.6-sol",
+      "repeat": 1,
+      "success": false,
+      "failure_stage": "execute",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": false,
+          "returncode": 124,
+          "error": "TIMEOUT\n2026-08-17T02:17:17.646747Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell\n2026-08-17T02:17:47.750797Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (1/5 in 185ms)...\n2026-08-17T02:18:02.949502Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (2/5 in 366ms)...\n2026-08-17T02:18:18.326622Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (3/5 in 871ms)...\n2026-08-17T02:18:34.230482Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (4/5 in 1.444s)...\n2026-08-17T02:18:50.688554Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (5/5 in 2.919s)...\n2026-08-17T02:19:08.634405Z  WARN codex_core::client: falling back to HTTP\n2026-08-17T02:20:56.808787Z  WARN codex_core::responses_retry: stream disconnected - retrying sampling request (1/5 in 210ms)...\n",
+          "elapsed_seconds": 300.197,
+          "usage": {
+            "input_tokens": 0,
+            "cached_input_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_output_tokens": 0
+          }
+        }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ]
+}

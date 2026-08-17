@@ -18,7 +18,7 @@ Completed pairs: `30/30`
 | `constraint_violation_hits` | 0.0000 | 0.0000 | +0.0000 |
 | `required_enforcement_coverage` | 1.0000 | 1.0000 | +0.0000 |
 | `under_enforcement_hits` | 0.0000 | 0.0000 | +0.0000 |
-| `failure_gate_hits` | 0.0000 | 0.0000 | +0.0000 |
+| `failure_gate_hits` | 0.0333 | 0.0000 | -0.0333 |
 | `constraint_component_hits` | 0.1000 | 0.0000 | -0.1000 |
 | `constraint_echo` | 0.4333 | 0.1667 | -0.2666 |
 | `soft_preference_hardening` | 0.0000 | 0.0000 | +0.0000 |
@@ -31,7 +31,7 @@ Only the `30` pairs where both responses passed objective and constraint gates a
 
 | Metric | Baseline | Skill | Delta |
 | --- | ---: | ---: | ---: |
-| `overoptimization_score` | 0.7333 | 0.1667 | -0.5666 |
+| `overoptimization_score` | 0.8333 | 0.1667 | -0.6666 |
 
 ## Per-Case Results
 
@@ -39,7 +39,7 @@ Only the `30` pairs where both responses passed objective and constraint gates a
 | --- | :---: | :---: | ---: | ---: | ---: |
 | `auth-two-files-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
 | `billing-modular-monolith-zh` | yes | yes | 1.00 | 0.00 | -1.00 |
-| `client-avoid-singleton-zh` | yes | yes | 2.00 | 1.00 | -1.00 |
+| `client-avoid-singleton-zh` | yes | yes | 5.00 | 1.00 | -4.00 |
 | `config-no-yaml-zh` | yes | yes | 0.00 | 0.00 | +0.00 |
 | `crawler-prefer-stdlib` | yes | yes | 0.00 | 0.00 | +0.00 |
 | `csv-no-pandas` | yes | yes | 0.00 | 0.00 | +0.00 |
@@ -70,7 +70,7 @@ Only the `30` pairs where both responses passed objective and constraint gates a
 
 ## Interpretation
 
-The aggregate over-optimization score decreased by `77.3%` without reducing aggregate objective coverage.
+The aggregate over-optimization score decreased by `80.0%` without reducing aggregate objective coverage.
 
 Aggregate constraint adherence changed by `+0.0000`.
 

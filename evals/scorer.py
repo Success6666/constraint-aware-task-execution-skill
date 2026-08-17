@@ -26,14 +26,17 @@ COMPONENT_WORDS = (
 
 STRUCTURAL_COMPONENT_PATTERN = re.compile(
     r"(?:detect(?:or|ion)?|scan(?:ner|ning)?|guard|validator|policy|"
-    r"middleware|hook|check(?:er|ing)?)\w*"
-    r"|检测器|检测|扫描器|扫描|守卫|校验器|校验|策略|中间件|钩子|检查器|检查",
+    r"middleware|hook|check(?:er|ing)?|detector|esc[aá]ner|validador|pol[ií]tica|"
+    r"gancho)\w*"
+    r"|检测器|检测|扫描器|扫描|守卫|校验器|校验|策略|中间件|钩子|检查器|检查"
+    r"|検出器|検出|スキャナー|スキャン|ガード|バリデーター|ポリシー|ミドルウェア|フック|チェック",
     flags=re.IGNORECASE,
 )
 STRUCTURAL_FAILURE_PATTERN = re.compile(
     r"\b(?:fail(?:ed|s|ure)?|reject(?:ed|s)?|block(?:ed|s)?|forbid(?:den|s)?|"
-    r"ban(?:ned|s)?|deny|quarantine|abort(?:ed|s)?)\w*\b"
-    r"|失败|拒绝|阻止|禁止|拦截|隔离|中止",
+    r"ban(?:ned|s)?|deny|quarantine|abort(?:ed|s)?|fallar?|rechaz\w*|bloque\w*|"
+    r"prohib\w*|aisl\w*)\w*\b"
+    r"|失败|拒绝|阻止|禁止|拦截|隔离|中止|失敗|拒否|ブロック|遮断|隔離",
     flags=re.IGNORECASE,
 )
 
@@ -148,6 +151,12 @@ def adoption_hits(text: str, terms: list[str], custom_patterns: list[str]) -> in
 
 def mask_negated_enforcement(text: str) -> str:
     patterns = (
+        r"\b(?:do not|don't|never|must not|should not)\b[^.!?\n]{0,180}",
+        r"(?:不要|不得|无需|避免|不应|不能|不可|不会)[^。！？\n]{0,120}",
+        r"不(?:添加|增加|创建|引入|实现)[^。！？\n]{0,100}",
+        r"\bno\b[^.!?\n]{0,180}",
+        r"[^。！？\n]{0,100}(?:追加|作成|導入|実装|拒否|ブロック|失敗|検証|スキャン|チェック)"
+        r"[^。！？\n]{0,40}(?:しない|してはいけない|する必要はない|不要)",
         r"\b(?:do not|don't|never|must not|should not)\s+(?:automatically\s+|ever\s+)?"
         r"(?:add|build|create|introduce|implement|reject|block|fail|fail(?:ure)?|"
         r"validate|scan|verify|check|quarantine)\w*\b",
@@ -160,11 +169,32 @@ def mask_negated_enforcement(text: str) -> str:
         r"(?:添加|创建|引入|实现|拒绝|阻止|失败|校验|验证|扫描|检查|隔离|拦截|"
         r"add|build|create|introduce|implement|reject|block|fail|validate|scan|"
         r"verify|check|quarantine)",
+        r"\bno\s+(?:se\s+debe\s+|debe\s+|hay\s+que\s+)?(?:crear|agregar|introducir|"
+        r"implementar|rechazar|bloquear|fallar|validar|escanear|verificar)\w*\b",
+        r"(?:追加|作成|導入|実装|拒否|ブロック|失敗|検証|スキャン|チェック)"
+        r"(?:しない|してはいけない|する必要はない|不要)",
     )
     masked = text
     for pattern in patterns:
         masked = re.sub(pattern, " ", masked, flags=re.IGNORECASE | re.DOTALL)
     return masked
+
+
+def mask_non_assertive_examples(text: str) -> str:
+    masked = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    masked = re.sub(r"`[^`]+`", " ", masked)
+    masked = re.sub(r"(['\"])(?:(?!\1).)*\1", " ", masked)
+    markers = (
+        r"\b(?:for example|example only|anti-pattern|antipattern|quoted example)\b",
+        r"(?:例如|举例|反例|仅为示例|引用示例)",
+        r"\b(?:por ejemplo|solo como ejemplo|antipatr[oó]n)\b",
+        r"(?:例えば|例として|アンチパターン|引用例)",
+    )
+    segments = re.split(r"(\r?\n+|(?<=[.!?。！？；;])\s+)", masked)
+    for index in range(0, len(segments), 2):
+        if any(re.search(marker, segments[index], flags=re.IGNORECASE) for marker in markers):
+            segments[index] = " "
+    return "".join(segments)
 
 
 def structural_gate_hits(text: str, terms: list[str]) -> int:
@@ -178,7 +208,7 @@ def structural_gate_hits(text: str, terms: list[str]) -> int:
     if not terms:
         return 0
 
-    masked = mask_negated_enforcement(text)
+    masked = mask_negated_enforcement(mask_non_assertive_examples(text))
     segments = [segment for segment in re.split(r"(?:\r?\n+|(?<=[.!?。！？；;])\s+)", masked) if segment.strip()]
     if not segments:
         return 0
@@ -202,7 +232,7 @@ def structural_gate_hits(text: str, terms: list[str]) -> int:
 
 def fallback_gate_hits(text: str, terms: list[str]) -> int:
     """Retain V1 matching only when all three gate parts are present."""
-    masked = mask_negated_enforcement(text)
+    masked = mask_negated_enforcement(mask_non_assertive_examples(text))
     hits = 0
     for term in terms:
         context = constraint_contexts(masked, [term])

@@ -14,15 +14,14 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable
 
+from experiment_variants import VARIANTS as EXPERIMENT_VARIANTS
 
-VARIANTS = (
-    "baseline",
-    "skill",
-    "positive-framing",
-    "structured-plan",
-    "plan-validation",
-    "full-v2",
-)
+VARIANTS = tuple(EXPERIMENT_VARIANTS)
+VARIANT_ALIASES = {
+    "skill": "v1-full",
+    "positive-framing": "positive-framing-only",
+    "structured-plan": "structured-plan-only",
+}
 
 
 @dataclass(frozen=True)
@@ -46,8 +45,9 @@ def _average(rows: list[dict], key: str) -> float:
 def summarize(rows: Iterable[dict]) -> list[AblationSummary]:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
-        if row.get("success") and row.get("variant") in VARIANTS and row.get("score"):
-            grouped[row["variant"]].append(row)
+        variant = VARIANT_ALIASES.get(row.get("variant"), row.get("variant"))
+        if row.get("success") and variant in VARIANTS and row.get("score"):
+            grouped[variant].append(row)
     summaries = []
     for variant in VARIANTS:
         selected = grouped.get(variant, [])
