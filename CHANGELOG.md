@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0-rc.7 - 2026-08-17
+
+- Bounded release matrix concurrency to reduce wall-clock time while retaining provider-level call limits and resumable checkpoints.
+
 ## 0.4.0-rc.6 - 2026-08-17
 
 - Added a grounded minimal plan fallback that can only use frozen case metadata and records every synthesized field.

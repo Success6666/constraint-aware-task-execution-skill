@@ -1,8 +1,8 @@
 {
   "$schema": "schemas/release-experiment.schema.json",
   "schema_version": "1.0",
-  "release_candidate": "0.4.0-rc.6",
-  "experiment": "release-0.4.0-rc.6",
+  "release_candidate": "0.4.0-rc.7",
+  "experiment": "release-0.4.0-rc.7",
   "output_root": "evals/experiments/releases",
   "limits": {
     "max_model_jobs": 600,
