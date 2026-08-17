@@ -13,9 +13,11 @@ from pathlib import PurePosixPath
 import re
 from typing import Any, Callable, Mapping
 
+from constraint_policy import evaluate_constraint_policy
+
 
 PLAN_SCHEMA_VERSION = "1.0"
-ALLOWED_CONSTRAINT_TYPES = {"hard", "soft", "enforcement"}
+ALLOWED_CONSTRAINT_TYPES = {"hard", "enforcement"}
 ALLOWED_ARTIFACT_KINDS = {"text", "json", "markdown", "python", "file"}
 
 
@@ -131,7 +133,9 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
         if required_gate not in (True, False):
             issues.append(_issue("ENFORCEMENT_REQUIRED_TYPE", f"{path}.enforcement_required", "must be boolean"))
         gate_text = " ".join(str(value or "") for value in (strategy, constraint.get("failure_action")))
-        if not required_gate and detect_gate_relation(gate_text):
+        target = constraint.get("target")
+        targets = [str(target)] if _is_nonempty_string(target) else None
+        if not required_gate and detect_gate_relation(gate_text, targets):
             issues.append(_issue(
                 "UNREQUESTED_FAILURE_GATE",
                 path,
@@ -153,6 +157,13 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
             issues.append(_issue("PREFERENCE_REQUIRED", f"{path}.preference", "must be non-empty"))
         if not _is_nonempty_string(preference.get("tradeoff")):
             issues.append(_issue("TRADEOFF_REQUIRED", f"{path}.tradeoff", "must be non-empty"))
+        if preference.get("type") is not None and preference.get("type") != "soft":
+            issues.append(_issue("PREFERENCE_TYPE", f"{path}.type", "soft preferences must use type=soft"))
+
+    policy = evaluate_constraint_policy(constraints, preferences)
+    for policy_issue in policy.issues:
+        if policy_issue.severity == "error":
+            issues.append(_issue(policy_issue.code, policy_issue.path, policy_issue.message))
 
     for key in ("risk_points", "artifacts"):
         if not isinstance(plan.get(key, []), list):

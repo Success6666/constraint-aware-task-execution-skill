@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/constraint-aware/runtime-request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "prompt", "workspace", "executor"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "prompt": {"type": "string", "minLength": 1},
+    "workspace": {"type": "string", "minLength": 1},
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "model"],
+      "properties": {
+        "type": {"enum": ["codex", "codex-cli", "ollama", "ollama-cli"]},
+        "model": {"type": "string"},
+        "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]}
+      }
+    },
+    "structured_plan": {"type": "boolean", "default": true},
+    "workspace_required": {"type": "boolean", "default": true},
+    "allowed_paths": {"type": "array", "items": {"type": "string"}},
+    "validators": {"type": "array", "items": {"type": "object", "required": ["type"]}},
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {"type": "integer", "minimum": 1},
+        "plan": {"type": "integer", "minimum": 1},
+        "artifact": {"type": "integer", "minimum": 0}
+      }
+    },
+    "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+    "sandbox": {"type": "string"},
+    "environment": {"type": "object", "additionalProperties": {"type": "string"}},
+    "output_root": {"type": "string"},
+    "result_path": {"type": "string"},
+    "resume": {"type": "boolean"}
+  }
+}

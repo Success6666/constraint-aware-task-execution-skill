@@ -3,25 +3,25 @@
 from __future__ import annotations
 
 import argparse
-import ast
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
-import re
-import shutil
-import subprocess
 from typing import Any
 
+from execution_state import ExecutionState, Stage
+from executors import create_executor
 from experiment_variants import VARIANTS
-from protocol import parse_plan, validate_markdown_artifact
+from protocol import parse_plan
+from validators import validate_workspace_contract
 from run_matrix import (
     DEFAULT_OUTPUT_ROOT,
     SCHEMA_PATH,
     add_usage,
     plan_prompt,
     prepare_workspace,
-    run_codex,
+    dispatch_generation,
     slug,
     usage_from_trace,
 )
@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run deterministic workspace artifact experiments.")
     parser.add_argument("--experiment", required=True)
     parser.add_argument("--model", action="append", dest="models", required=True)
+    parser.add_argument("--executor", choices=("codex", "ollama"), default="codex")
     parser.add_argument("--mode", action="append", dest="modes")
     parser.add_argument("--case", action="append", dest="case_ids")
     parser.add_argument("--repeat", type=int, default=1)
@@ -44,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--repair-attempts", type=int, default=2)
     parser.add_argument("--plan-attempts", type=int, default=2)
+    parser.add_argument("--transport-attempts", type=int, default=2)
     parser.add_argument("--reasoning-effort", choices=("low", "medium", "high", "xhigh"), default="medium")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--resume", action="store_true")
@@ -75,82 +77,19 @@ def project_paths(workspace: Path) -> set[str]:
     }
 
 
+def project_fingerprints(workspace: Path) -> dict[str, str]:
+    return {
+        relative: hashlib.sha256((workspace / relative).read_bytes()).hexdigest()
+        for relative in project_paths(workspace)
+    }
+
+
+def changed_project_paths(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
+
+
 def validate_runtime(case: dict, workspace: Path) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    actual_paths = project_paths(workspace)
-    allowed_paths = set(case["allowed_paths"])
-    unexpected = sorted(actual_paths - allowed_paths)
-    results.append({
-        "type": "path_scope", "status": "pass" if not unexpected else "fail",
-        "errors": [f"PATH_SCOPE:{path}" for path in unexpected],
-    })
-    for validator in case["validators"]:
-        kind = validator["type"]
-        errors: list[str] = []
-        details: dict[str, Any] = {}
-        if kind == "files_exist":
-            errors = [f"FILE_MISSING:{path}" for path in validator["paths"] if not (workspace / path).is_file()]
-        elif kind == "json_exact":
-            path = workspace / validator["path"]
-            try:
-                value = json.loads(path.read_text(encoding="utf-8"))
-                if value != validator["value"]:
-                    errors.append(f"JSON_VALUE:{validator['path']}")
-            except (OSError, json.JSONDecodeError) as exc:
-                errors.append(f"JSON_INVALID:{validator['path']}:{exc}")
-        elif kind == "markdown_headings":
-            path = workspace / validator["path"]
-            if not path.is_file():
-                errors.append(f"FILE_MISSING:{validator['path']}")
-            else:
-                result = validate_markdown_artifact(path.read_text(encoding="utf-8"), validator["headings"])
-                errors.extend(f"MARKDOWN:{error}" for error in result.errors)
-        elif kind == "python_compile":
-            for relative in validator["paths"]:
-                path = workspace / relative
-                try:
-                    compile(path.read_text(encoding="utf-8"), relative, "exec")
-                except (OSError, SyntaxError, ValueError) as exc:
-                    errors.append(f"PYTHON_COMPILE:{relative}:{exc}")
-        elif kind == "forbidden_imports":
-            forbidden = set(validator["imports"])
-            for relative in validator["paths"]:
-                path = workspace / relative
-                try:
-                    tree = ast.parse(path.read_text(encoding="utf-8"))
-                except (OSError, SyntaxError) as exc:
-                    errors.append(f"PYTHON_AST:{relative}:{exc}")
-                    continue
-                imports = {
-                    alias.name.split(".")[0]
-                    for node in ast.walk(tree) if isinstance(node, ast.Import)
-                    for alias in node.names
-                }
-                imports.update(
-                    (node.module or "").split(".")[0]
-                    for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
-                )
-                for name in sorted(imports & forbidden):
-                    errors.append(f"FORBIDDEN_IMPORT:{relative}:{name}")
-        elif kind == "forbidden_pattern":
-            for relative in validator["paths"]:
-                path = workspace / relative
-                content = path.read_text(encoding="utf-8") if path.is_file() else ""
-                for pattern in validator["patterns"]:
-                    if re.search(pattern, content):
-                        errors.append(f"FORBIDDEN_PATTERN:{relative}")
-        elif kind == "command":
-            completed = subprocess.run(
-                validator["command"], cwd=workspace, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=120, check=False,
-            )
-            details = {"returncode": completed.returncode, "output": (completed.stdout + completed.stderr)[-4000:]}
-            if completed.returncode:
-                errors.append(f"COMMAND_FAILED:{' '.join(validator['command'])}")
-        else:
-            errors.append(f"VALIDATOR_UNSUPPORTED:{kind}")
-        results.append({"type": kind, "status": "pass" if not errors else "fail", "errors": errors, **details})
-    return results
+    return validate_workspace_contract(workspace, case["allowed_paths"], case["validators"])
 
 
 def runtime_prompt(case: dict, mode: str, plan_text: str | None = None, errors: list[str] | None = None) -> str:
@@ -176,12 +115,23 @@ def runtime_prompt(case: dict, mode: str, plan_text: str | None = None, errors: 
 def run_runtime_job(
     case: dict, mode: str, model: str, repeat: int, root: Path,
     effort: str, timeout: int, repair_attempts: int, plan_attempts: int = 2,
+    executor_name: str = "codex", transport_attempts: int = 2,
 ) -> dict[str, Any]:
     variant = VARIANTS["full-v2"] if mode == "full-v2" else VARIANTS["baseline"]
     workspace = prepare_workspace(root, model, repeat, variant, f"runtime-{case['id']}")
     base = Path(slug(model)) / f"r{repeat}" / mode / case["id"]
     usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0}
     attempts: list[dict[str, Any]] = []
+    state = ExecutionState(f"{slug(model)}:r{repeat}:{mode}:{case['id']}")
+    if not create_executor(executor_name).capabilities.workspace_access:
+        state.finish(False, "executor_capability_mismatch")
+        return {
+            "case_id": case["id"], "mode": mode, "model": model, "executor": executor_name,
+            "repeat": repeat, "success": False, "contract_pass": False,
+            "termination_reason": state.termination_reason, "attempts": [], "state": state.to_dict(),
+            "plan_retry_count": 0, "artifact_retry_count": 0, "retry_count": 0,
+            "transport_retry_count": 0, "usage": usage,
+        }
     plan_text = None
     plan_retry_count = 0
     if mode == "full-v2":
@@ -190,44 +140,70 @@ def run_runtime_job(
         for index in range(plan_attempts):
             plan_path = root / "plans" / base.with_suffix(f".a{index + 1}.json")
             trace_path = root / "traces" / "plans" / base.with_suffix(f".a{index + 1}.jsonl")
-            call = run_codex(
+            call = dispatch_generation(
                 plan_prompt({"prompt": case["prompt"]}, variant, previous, issues), model, effort,
                 workspace, root / ".codex-homes", plan_path, trace_path, timeout, SCHEMA_PATH,
+                executor_name=executor_name, transport_attempts=transport_attempts,
             )
             add_usage(usage, call["usage"])
             attempt = {"phase": "plan", "attempt": index + 1, **call}
             attempts.append(attempt)
             if not call["success"]:
+                state.add_attempt(Stage.PLAN, "fail", errors=["PLAN_CALL_FAILED"], evidence={"call": call})
                 previous = plan_path.read_text(encoding="utf-8") if plan_path.is_file() else ""
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$"}]
                 continue
             previous = plan_path.read_text(encoding="utf-8")
             _parsed, validation = parse_plan(previous)
             attempt["validation"] = validation.to_dict()
+            state.add_attempt(
+                Stage.PLAN,
+                "pass" if validation.valid else "fail",
+                errors=[issue.code for issue in validation.issues],
+                evidence={"validation": validation.to_dict()},
+            )
             issues = [{"code": issue.code, "path": issue.path} for issue in validation.issues]
             if validation.valid:
                 plan_text = previous
                 break
         plan_retry_count = max(0, sum(item["phase"] == "plan" for item in attempts) - 1)
         if plan_text is None:
+            state.finish(False, "plan_validation_exhausted")
             return {
-                "case_id": case["id"], "mode": mode, "model": model, "repeat": repeat,
+                "case_id": case["id"], "mode": mode, "model": model, "executor": executor_name, "repeat": repeat,
                 "success": False, "contract_pass": False,
                 "termination_reason": "plan_validation_exhausted", "attempts": attempts,
                 "plan_retry_count": plan_retry_count, "artifact_retry_count": 0,
-                "retry_count": plan_retry_count, "usage": usage,
+                "retry_count": plan_retry_count,
+                "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
+                "usage": usage, "state": state.to_dict(),
             }
 
     output_path = root / "messages" / base.with_suffix(".md")
     trace_path = root / "traces" / "execute" / base.with_suffix(".jsonl")
-    call = run_codex(
+    before_execute = project_fingerprints(workspace)
+    call = dispatch_generation(
         runtime_prompt(case, mode, plan_text), model, effort, workspace, root / ".codex-homes",
         output_path, trace_path, timeout, sandbox="workspace-write",
+        executor_name=executor_name, transport_attempts=transport_attempts,
     )
     add_usage(usage, call["usage"])
-    attempts.append({"phase": "execute", **call})
+    execute_changed = changed_project_paths(before_execute, project_fingerprints(workspace))
+    attempts.append({"phase": "execute", "changed_paths": execute_changed, **call})
+    state.add_attempt(
+        Stage.EXECUTE,
+        "pass" if call["success"] else "fail",
+        errors=[] if call["success"] else ["EXECUTION_CALL_FAILED"],
+        changed_paths=execute_changed,
+        evidence={"call": call},
+    )
     validations = validate_runtime(case, workspace) if call["success"] else []
-    errors = [error for result in validations for error in result["errors"]]
+    state.update_validations(validations)
+    errors = [error for result in validations if result["status"] == "fail" for error in result["errors"]]
+    unsupported = [result for result in validations if result["status"] == "unsupported"]
+    if call["success"]:
+        validation_status = "fail" if errors else ("unsupported" if unsupported else "pass")
+        state.add_attempt(Stage.VALIDATE, validation_status, errors=errors, evidence={"validations": validations})
     repair_count = 0
     repair_success = False
     if mode == "full-v2":
@@ -237,15 +213,29 @@ def run_runtime_job(
             repair_count += 1
             repair_output = root / "messages" / "repairs" / base.with_suffix(f".a{index + 1}.md")
             repair_trace = root / "traces" / "repairs" / base.with_suffix(f".a{index + 1}.jsonl")
-            repair = run_codex(
+            before_repair = project_fingerprints(workspace)
+            repair = dispatch_generation(
                 runtime_prompt(case, mode, plan_text, errors), model, effort, workspace, root / ".codex-homes",
                 repair_output, repair_trace, timeout, sandbox="workspace-write",
+                executor_name=executor_name, transport_attempts=transport_attempts,
             )
             add_usage(usage, repair["usage"])
-            attempts.append({"phase": "repair", "attempt": index + 1, **repair})
+            repair_changed = changed_project_paths(before_repair, project_fingerprints(workspace))
+            attempts.append({"phase": "repair", "attempt": index + 1, "changed_paths": repair_changed, **repair})
+            state.add_attempt(
+                Stage.REPAIR,
+                "pass" if repair["success"] else "fail",
+                errors=[] if repair["success"] else ["REPAIR_CALL_FAILED"],
+                changed_paths=repair_changed,
+                evidence={"call": repair},
+            )
             if repair["success"]:
                 validations = validate_runtime(case, workspace)
-                errors = [error for result in validations for error in result["errors"]]
+                state.update_validations(validations)
+                errors = [error for result in validations if result["status"] == "fail" for error in result["errors"]]
+                unsupported = [result for result in validations if result["status"] == "unsupported"]
+                validation_status = "fail" if errors else ("unsupported" if unsupported else "pass")
+                state.add_attempt(Stage.VALIDATE, validation_status, errors=errors, evidence={"validations": validations})
                 if not errors:
                     repair_success = True
                     break
@@ -256,13 +246,23 @@ def run_runtime_job(
     snapshot_path = root / "artifacts" / base.with_suffix(".json")
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    contract_pass = call["success"] and not errors and not unsupported
+    termination_reason = (
+        "success" if contract_pass else
+        "validation_unsupported" if unsupported else
+        "validation_exhausted" if call["success"] else
+        "execution_failed"
+    )
+    state.finish(contract_pass, termination_reason)
     return {
-        "case_id": case["id"], "mode": mode, "model": model, "repeat": repeat,
-        "success": call["success"], "contract_pass": not errors,
-        "termination_reason": "success" if not errors else "validation_exhausted",
+        "case_id": case["id"], "mode": mode, "model": model, "executor": executor_name, "repeat": repeat,
+        "success": call["success"], "contract_pass": contract_pass,
+        "termination_reason": termination_reason,
         "validations": validations, "errors": errors, "attempts": attempts,
         "retry_count": plan_retry_count + repair_count, "artifact_retry_count": repair_count,
+        "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
         "plan_retry_count": plan_retry_count, "repair_success": repair_success, "usage": usage,
+        "state": state.to_dict(),
     }
 
 
@@ -276,7 +276,7 @@ def checkpoint(path: Path, metadata: dict, rows: dict[tuple[str, int, str, str],
 
 def main() -> int:
     args = parse_args()
-    if args.plan_attempts < 1 or args.repair_attempts < 0:
+    if args.plan_attempts < 1 or args.repair_attempts < 0 or args.transport_attempts < 1:
         raise ValueError("retry attempt counts must be non-negative and plan attempts must be positive")
     modes = list(dict.fromkeys(args.modes or MODES))
     unknown = set(modes) - set(MODES)
@@ -288,7 +288,8 @@ def main() -> int:
     rows: dict[tuple[str, int, str, str], dict] = {}
     if args.resume and results_path.is_file():
         previous = json.loads(results_path.read_text(encoding="utf-8"))
-        rows = {(row["model"], row["repeat"], row["mode"], row["case_id"]): row for row in previous["results"]}
+        if previous.get("executor", "codex") == args.executor:
+            rows = {(row["model"], row["repeat"], row["mode"], row["case_id"]): row for row in previous["results"]}
     jobs = []
     for model in args.models:
         for repeat in range(1, args.repeat + 1):
@@ -301,13 +302,15 @@ def main() -> int:
     metadata = {
         "experiment": args.experiment, "protocol": RUNTIME_PROTOCOL,
         "generated_at": datetime.now(timezone.utc).isoformat(), "models": args.models,
+        "executor": args.executor, "transport_attempts": args.transport_attempts,
         "modes": modes, "repeats": args.repeat, "cases": [case["id"] for case in cases],
     }
     checkpoint(results_path, metadata, rows)
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
         future_map = {
             executor.submit(run_runtime_job, case, mode, model, repeat, root, args.reasoning_effort,
-                            args.timeout, args.repair_attempts, args.plan_attempts): (case, mode, model, repeat)
+                            args.timeout, args.repair_attempts, args.plan_attempts,
+                            args.executor, args.transport_attempts): (case, mode, model, repeat)
             for case, mode, model, repeat in jobs
         }
         for future in as_completed(future_map):
@@ -317,7 +320,8 @@ def main() -> int:
                 rows[key] = future.result()
             except Exception as exc:  # pragma: no cover
                 rows[key] = {"case_id": case["id"], "mode": mode, "model": model, "repeat": repeat,
-                             "success": False, "contract_pass": False, "error": repr(exc)}
+                             "executor": args.executor, "success": False, "contract_pass": False,
+                             "error": repr(exc)}
             checkpoint(results_path, metadata, rows)
             print(f"[runtime] {model} r{repeat} {mode} {case['id']} pass={rows[key].get('contract_pass')}", flush=True)
     return 0 if all(row.get("contract_pass") for row in rows.values()) else 1

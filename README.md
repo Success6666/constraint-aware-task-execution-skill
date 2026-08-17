@@ -2,6 +2,8 @@
 
 An Agent Skill that keeps the user's primary objective ahead of negative constraints and soft preferences. It reduces the tendency to replace useful work with extra guards, scanners, policy layers, rejection paths, or repeated compliance commentary.
 
+Current protocol version: `0.4.0-rc.1`. This prerelease completes the non-test implementation surface; final promotion remains gated by the full validation and model matrix.
+
 ## Measured Result
 
 The committed A/B run used `gpt-5.6-sol` with medium reasoning effort on 30 matched prompts: 15 English and 15 Chinese. The suite contains 12 hard-constraint cases, 6 soft-preference cases, 6 safety or explicit-enforcement cases, and 6 output or architecture-constraint cases.
@@ -42,6 +44,25 @@ for the current completion state. Validation errors are machine feedback; over-o
 and are never included in model repair prompts.
 
 The artifact validators prove observable contracts only. Unsupported semantic checks remain explicitly `unsupported`.
+
+## Capability retention
+
+Constraint compliance is not accepted when it makes the model less useful. The evaluation layer pairs each candidate with the same case, model, repeat, and sampling signature, then reports:
+
+- objective, hard-constraint, enforcement, format, path, and artifact retention;
+- non-constraint requirement and declared quality retention;
+- unnecessary refusal, clarification, and excessive-caution regressions;
+- token and latency ratios as separate efficiency metrics.
+
+Missing or failed pairs are coverage gaps, not zero scores. Output length and keyword counts do not prove quality. A final candidate with a functional, required-content, artifact, or declared-quality regression fails the release gate even if its over-optimization score improves.
+
+For semantic quality that deterministic contracts cannot establish, `evals/pairwise_review.py` prepares anonymized baseline/candidate review packets and a separate mapping key. Reviewers score correctness, completeness, usefulness, and requirement retention on both sides; the applied scores become explicit partial evidence instead of inferred keyword quality.
+
+## Model-independent runtime
+
+`evals/executors/` provides Codex CLI and local Ollama adapters with common request, result, capability, usage, and failure contracts. `scripts/execute_protocol.py` exposes the plan, execute, validate, and bounded-repair flow through versioned JSON input and output. Workspace writes require an executor that declares workspace access; unsupported capabilities terminate explicitly.
+
+Runtime validators are selected from a fixed registry. File access is contained to the workspace, commands must match an allowlist and run without a shell, and unknown validators return `unsupported`. Trace and result persistence redact credential-shaped values and use isolated temporary runtime state.
 
 ## Install
 
@@ -114,8 +135,23 @@ Run an isolated orthogonal matrix or workspace-artifact experiment:
 
 ```bash
 python evals/run_matrix.py --experiment full-matrix --model MODEL --variant baseline --variant full-v2
+python evals/run_matrix.py --experiment local-matrix --executor ollama --model qwen3.5:9b --variant baseline --variant full-v2
 python evals/run_runtime.py --experiment runtime-matrix --model MODEL --mode direct --mode full-v2
+python evals/pairwise_review.py prepare --results RESULTS.json --experiment-root EXPERIMENT_DIR --variant full-v2 --seed REVIEW_SEED --cases evals/cases.json --reviews reviews.json --key reviews.key.json
+python evals/pairwise_review.py apply --results RESULTS.json --reviews reviews.json --key reviews.key.json --output RESULTS.reviewed.json
 ```
+
+Run the stable Agent Runtime interface:
+
+```bash
+python evals/agent_runtime.py --describe
+python evals/agent_runtime.py --request generation-request.json --response generation-response.json
+python scripts/execute_protocol.py request.json --output result.json
+```
+
+The first interface performs one model generation with normalized capabilities and failures. The second executes the full plan, validate, and bounded-repair protocol.
+
+The request and result contracts are defined in `evals/schemas/runtime-request.schema.json` and `evals/schemas/result.schema.json`. Benchmark pairing and release gates are declared in `evals/benchmark-manifest.json`.
 
 Each case uses an isolated temporary Git repository and a temporary `CODEX_HOME` containing only a copied authentication file. The authentication copy is deleted after the subprocess exits. Checkpoints are written atomically after each result, and one failed case does not discard completed results.
 
@@ -135,9 +171,14 @@ evals/cases.json                         30-case bilingual benchmark
 evals/run_ab.py                          Isolated concurrent A/B runner
 evals/run_matrix.py                      Orthogonal plan/execute/repair matrix runner
 evals/run_runtime.py                     Real workspace artifact runner
+evals/executors/                         Model execution adapters
+evals/validators/                        Allowlisted artifact validator registry
+evals/capability_metrics.py              Paired capability-retention metrics
+evals/pairwise_review.py                 Blinded semantic capability review workflow
 evals/scorer.py                          Deterministic scorer
 evals/build_experiment_report.py         Strict completeness and metric report
 evals/results/                           Raw responses, scores, and report
+scripts/execute_protocol.py              Versioned Agent Runtime JSON CLI
 scripts/verify-install.py                Cross-agent installation verifier
 tests/                                   Unit and distribution tests
 ```

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/constraint-aware/result.schema.json",
+  "type": "object",
+  "required": ["schema_version", "protocol", "run_id", "success", "termination_reason", "executor", "state", "attempts"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "protocol": {"const": "constraint-aware-execution"},
+    "run_id": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "success": {"type": "boolean"},
+    "termination_reason": {"type": ["string", "null"]},
+    "executor": {"type": "object"},
+    "plan_validation": {"type": ["object", "null"]},
+    "validations": {"type": "array"},
+    "state": {"type": "object"},
+    "attempts": {"type": "array"}
+  }
+}
+

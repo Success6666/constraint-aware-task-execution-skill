@@ -1,0 +1,33 @@
+# Migration to 0.4
+
+## Version status
+
+`0.4.0-rc.1` is the non-test implementation candidate. Keep `v0.3.0` results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the deferred validation and model matrices satisfy the task acceptance gates.
+
+## Runner changes
+
+- `evals/run_matrix.py` accepts `--executor codex|ollama` and `--transport-attempts`.
+- Transport retries are recorded separately from plan retries and artifact repairs.
+- Result signatures include executor and transport configuration; incompatible resume rows are regenerated.
+- `unsupported` no longer implies `artifact_contract_pass=true`.
+- `evals/run_runtime.py` uses the same executor contract, state records, transport accounting, and validator registry.
+
+## Protocol changes
+
+- Execution plans may declare `target`, `scope`, `polarity`, and `priority`.
+- Enforcement constraints require an explicit gate and failure action.
+- Hard conflicts invalidate a plan; a conflicting soft preference is suppressed and reported.
+- Unknown validators and unavailable optional runtimes return `unsupported`.
+- Runtime commands must match the fixed allowlist and execute without a shell.
+
+## Integration changes
+
+- Use `evals/agent_runtime.py` for a single versioned generation request.
+- Use `scripts/execute_protocol.py` for plan, execution, validation, and bounded repair.
+- Validate integrations against `evals/schemas/runtime-request.schema.json`, `evals/schemas/result.schema.json`, and `evals/schemas/score.schema.json`.
+- Use `evals/benchmark-manifest.json` for pairing keys, missing-sample policy, and release gates.
+- Use `evals/pairwise_review.py` to create blinded semantic review packets and apply completed review scores without exposing variant labels to reviewers.
+
+## Capability gate
+
+Final candidates must have complete baseline pairing and zero capability regressions for observable dimensions. Functional, non-constraint requirement, artifact, format, path, or declared-quality loss blocks promotion even when over-optimization improves. Efficiency ratios remain separate diagnostics.

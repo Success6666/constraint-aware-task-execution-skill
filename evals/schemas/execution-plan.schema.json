@@ -25,6 +25,10 @@
           "type": {"type": "string", "enum": ["hard", "enforcement"]},
           "statement": {"type": "string", "minLength": 1},
           "strategy": {"type": "string", "minLength": 1},
+          "target": {"type": "string"},
+          "scope": {"type": "string"},
+          "polarity": {"type": "string", "enum": ["require", "forbid"]},
+          "priority": {"type": "integer"},
           "required_gate": {"type": "boolean"},
           "failure_action": {"type": "string"}
         }
@@ -37,8 +41,14 @@
         "additionalProperties": false,
         "required": ["preference", "tradeoff"],
         "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "type": {"const": "soft"},
           "preference": {"type": "string", "minLength": 1},
-          "tradeoff": {"type": "string", "minLength": 1}
+          "tradeoff": {"type": "string", "minLength": 1},
+          "target": {"type": "string"},
+          "scope": {"type": "string"},
+          "polarity": {"type": "string", "enum": ["prefer", "avoid"]},
+          "priority": {"type": "integer"}
         }
       }
     },

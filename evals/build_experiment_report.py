@@ -10,6 +10,11 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+try:
+    from .capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+except ImportError:  # Direct script execution.
+    from capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+
 
 SCORE_METRICS = (
     "evaluation_pass",
@@ -67,6 +72,10 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
         row for row in indexed.values()
         if row.get("success") and row.get("artifact_contract_pass", True)
     ]
+    unsupported = [
+        row for row in indexed.values()
+        if row.get("success") and row.get("artifact_contract_pass") is None
+    ]
     by_variant: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in completed:
         if row.get("score"):
@@ -87,14 +96,24 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
     plan_retry_rows = [row for row in indexed.values() if int(row.get("plan_retry_count", 0) or 0) > 0]
     artifact_retry_rows = [row for row in indexed.values() if int(row.get("artifact_retry_count", 0) or 0) > 0]
     observed = len(indexed)
+    capability = aggregate_capability_metrics(list(indexed.values()))
+    final_candidates = [
+        variant for variant in ("full-v2", "skill", "v1-full")
+        if variant in payload.get("variants", [])
+    ][:1]
+    capability["acceptance"] = evaluate_capability_acceptance(
+        capability, final_candidates
+    )
+    capability_accepted = capability["acceptance"]["status"] == "pass"
     return {
         "experiment": payload.get("experiment", "unknown"),
         "expected": len(expected),
         "observed": len(indexed),
         "completed": len(completed),
         "failed": len(failed),
+        "unsupported": len(unsupported),
         "missing": len(missing),
-        "complete": len(completed) == len(expected) and not failed and not missing,
+        "complete": len(completed) == len(expected) and not failed and not unsupported and not missing,
         "missing_keys": [list(key) for key in missing],
         "failures": [
             {
@@ -108,6 +127,7 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
         ],
         "variant_metrics": variant_metrics,
         "retry_count": sum(int(row.get("retry_count", 0) or 0) for row in indexed.values()),
+        "transport_retry_count": sum(int(row.get("transport_retry_count", 0) or 0) for row in indexed.values()),
         "retry_rows": len(retry_rows),
         "retry_rate": round(len(retry_rows) / observed, 4) if observed else None,
         "repair_success_rate": round(len(repaired) / len(retry_rows), 4) if retry_rows else None,
@@ -116,6 +136,8 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
         "artifact_retry_count": sum(int(row.get("artifact_retry_count", 0) or 0) for row in indexed.values()),
         "artifact_retry_rate": round(len(artifact_retry_rows) / observed, 4) if observed else None,
         "usage": usage,
+        "capability_retention": capability,
+        "capability_accepted": capability_accepted,
     }
 
 
@@ -140,6 +162,7 @@ def summarize_runtime(payload: dict[str, Any]) -> dict[str, Any]:
         "complete": len(passed) == len(expected) and not failed and not missing,
         "missing_keys": [list(key) for key in missing],
         "retry_count": sum(int(row.get("retry_count", 0) or 0) for row in indexed.values()),
+        "transport_retry_count": sum(int(row.get("transport_retry_count", 0) or 0) for row in indexed.values()),
         "retry_rate": round(len(retry_rows) / observed, 4) if observed else None,
         "repair_successes": sum(bool(row.get("repair_success")) for row in indexed.values()),
     }
@@ -182,6 +205,7 @@ def build_summary(
             and runtime_summaries
             and protocol_summaries
             and all(item["complete"] for item in matrix_summaries)
+            and all(item["capability_accepted"] for item in matrix_summaries)
             and all(item["complete"] for item in runtime_summaries)
             and all(item["complete"] for item in protocol_summaries)
             and validator_complete
@@ -203,16 +227,21 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "## Matrix Experiments",
         "",
-        "| Experiment | Expected | Completed | Failed | Missing | Complete |",
-        "| --- | ---: | ---: | ---: | ---: | :---: |",
+        "| Experiment | Expected | Completed | Failed | Unsupported | Missing | Capability | Complete |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | :---: | :---: |",
     ]
     for item in summary["matrices"]:
         lines.append(
             f"| `{item['experiment']}` | {item['expected']} | {item['completed']} | "
-            f"{item['failed']} | {item['missing']} | {'yes' if item['complete'] else 'no'} |"
+            f"{item['failed']} | {item['unsupported']} | {item['missing']} | "
+            f"{'yes' if item['capability_accepted'] else 'no'} | "
+            f"{'yes' if item['complete'] else 'no'} |"
         )
     lines.extend(["", "## Variant Metrics", ""])
     for item in summary["matrices"]:
+        def show_capability(value: Any) -> str:
+            return "n/a" if value is None else f"{value:.4f}"
+
         lines.extend([
             f"### {item['experiment']}",
             "",
@@ -238,16 +267,62 @@ def render_markdown(summary: dict[str, Any]) -> str:
         if item["missing_keys"]:
             lines.extend(["", f"Missing rows: `{len(item['missing_keys'])}`."])
         lines.append("")
+        capability = item.get("capability_retention", {})
+        lines.extend([
+            "Capability retention (paired against `baseline`):",
+            "",
+            "| Variant | Pairs | Quality Retention | Non-Constraint Retention | Valid Information | Regression Rate | Efficiency Regression | Cost Ratio | Latency Ratio |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ])
+        for variant, metrics in capability.get("by_variant", {}).items():
+            lines.append(
+                f"| `{variant}` | {metrics['paired_rows']}/{metrics['eligible_rows']} | "
+                f"{show_capability(metrics['quality_retention_ratio'])} | "
+                f"{show_capability(metrics['non_constraint_requirement_retention'])} | "
+                f"{show_capability(metrics['valid_information_retention'])} | "
+                f"{show_capability(metrics['capability_regression_rate'])} | "
+                f"{show_capability(metrics['efficiency_regression_rate'])} | "
+                f"{show_capability(metrics['cost_ratio'])} | "
+                f"{show_capability(metrics['latency_ratio'])} |"
+            )
+        lines.extend([
+            "",
+            f"Pair coverage: `{capability.get('paired_rows', 0)}/{capability.get('eligible_variant_rows', 0)}`. "
+            "Missing pairs are not converted to zero scores.",
+            f"General semantic capability status: `{capability.get('semantic_capability_status', 'unsupported')}`. "
+            "Broad semantic preservation requires explicit evaluator observations; deterministic regex metrics provide only partial evidence.",
+            f"Final-candidate capability acceptance: `{capability.get('acceptance', {}).get('status', 'unsupported')}`.",
+            "",
+        ])
+        for variant, metrics in capability.get("by_variant", {}).items():
+            lines.extend([
+                f"Component and behavior retention for `{variant}`:",
+                "",
+                "| Signal | Observed Pairs | Retention / Regression Rate |",
+                "| --- | ---: | ---: |",
+            ])
+            for component, component_metrics in metrics.get("component_retention", {}).items():
+                lines.append(
+                    f"| `{component}` retention | {component_metrics['observed_pairs']} | "
+                    f"{show_capability(component_metrics['retention_ratio'])} |"
+                )
+            for behavior, behavior_metrics in metrics.get("behavioral_regressions", {}).items():
+                lines.append(
+                    f"| `{behavior}` regression | {behavior_metrics['observed_pairs']} | "
+                    f"{show_capability(behavior_metrics['regression_rate'])} |"
+                )
+            lines.append("")
     lines.extend([
         "## Runtime Experiments",
         "",
-        "| Experiment | Expected | Passed | Failed | Missing | Retries | Complete |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | :---: |",
+        "| Experiment | Expected | Passed | Failed | Missing | Targeted Retries | Transport Retries | Complete |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |",
     ])
     for item in summary["runtimes"]:
         lines.append(
             f"| `{item['experiment']}` | {item['expected']} | {item['passed']} | {item['failed']} | "
-            f"{item['missing']} | {item['retry_count']} | {'yes' if item['complete'] else 'no'} |"
+            f"{item['missing']} | {item['retry_count']} | {item['transport_retry_count']} | "
+            f"{'yes' if item['complete'] else 'no'} |"
         )
     lines.extend([
         "",

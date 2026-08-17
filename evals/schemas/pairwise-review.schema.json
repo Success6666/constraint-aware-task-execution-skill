@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "blinded", "dimensions", "reviews"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "blinded": {"const": true},
+    "dimensions": {
+      "const": ["correctness", "completeness", "usefulness", "requirement_retention"]
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["review_id", "case_id", "prompt", "response_a", "response_b", "scores"],
+        "properties": {
+          "review_id": {"type": "string"},
+          "case_id": {"type": "string"},
+          "prompt": {"type": "string"},
+          "response_a": {"type": "string"},
+          "response_b": {"type": "string"},
+          "scores": {
+            "type": "object",
+            "required": ["a", "b"],
+            "properties": {
+              "a": {"$ref": "#/$defs/sideScore"},
+              "b": {"$ref": "#/$defs/sideScore"}
+            }
+          },
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sideScore": {
+      "type": "object",
+      "required": ["correctness", "completeness", "usefulness", "requirement_retention"],
+      "properties": {
+        "correctness": {"type": ["number", "null"], "minimum": 1, "maximum": 5},
+        "completeness": {"type": ["number", "null"], "minimum": 1, "maximum": 5},
+        "usefulness": {"type": ["number", "null"], "minimum": 1, "maximum": 5},
+        "requirement_retention": {"type": ["number", "null"], "minimum": 1, "maximum": 5}
+      }
+    }
+  }
+}
+

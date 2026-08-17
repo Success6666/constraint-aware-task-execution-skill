@@ -8,15 +8,14 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
-import tempfile
-import time
 from typing import Any
 
+from execution_state import ExecutionState, Stage
+from executors import GenerationRequest, attempt_summary, create_executor, generate_with_transport_retries
 from experiment_variants import VARIANTS, Variant, select_variants
 from protocol import choose_retry, parse_plan
 from scorer import score_response
@@ -39,6 +38,7 @@ Use tools only when the prompt explicitly requests artifact creation.
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the complete constraint-aware execution matrix.")
     parser.add_argument("--experiment", required=True)
+    parser.add_argument("--executor", choices=("codex", "ollama"), default="codex")
     parser.add_argument("--model", action="append", dest="models", required=True)
     parser.add_argument("--variant", action="append", dest="variants")
     parser.add_argument("--case", action="append", dest="case_ids")
@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=360)
     parser.add_argument("--plan-attempts", type=int, default=2)
     parser.add_argument("--artifact-attempts", type=int, default=2)
+    parser.add_argument("--transport-attempts", type=int, default=2)
     parser.add_argument("--reasoning-effort", choices=("low", "medium", "high", "xhigh"), default="medium")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--resume", action="store_true")
@@ -91,44 +92,56 @@ def prepare_workspace(root: Path, model: str, repeat: int, variant: Variant, cas
     return workspace
 
 
-def prepare_codex_home(temp_root: Path, key: str) -> Path:
-    source_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-    source_auth = source_home / "auth.json"
-    if not source_auth.is_file():
-        raise RuntimeError(f"Codex authentication was not found at {source_auth}")
-    temp_root.mkdir(parents=True, exist_ok=True)
-    codex_home = Path(tempfile.mkdtemp(prefix=f"{slug(key)}-", dir=temp_root))
-    shutil.copy2(source_auth, codex_home / "auth.json")
-    return codex_home
-
-
-def usage_from_trace(trace: str) -> dict[str, int]:
-    totals = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0}
-    for line in trace.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        usage = event.get("usage")
-        if not isinstance(usage, dict):
-            continue
-        for key in totals:
-            totals[key] += int(usage.get(key, 0) or 0)
-    return totals
-
-
-def codex_launcher() -> list[str]:
-    if os.name == "nt":
-        command_path = shutil.which("codex.cmd")
-        node_path = shutil.which("node.exe") or shutil.which("node")
-        if command_path and node_path:
-            script_path = Path(command_path).parent / "node_modules" / "@openai" / "codex" / "bin" / "codex.js"
-            if script_path.is_file():
-                return [node_path, str(script_path)]
-    command_path = shutil.which("codex")
-    if not command_path:
-        raise RuntimeError("Codex CLI was not found on PATH")
-    return [command_path]
+def run_executor(
+    prompt: str,
+    model: str,
+    reasoning_effort: str,
+    workspace: Path,
+    temp_root: Path,
+    output_path: Path,
+    trace_path: Path,
+    timeout: int,
+    output_schema: Path | None = None,
+    sandbox: str = "read-only",
+    executor_name: str = "codex",
+    transport_attempts: int = 1,
+) -> dict[str, Any]:
+    del temp_root  # Kept in the compatibility signature; executors own temporary state.
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    executor = create_executor(executor_name)
+    transport = generate_with_transport_retries(
+        executor,
+        GenerationRequest(
+            prompt=prompt,
+            model=model,
+            cwd=workspace,
+            timeout_seconds=timeout,
+            reasoning_effort=reasoning_effort,
+            sandbox=sandbox,
+            trace_path=trace_path,
+            output_path=output_path,
+            output_schema=output_schema,
+        ),
+        transport_attempts,
+    )
+    result = transport.result
+    usage = {
+        "input_tokens": result.usage.input_tokens or 0,
+        "cached_input_tokens": result.usage.cached_input_tokens or 0,
+        "output_tokens": result.usage.output_tokens or 0,
+        "reasoning_output_tokens": result.usage.reasoning_tokens or 0,
+    }
+    return {
+        "success": result.success,
+        "returncode": result.returncode,
+        "error": (result.failure_message or result.stderr)[-4000:],
+        "failure_kind": result.failure_kind.value,
+        "elapsed_seconds": round(result.duration_seconds, 3),
+        "usage": usage,
+        "transport_retry_count": transport.retry_count,
+        "transport_attempts": [attempt_summary(item) for item in transport.attempts],
+    }
 
 
 def run_codex(
@@ -142,65 +155,68 @@ def run_codex(
     timeout: int,
     output_schema: Path | None = None,
     sandbox: str = "read-only",
+    transport_attempts: int = 1,
 ) -> dict[str, Any]:
-    codex_home = prepare_codex_home(temp_root, output_path.stem)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    trace_path.parent.mkdir(parents=True, exist_ok=True)
-    command = codex_launcher() + [
-        "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check",
-        "--sandbox", sandbox, "--json", "--output-last-message", str(output_path),
-        "--cd", str(workspace), "--model", model,
-        "--config", f'model_reasoning_effort="{reasoning_effort}"',
-        "--config", "features.plugins=false",
-        "--config", "features.apps=false",
-    ]
-    if output_schema:
-        command.extend(["--output-schema", str(output_schema)])
-    command.append(prompt)
-    environment = os.environ.copy()
-    environment["CODEX_HOME"] = str(codex_home)
-    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
-        value = environment.get(key, "")
-        if any(host in value.casefold() for host in ("localhost", "127.0.0.1", "[::1]")):
-            environment.pop(key, None)
-    started = time.monotonic()
-    timed_out = False
-    process = subprocess.Popen(
-            command,
-            cwd=ROOT,
-            env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            shell=False,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+    """Compatibility entry point for existing callers and test doubles."""
+
+    return run_executor(
+        prompt,
+        model,
+        reasoning_effort,
+        workspace,
+        temp_root,
+        output_path,
+        trace_path,
+        timeout,
+        output_schema,
+        sandbox,
+        executor_name="codex",
+        transport_attempts=transport_attempts,
+    )
+
+
+def dispatch_generation(
+    prompt: str,
+    model: str,
+    reasoning_effort: str,
+    workspace: Path,
+    temp_root: Path,
+    output_path: Path,
+    trace_path: Path,
+    timeout: int,
+    output_schema: Path | None = None,
+    sandbox: str = "read-only",
+    executor_name: str = "codex",
+    transport_attempts: int = 1,
+) -> dict[str, Any]:
+    if executor_name == "codex":
+        return run_codex(
+            prompt,
+            model,
+            reasoning_effort,
+            workspace,
+            temp_root,
+            output_path,
+            trace_path,
+            timeout,
+            output_schema,
+            sandbox,
+            transport_attempts,
         )
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                capture_output=True, text=True, check=False,
-            )
-        else:  # pragma: no cover - Windows is the release environment
-            process.kill()
-        stdout, stderr = process.communicate()
-    finally:
-        (codex_home / "auth.json").unlink(missing_ok=True)
-        shutil.rmtree(codex_home, ignore_errors=True)
-    elapsed = round(time.monotonic() - started, 3)
-    trace_path.write_text(stdout, encoding="utf-8")
-    return {
-        "success": not timed_out and process.returncode == 0 and output_path.is_file(),
-        "returncode": 124 if timed_out else process.returncode,
-        "error": (("TIMEOUT\n" if timed_out else "") + stderr)[-4000:],
-        "elapsed_seconds": elapsed,
-        "usage": usage_from_trace(stdout),
-    }
+    return run_executor(
+        prompt,
+        model,
+        reasoning_effort,
+        workspace,
+        temp_root,
+        output_path,
+        trace_path,
+        timeout,
+        output_schema,
+        sandbox,
+        executor_name=executor_name,
+        transport_attempts=transport_attempts,
+    )
 
 
 def skill_invocation(variant: Variant) -> str:
@@ -283,19 +299,39 @@ def repair_prompt(
     )
 
 
-def signature(case: dict, variant: Variant, model: str, repeat: int, effort: str) -> str:
+def signature(
+    case: dict,
+    variant: Variant,
+    model: str,
+    repeat: int,
+    effort: str,
+    executor_name: str = "codex",
+    transport_attempts: int = 1,
+) -> str:
     payload = {
         "case": case,
         "variant": asdict(variant),
         "model": model,
         "repeat": repeat,
         "reasoning_effort": effort,
+        "executor": executor_name,
+        "transport_attempts": transport_attempts,
         "runner_protocol": RUNNER_PROTOCOL,
         "plan_schema": hashlib.sha256(SCHEMA_PATH.read_bytes()).hexdigest(),
         "protocol_digest": hashlib.sha256(PROTOCOL_PATH.read_bytes()).hexdigest(),
         "skill_digest": hashlib.sha256(SKILL_PATH.read_bytes()).hexdigest() if variant.use_skill else None,
     }
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def sampling_signature(model: str, effort: str, executor_name: str, transport_attempts: int) -> str:
+    payload = {
+        "model": model,
+        "reasoning_effort": effort,
+        "executor": executor_name,
+        "transport_attempts": transport_attempts,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def add_usage(total: dict[str, int], addition: dict[str, int]) -> None:
@@ -313,6 +349,8 @@ def run_job(
     timeout: int,
     plan_attempts: int,
     artifact_attempts: int,
+    executor_name: str = "codex",
+    transport_attempts: int = 1,
 ) -> dict[str, Any]:
     workspace = prepare_workspace(experiment_root, model, repeat, variant, case["id"])
     base = Path(slug(model)) / f"r{repeat}" / variant.name / case["id"]
@@ -321,6 +359,7 @@ def run_job(
     temp_root = experiment_root / ".codex-homes"
     usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "reasoning_output_tokens": 0}
     stages: list[dict[str, Any]] = []
+    state = ExecutionState(f"{executor_name}:{slug(model)}:r{repeat}:{variant.name}:{case['id']}")
     plan_text: str | None = None
     plan_result: dict[str, Any] | None = None
     selected_plan_path: Path | None = None
@@ -332,14 +371,16 @@ def run_job(
         for attempt in range(attempts):
             plan_path = raw_root / "plans" / base.with_suffix(f".a{attempt + 1}.json")
             trace_path = trace_root / "plans" / base.with_suffix(f".a{attempt + 1}.jsonl")
-            call = run_codex(
+            call = dispatch_generation(
                 plan_prompt(case, variant, previous, issues), model, effort, workspace, temp_root,
-                plan_path, trace_path, timeout, SCHEMA_PATH,
+                plan_path, trace_path, timeout, SCHEMA_PATH, executor_name=executor_name,
+                transport_attempts=transport_attempts,
             )
             add_usage(usage, call["usage"])
             stage = {"stage": "plan", "attempt": attempt + 1, **call}
             stages.append(stage)
             if not call["success"]:
+                state.add_attempt(Stage.PLAN, "fail", errors=["PLAN_CALL_FAILED"], evidence={"call": call})
                 previous = plan_path.read_text(encoding="utf-8") if plan_path.is_file() else ""
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$", "message": call["error"][-500:]}]
                 continue
@@ -347,32 +388,56 @@ def run_job(
             parsed, validation = parse_plan(previous)
             issues = [{"code": issue.code, "path": issue.path} for issue in validation.issues]
             stage["validation"] = validation.to_dict()
+            state.add_attempt(
+                Stage.PLAN,
+                "pass" if validation.valid else "fail",
+                errors=[issue.code for issue in validation.issues],
+                evidence={"validation": validation.to_dict()},
+            )
             if not variant.validate_plan or validation.valid:
                 plan_text = previous
                 plan_result = parsed
                 selected_plan_path = plan_path
                 break
         if plan_text is None:
+            state.finish(False, "plan_validation_exhausted")
             return {
                 "case_id": case["id"], "variant": variant.name, "model": model, "repeat": repeat,
+                "executor": executor_name,
+                "sampling_signature": sampling_signature(model, effort, executor_name, transport_attempts),
                 "success": False, "failure_stage": "plan", "stages": stages, "usage": usage,
+                "transport_retry_count": sum(int(stage.get("transport_retry_count", 0) or 0) for stage in stages),
+                "state": state.to_dict(), "termination_reason": state.termination_reason,
             }
 
     answer_path = raw_root / "answers" / base.with_suffix(".md")
     answer_trace = trace_root / "answers" / base.with_suffix(".jsonl")
-    call = run_codex(
+    call = dispatch_generation(
         execution_prompt(case, variant, plan_text), model, effort, workspace, temp_root,
-        answer_path, answer_trace, timeout,
+        answer_path, answer_trace, timeout, executor_name=executor_name,
+        transport_attempts=transport_attempts,
     )
     add_usage(usage, call["usage"])
     stages.append({"stage": "execute", "attempt": 1, **call})
+    state.add_attempt(
+        Stage.EXECUTE,
+        "pass" if call["success"] else "fail",
+        errors=[] if call["success"] else ["EXECUTION_CALL_FAILED"],
+        evidence={"call": call},
+    )
     if not call["success"]:
+        state.finish(False, "execution_failed")
         return {
             "case_id": case["id"], "variant": variant.name, "model": model, "repeat": repeat,
+            "executor": executor_name,
+            "sampling_signature": sampling_signature(model, effort, executor_name, transport_attempts),
             "success": False, "failure_stage": "execute", "stages": stages, "usage": usage,
+            "transport_retry_count": sum(int(stage.get("transport_retry_count", 0) or 0) for stage in stages),
+            "state": state.to_dict(), "termination_reason": state.termination_reason,
         }
     response = answer_path.read_text(encoding="utf-8")
     artifact_status, errors, score = artifact_errors(case, response)
+    state.add_attempt(Stage.VALIDATE, artifact_status, errors=errors, evidence={"score": score})
     retry_events: list[dict[str, Any]] = []
 
     if variant.repair_artifact:
@@ -385,38 +450,54 @@ def run_job(
                 break
             repair_path = raw_root / "repairs" / base.with_suffix(f".a{attempt + 1}.md")
             repair_trace = trace_root / "repairs" / base.with_suffix(f".a{attempt + 1}.jsonl")
-            repair = run_codex(
+            repair = dispatch_generation(
                 repair_prompt(case, variant, plan_text, response, errors, decision), model, effort,
                 workspace, temp_root, repair_path, repair_trace, timeout,
+                executor_name=executor_name,
+                transport_attempts=transport_attempts,
             )
             add_usage(usage, repair["usage"])
             stages.append({"stage": "repair", "attempt": attempt + 1, **repair})
+            state.add_attempt(
+                Stage.REPAIR,
+                "pass" if repair["success"] else "fail",
+                errors=[] if repair["success"] else ["REPAIR_CALL_FAILED"],
+                evidence={"call": repair},
+            )
             if not repair["success"]:
                 continue
             response = repair_path.read_text(encoding="utf-8")
             answer_path.write_text(response, encoding="utf-8")
             artifact_status, errors, score = artifact_errors(case, response)
+            state.add_attempt(Stage.VALIDATE, artifact_status, errors=errors, evidence={"score": score})
 
-    contract_pass = artifact_status != "fail"
+    success = artifact_status != "fail"
+    contract_pass = True if artifact_status == "pass" else (False if artifact_status == "fail" else None)
+    termination_reason = "success" if artifact_status == "pass" else ("unsupported" if artifact_status == "unsupported" else "artifact_validation_exhausted")
+    state.finish(success, termination_reason)
     return {
         "case_id": case["id"],
         "variant": variant.name,
         "model": model,
+        "executor": executor_name,
+        "sampling_signature": sampling_signature(model, effort, executor_name, transport_attempts),
         "repeat": repeat,
-        "success": contract_pass,
-        "failure_stage": None if contract_pass else "artifact",
-        "signature": signature(case, variant, model, repeat, effort),
+        "success": success,
+        "failure_stage": None if success else "artifact",
+        "signature": signature(case, variant, model, repeat, effort, executor_name, transport_attempts),
         "plan": plan_result,
         "artifact_errors": errors,
         "artifact_validation_status": artifact_status,
         "artifact_contract_pass": contract_pass,
         "retry_events": retry_events,
         "retry_count": len(retry_events),
+        "transport_retry_count": sum(int(stage.get("transport_retry_count", 0) or 0) for stage in stages),
         "plan_retry_count": max(0, sum(stage["stage"] == "plan" for stage in stages) - 1),
         "artifact_retry_count": sum(stage["stage"] == "repair" for stage in stages),
-        "repair_success": bool(retry_events) and contract_pass,
-        "termination_reason": "success" if contract_pass else "artifact_validation_exhausted",
+        "repair_success": bool(retry_events) and artifact_status == "pass",
+        "termination_reason": termination_reason,
         "stages": stages,
+        "state": state.to_dict(),
         "usage": usage,
         "score": score,
         "evidence": {
@@ -452,6 +533,8 @@ def main() -> int:
         raise ValueError("--jobs must be between 1 and 8")
     if args.repeat < 1:
         raise ValueError("--repeat must be positive")
+    if args.transport_attempts < 1:
+        raise ValueError("--transport-attempts must be positive")
     cases = load_cases(args.cases, args.case_ids)
     variants = select_variants(args.variants)
     experiment_root = args.output_root / args.experiment
@@ -472,7 +555,10 @@ def main() -> int:
                 for case in cases:
                     key = (model, repeat, variant.name, case["id"])
                     previous = rows.get(key)
-                    expected = signature(case, variant, model, repeat, args.reasoning_effort)
+                    expected = signature(
+                        case, variant, model, repeat, args.reasoning_effort, args.executor,
+                        args.transport_attempts,
+                    )
                     if (
                         args.resume and not args.force and previous and previous.get("success")
                         and previous.get("signature") == expected
@@ -486,6 +572,8 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "runner_protocol": RUNNER_PROTOCOL,
         "reasoning_effort": args.reasoning_effort,
+        "executor": args.executor,
+        "transport_attempts": args.transport_attempts,
         "models": args.models,
         "variants": [variant.name for variant in variants],
         "repeats": args.repeat,
@@ -499,7 +587,8 @@ def main() -> int:
         print(f"[{model} r{repeat} {variant.name}] {case['id']}", flush=True)
         return run_job(
             case, variant, model, repeat, experiment_root, args.reasoning_effort,
-            args.timeout, args.plan_attempts, args.artifact_attempts,
+            args.timeout, args.plan_attempts, args.artifact_attempts, args.executor,
+            args.transport_attempts,
         )
 
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
@@ -512,6 +601,7 @@ def main() -> int:
             except Exception as exc:  # pragma: no cover - process boundary
                 rows[key] = {
                     "case_id": case["id"], "variant": variant.name, "model": model, "repeat": repeat,
+                    "executor": args.executor,
                     "success": False, "failure_stage": "runner", "error": repr(exc),
                 }
             write_checkpoint(results_path, rows, metadata)

@@ -10,3 +10,4 @@ evals/experiments/**/traces/
 evals/experiments/**/messages/
 evals/experiments/**/plans/
 evals/experiments/**/artifacts/
+evals/experiments/**/reviews.key.json

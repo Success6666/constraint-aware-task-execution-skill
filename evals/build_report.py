@@ -5,6 +5,11 @@ import json
 from pathlib import Path
 from statistics import mean
 
+try:
+    from .capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+except ImportError:  # Direct script execution.
+    from capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_PATH = ROOT / "evals" / "results"
@@ -70,6 +75,9 @@ def main() -> None:
         "languages": dict(sorted(language_counts.items())),
         "categories": dict(sorted(category_counts.items())),
     }
+    capability = aggregate_capability_metrics(payload["results"])
+    capability["acceptance"] = evaluate_capability_acceptance(capability, ["skill"])
+    summary["capability_retention"] = capability
     (RESULTS_PATH / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
     )
@@ -165,6 +173,43 @@ def main() -> None:
         "Inspect the committed raw responses when a metric changes unexpectedly.",
         "",
     ])
+    capability_variant = capability.get("by_variant", {}).get("skill", {})
+    def show_capability(value: object) -> str:
+        return "n/a" if value is None else f"{float(value):.4f}"
+    lines.extend([
+        "## Capability Retention",
+        "",
+        f"- Paired rows: `{capability.get('paired_rows', 0)}/{capability.get('eligible_variant_rows', 0)}`",
+        f"- Quality retention ratio: `{show_capability(capability_variant.get('quality_retention_ratio'))}`",
+        f"- Non-constraint requirement retention: `{show_capability(capability_variant.get('non_constraint_requirement_retention'))}`",
+        f"- Capability regression rate: `{show_capability(capability_variant.get('capability_regression_rate'))}`",
+        f"- Efficiency regression rate: `{show_capability(capability_variant.get('efficiency_regression_rate'))}`",
+        f"- Valid information retention: `{show_capability(capability_variant.get('valid_information_retention'))}`",
+        f"- Cost ratio: `{show_capability(capability_variant.get('cost_ratio'))}`",
+        f"- Latency ratio: `{show_capability(capability_variant.get('latency_ratio'))}`",
+        f"- General semantic capability: `{capability.get('semantic_capability_status', 'unsupported')}`",
+        f"- Capability acceptance: `{capability.get('acceptance', {}).get('status', 'unsupported')}`",
+        "",
+        "Only successful baseline/skill pairs enter retention denominators. Missing pairs are reported as coverage gaps, not zero scores. General semantic preservation remains partial unless an explicit semantic evaluator supplies observations.",
+        "",
+    ])
+    lines.extend([
+        "| Component | Observed Pairs | Retention | Regression Rate |",
+        "| --- | ---: | ---: | ---: |",
+    ])
+    for component, metrics in capability_variant.get("component_retention", {}).items():
+        lines.append(
+            f"| `{component}` | {metrics['observed_pairs']} | "
+            f"{show_capability(metrics['retention_ratio'])} | "
+            f"{show_capability(metrics['regression_rate'])} |"
+        )
+    lines.extend(["", "Behavioral regression observations:", ""])
+    for behavior, metrics in capability_variant.get("behavioral_regressions", {}).items():
+        lines.append(
+            f"- `{behavior}`: `{metrics['regression_hits']}/{metrics['observed_pairs']}` "
+            f"(rate `{show_capability(metrics['regression_rate'])}`)"
+        )
+    lines.append("")
     (RESULTS_PATH / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
 
 

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "benchmark_id": "constraint-aware-task-execution",
+  "pairing_key": ["case_id", "model", "repeat", "sampling_signature"],
+  "missing_sample_policy": "exclude_and_report",
+  "release_gates": {
+    "capability_regression_rate_max": 0,
+    "objective_coverage_not_below_baseline": true,
+    "constraint_adherence_not_below_baseline": true,
+    "required_enforcement_not_below_baseline": true,
+    "functional_contract_not_below_baseline": true,
+    "non_constraint_requirement_retention_not_below_baseline": true
+  },
+  "datasets": [
+    {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30},
+    {"id": "gate-adversarial-v1", "path": "gate_cases.json", "kind": "classification", "declared_cases": 32},
+    {"id": "constraint-adversarial-v1", "path": "adversarial_cases.json", "kind": "answer"},
+    {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6}
+  ]
+}
+

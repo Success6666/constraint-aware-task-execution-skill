@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-aware-task-execution.local/schemas/score.schema.json",
+  "title": "Constraint-Aware Evaluation Score",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "objective_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "required_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "constraint_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "constraint_adherence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "required_enforcement_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "format_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "response_format_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "path_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "path_scope_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "artifact_contract": {"type": ["number", "boolean", "null"], "minimum": 0, "maximum": 1},
+    "valid_information_retention": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "observations": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "unnecessary_refusal": {"type": ["boolean", "null"]},
+        "unnecessary_clarification": {"type": ["boolean", "null"]},
+        "over_conservative": {"type": ["boolean", "null"]}
+      }
+    },
+    "semantic_capability_status": {
+      "type": "string",
+      "enum": ["supported", "partial", "unsupported"]
+    }
+  }
+}
