@@ -58,12 +58,130 @@ def verify_datasets(manifest: dict[str, Any]) -> dict[str, Any]:
             errors.append(f"DATASET_JSON:{dataset.get('id')}:{exc}")
             continue
         count = len(value) if isinstance(value, list) else -1
+        if isinstance(value, list):
+            ids = [item.get("id") for item in value if isinstance(item, dict)]
+            if len(ids) != count or any(not isinstance(case_id, str) or not case_id for case_id in ids):
+                errors.append(f"DATASET_CASE_ID:{dataset.get('id')}")
+            elif len(set(ids)) != len(ids):
+                errors.append(f"DATASET_DUPLICATE_CASE_ID:{dataset.get('id')}")
+            required_fields = {
+                "answer": {
+                    "id", "language", "category", "prompt", "constraint_terms",
+                    "objective_markers", "soft_preference",
+                },
+                "classification": {
+                    "id", "language", "category", "text", "constraint_terms",
+                    "expect_gate",
+                },
+                "artifact": {"id", "prompt", "allowed_paths", "validators"},
+            }.get(str(dataset.get("kind")), set())
+            for index, item in enumerate(value):
+                if not isinstance(item, dict):
+                    errors.append(f"DATASET_CASE_OBJECT:{dataset.get('id')}:{index}")
+                    continue
+                missing_fields = sorted(required_fields - set(item))
+                if missing_fields:
+                    errors.append(
+                        f"DATASET_CASE_FIELDS:{dataset.get('id')}:{item.get('id', index)}:{missing_fields}"
+                    )
         if count != dataset.get("declared_cases"):
             errors.append(f"DATASET_COUNT:{dataset.get('id')}:{count}")
         if digest != dataset.get("sha256"):
             errors.append(f"DATASET_DIGEST:{dataset.get('id')}:{digest}")
         observed.append({"id": dataset.get("id"), "cases": count, "sha256": digest})
     return _check(errors, datasets=observed)
+
+
+def verify_release_coverage(
+    manifest: dict[str, Any], release: dict[str, Any]
+) -> dict[str, Any]:
+    errors: list[str] = []
+    datasets = {
+        str(item.get("path")): str(item.get("id"))
+        for item in manifest.get("datasets", [])
+    }
+    observed: dict[str, Any] = {}
+    required_matrices = manifest.get("required_matrices", {})
+    for group, requirement in required_matrices.items():
+        source = release.get("runtimes", []) if group == "runtime" else release.get("matrices", [])
+        entries = [item for item in source if item.get("benchmark_matrix") == group]
+        models = {(item.get("executor"), item.get("model")) for item in entries}
+        if len(models) < int(requirement.get("minimum_models", 1)):
+            errors.append(f"RELEASE_MODELS:{group}:{len(models)}")
+        required_datasets = set(requirement.get("datasets", []))
+        entry_details: list[dict[str, Any]] = []
+        for item in entries:
+            case_files = (
+                [item.get("case_file")]
+                if group == "runtime"
+                else item.get("case_files", [])
+            )
+            actual_datasets = {datasets.get(str(path)) for path in case_files}
+            if None in actual_datasets:
+                errors.append(f"RELEASE_DATASET_UNKNOWN:{item.get('id')}:{case_files}")
+                actual_datasets.discard(None)
+            if actual_datasets != required_datasets:
+                errors.append(
+                    f"RELEASE_DATASETS:{item.get('id')}:{sorted(actual_datasets)}"
+                )
+            case_ids: set[str] = set()
+            for relative in case_files:
+                path = EVALS / str(relative)
+                if not path.is_file():
+                    continue
+                value = _json(path)
+                if not isinstance(value, list):
+                    continue
+                for case in value:
+                    case_id = case.get("id") if isinstance(case, dict) else None
+                    if case_id in case_ids:
+                        errors.append(f"RELEASE_DUPLICATE_CASE:{item.get('id')}:{case_id}")
+                    if isinstance(case_id, str):
+                        case_ids.add(case_id)
+            dimension = "modes" if group == "runtime" else "variants"
+            required_values = set(requirement.get(dimension, []))
+            actual_values = set(item.get(dimension, []))
+            if not required_values.issubset(actual_values):
+                errors.append(
+                    f"RELEASE_{dimension.upper()}:{item.get('id')}:{sorted(actual_values)}"
+                )
+            if int(item.get("repeats", 0)) < int(requirement.get("minimum_repeats", 1)):
+                errors.append(f"RELEASE_REPEATS:{item.get('id')}:{item.get('repeats')}")
+            entry_details.append({
+                "id": item.get("id"),
+                "executor": item.get("executor"),
+                "model": item.get("model"),
+                "datasets": sorted(actual_datasets),
+                "cases": len(case_ids),
+                dimension: sorted(actual_values),
+                "repeats": item.get("repeats"),
+            })
+        observed[group] = {
+            "entries": entry_details,
+            "models": len(models),
+        }
+
+    semantic = manifest.get("semantic_review", {})
+    review = release.get("review", {})
+    if release.get("release_candidate") != manifest.get("repository_version"):
+        errors.append("RELEASE_VERSION_MISMATCH")
+    if bool(review.get("required_for_final_release")) != bool(
+        semantic.get("required_for_final_release")
+    ):
+        errors.append("RELEASE_REVIEW_REQUIRED")
+    if set(review.get("candidate_variants", [])) != set(
+        semantic.get("candidate_variants", [])
+    ):
+        errors.append("RELEASE_REVIEW_CANDIDATES")
+    if int(review.get("minimum_reviewers_per_pair", 0)) < int(
+        semantic.get("minimum_reviewers_per_pair", 0)
+    ):
+        errors.append("RELEASE_REVIEWER_COUNT")
+    if float(review.get("maximum_dimension_delta_spread", 1.0)) > float(
+        semantic.get("maximum_dimension_delta_spread", 0.0)
+    ):
+        errors.append("RELEASE_REVIEW_DISAGREEMENT_THRESHOLD")
+    return _check(errors, matrices=observed)
 
 
 def _validate(instance: Any, schema_path: Path, label: str) -> list[str]:
@@ -165,6 +283,7 @@ def build_report(manifest_path: Path, release_path: Path) -> dict[str, Any]:
     release = _json(release_path)
     checks = {
         "dataset_integrity": verify_datasets(manifest),
+        "release_coverage": verify_release_coverage(manifest, release),
         "schema_validation": verify_schemas(manifest, release),
         "skill_validation": verify_skill(),
         "secret_scan": verify_secrets(),

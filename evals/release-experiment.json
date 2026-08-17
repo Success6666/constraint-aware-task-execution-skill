@@ -6,7 +6,7 @@
   "output_root": "evals/experiments/releases",
   "limits": {
     "max_model_jobs": 600,
-    "max_model_invocations": 2400,
+    "max_model_invocations": 2500,
     "step_timeout_seconds": 172800
   },
   "verification": {
@@ -19,6 +19,8 @@
   "matrices": [
     {
       "id": "primary",
+      "benchmark_matrix": "primary",
+      "case_files": ["cases.json", "adversarial_cases.json"],
       "executor": "codex",
       "model": "gpt-5.6-sol",
       "reasoning_effort": "medium",
@@ -42,6 +44,8 @@
     },
     {
       "id": "secondary-terra",
+      "benchmark_matrix": "secondary",
+      "case_files": ["cases.json"],
       "executor": "codex",
       "model": "gpt-5.6-terra",
       "reasoning_effort": "medium",
@@ -56,6 +60,8 @@
     },
     {
       "id": "secondary-55",
+      "benchmark_matrix": "secondary",
+      "case_files": ["cases.json"],
       "executor": "codex",
       "model": "gpt-5.5",
       "reasoning_effort": "medium",
@@ -70,6 +76,8 @@
     },
     {
       "id": "local-qwen",
+      "benchmark_matrix": "secondary",
+      "case_files": ["cases.json"],
       "executor": "ollama",
       "model": "qwen3.5:9b",
       "reasoning_effort": "medium",
@@ -86,6 +94,8 @@
   "runtimes": [
     {
       "id": "primary-runtime",
+      "benchmark_matrix": "runtime",
+      "case_file": "runtime_cases.json",
       "executor": "codex",
       "model": "gpt-5.6-sol",
       "reasoning_effort": "medium",

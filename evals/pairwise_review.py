@@ -453,7 +453,7 @@ def main() -> int:
     seed_source.add_argument("--seed")
     seed_source.add_argument("--seed-file", type=Path)
     prepare.add_argument("--reviewer-id", required=True)
-    prepare.add_argument("--cases", type=Path)
+    prepare.add_argument("--cases", type=Path, action="append", dest="case_paths")
     prepare.add_argument("--reviews", type=Path, required=True)
     prepare.add_argument("--key", type=Path, required=True)
     prepare.add_argument("--force", action="store_true")
@@ -473,9 +473,15 @@ def main() -> int:
         if not seed:
             raise ValueError("review seed must not be empty")
         prompts: dict[str, str] = {}
-        if args.cases:
-            cases = json.loads(args.cases.read_text(encoding="utf-8"))
-            prompts = {str(case["id"]): str(case["prompt"]) for case in cases}
+        for case_path in args.case_paths or []:
+            cases = json.loads(case_path.read_text(encoding="utf-8"))
+            if not isinstance(cases, list):
+                raise ValueError(f"cases file must contain an array: {case_path}")
+            for case in cases:
+                case_id = str(case["id"])
+                if case_id in prompts:
+                    raise ValueError(f"duplicate review case id: {case_id}")
+                prompts[case_id] = str(case["prompt"])
         if not args.force and (args.reviews.exists() or args.key.exists()):
             raise ValueError("refusing to overwrite review packet or mapping key; use --force")
         reviews, key = prepare_reviews(

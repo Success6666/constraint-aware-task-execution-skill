@@ -9,6 +9,8 @@
 - Clarified Python runtime contracts to require standard-library `unittest.TestCase` coverage.
 - Preserved explicitly requested safety gates while rejecting unrequested enforcement classifications during plan repair.
 - Completed 12/12 real workspace runtime cases across direct and full-v2 execution.
+- Added scoreable adversarial answer cases to the primary release matrix and blinded review packets.
+- Added release-coverage preflight checks for dataset bindings, matrix dimensions, model counts, and semantic-review policy.
 
 ## 0.4.0-rc.3 - 2026-08-17
 

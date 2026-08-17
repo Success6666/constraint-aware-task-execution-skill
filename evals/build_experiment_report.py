@@ -175,8 +175,30 @@ def summarize_matrix(
     capability["acceptance"] = _capability_acceptance(
         capability, final_candidates, manifest
     )
+    review_required = bool(
+        isinstance(semantic_review, Mapping)
+        and semantic_review.get("required_for_final_release")
+    )
+    pairwise_review = payload.get("pairwise_review")
+    pairwise_review_complete = (
+        not review_required
+        or bool(
+            isinstance(pairwise_review, Mapping)
+            and pairwise_review.get("complete")
+            and len(pairwise_review.get("reviewers", [])) >= minimum_reviewers
+        )
+    )
+    if manifest is not None and not pairwise_review_complete:
+        capability["acceptance"].setdefault("failures", []).append({
+            "variant": ",".join(final_candidates) or "release-candidate",
+            "reasons": ["pairwise_review_incomplete"],
+        })
+        capability["acceptance"]["status"] = "fail"
     capability_accepted = (
-        capability["acceptance"]["status"] == "pass" if manifest is not None else True
+        capability["acceptance"]["status"] == "pass"
+        and pairwise_review_complete
+        if manifest is not None
+        else True
     )
     return {
         "experiment": payload.get("experiment", "unknown"),
@@ -220,17 +242,25 @@ def summarize_matrix(
         "usage": usage,
         "capability_retention": capability,
         "capability_accepted": capability_accepted,
-        "pairwise_review": payload.get("pairwise_review"),
+        "pairwise_review": pairwise_review,
+        "pairwise_review_complete": pairwise_review_complete,
     }
 
 
 def summarize_runtime(payload: dict[str, Any]) -> dict[str, Any]:
     expected = _expected_keys(payload, "modes")
+    raw_rows = payload.get("results", [])
+    observed_keys = [
+        (row.get("model"), row.get("repeat"), row.get("mode"), row.get("case_id"))
+        for row in raw_rows
+    ]
     indexed = {
         (row.get("model"), row.get("repeat"), row.get("mode"), row.get("case_id")): row
-        for row in payload.get("results", [])
+        for row in raw_rows
     }
     missing = sorted(expected - set(indexed))
+    unexpected = sorted(set(indexed) - expected)
+    duplicate_rows = len(observed_keys) - len(set(observed_keys))
     passed = [row for row in indexed.values() if row.get("success") and row.get("contract_pass")]
     failed = [row for row in indexed.values() if not (row.get("success") and row.get("contract_pass"))]
     retry_rows = [row for row in indexed.values() if int(row.get("retry_count", 0) or 0) > 0]
@@ -242,8 +272,16 @@ def summarize_runtime(payload: dict[str, Any]) -> dict[str, Any]:
         "passed": len(passed),
         "failed": len(failed),
         "missing": len(missing),
-        "complete": len(passed) == len(expected) and not failed and not missing,
+        "complete": (
+            len(passed) == len(expected)
+            and not failed
+            and not missing
+            and not unexpected
+            and not duplicate_rows
+        ),
         "missing_keys": [list(key) for key in missing],
+        "unexpected_keys": [list(key) for key in unexpected],
+        "duplicate_rows": duplicate_rows,
         "retry_count": sum(int(row.get("retry_count", 0) or 0) for row in indexed.values()),
         "transport_retry_count": sum(int(row.get("transport_retry_count", 0) or 0) for row in indexed.values()),
         "retry_rate": round(len(retry_rows) / observed, 4) if observed else None,
@@ -452,6 +490,14 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"{item['missing']} | {item['retry_count']} | {item['transport_retry_count']} | "
             f"{'yes' if item['complete'] else 'no'} |"
         )
+        if item["unexpected_keys"]:
+            lines.append(
+                f"Unexpected runtime rows for `{item['experiment']}`: `{len(item['unexpected_keys'])}`."
+            )
+        if item["duplicate_rows"]:
+            lines.append(
+                f"Duplicate runtime rows for `{item['experiment']}`: `{item['duplicate_rows']}`."
+            )
     lines.extend([
         "",
         "## Protocol Conformance",

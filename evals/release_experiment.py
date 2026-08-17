@@ -21,6 +21,7 @@ from redaction import atomic_write_json, atomic_write_text, redact_text
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EVALS_ROOT = ROOT / "evals"
 DEFAULT_CONFIG = ROOT / "evals" / "release-experiment.json"
 PHASES = (
     "verification",
@@ -107,19 +108,29 @@ def case_count(path: Path) -> int:
     return len(value)
 
 
+def case_file_path(value: Any) -> Path:
+    path = (EVALS_ROOT / str(value)).resolve()
+    if path != EVALS_ROOT and EVALS_ROOT not in path.parents:
+        raise ValueError(f"case file escapes evals directory: {value}")
+    return path
+
+
 def estimate_model_jobs(config: Mapping[str, Any]) -> dict[str, int]:
-    answer_cases = case_count(ROOT / "evals" / "cases.json")
-    runtime_cases = case_count(ROOT / "evals" / "runtime_cases.json")
     matrix_jobs = sum(
-        answer_cases * len(item.get("variants", [])) * int(item.get("repeats", 1))
+        sum(case_count(case_file_path(path)) for path in item.get("case_files", []))
+        * len(item.get("variants", [])) * int(item.get("repeats", 1))
         for item in config["matrices"]
     )
     runtime_jobs = sum(
-        runtime_cases * len(item.get("modes", [])) * int(item.get("repeats", 1))
+        case_count(case_file_path(item.get("case_file")))
+        * len(item.get("modes", [])) * int(item.get("repeats", 1))
         for item in config["runtimes"]
     )
     matrix_invocations = 0
     for item in config["matrices"]:
+        matrix_cases = sum(
+            case_count(case_file_path(path)) for path in item.get("case_files", [])
+        )
         per_case = 0
         for name in item.get("variants", []):
             variant = VARIANTS.get(str(name))
@@ -128,9 +139,10 @@ def estimate_model_jobs(config: Mapping[str, Any]) -> dict[str, int]:
             plan_calls = int(item.get("plan_attempts", 2)) if variant.structured_plan and variant.validate_plan else int(variant.structured_plan)
             repair_calls = int(item.get("artifact_attempts", 2)) if variant.repair_artifact else 0
             per_case += 1 + plan_calls + repair_calls
-        matrix_invocations += answer_cases * int(item.get("repeats", 1)) * per_case * int(item.get("transport_attempts", 1))
+        matrix_invocations += matrix_cases * int(item.get("repeats", 1)) * per_case * int(item.get("transport_attempts", 1))
     runtime_invocations = 0
     for item in config["runtimes"]:
+        runtime_cases = case_count(case_file_path(item.get("case_file")))
         per_case = 0
         for mode in item.get("modes", []):
             per_case += 1 if mode == "direct" else 1 + int(item.get("plan_attempts", 2)) + int(item.get("repair_attempts", 2))
@@ -217,6 +229,8 @@ def matrix_command(item: Mapping[str, Any], output_root: Path, resume: bool) -> 
         "--plan-attempts", str(item.get("plan_attempts", 2)),
         "--artifact-attempts", str(item.get("artifact_attempts", 2)),
     ]
+    for case_file in item.get("case_files", []):
+        command.extend(("--cases", str(case_file_path(case_file))))
     for variant in item.get("variants", []):
         command.extend(("--variant", str(variant)))
     if resume:
@@ -237,6 +251,7 @@ def runtime_command(item: Mapping[str, Any], output_root: Path, resume: bool) ->
         "--timeout", str(item.get("timeout_seconds", 900)),
         "--transport-attempts", str(item.get("transport_attempts", 2)),
         "--inter-stage-delay", str(item.get("inter_stage_delay_seconds", 0)),
+        "--cases", str(case_file_path(item.get("case_file"))),
         "--plan-attempts", str(item.get("plan_attempts", 2)),
         "--repair-attempts", str(item.get("repair_attempts", 2)),
     ]
@@ -284,13 +299,13 @@ def review_prepare_command(
         str(_review_seed_path(release_root, matrix_id, reviewer_id)),
         "--reviewer-id",
         reviewer_id,
-        "--cases",
-        str(ROOT / "evals" / "cases.json"),
         "--reviews",
         str(_review_packet_path(release_root, matrix_id, reviewer_id)),
         "--key",
         str(_review_key_path(release_root, matrix_id, reviewer_id)),
     ]
+    for case_file in item.get("case_files", []):
+        command.extend(("--cases", str(case_file_path(case_file))))
     for variant in config.get("review", {}).get("candidate_variants", []):
         command.extend(("--variant", str(variant)))
     if force:
