@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "objective",
+    "requirements",
+    "hard_constraints",
+    "soft_preferences",
+    "risk_points",
+    "artifacts",
+    "validation_profile"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "objective": {"type": "string", "minLength": 1},
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "statement", "acceptance_criteria"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "statement": {"type": "string", "minLength": 1},
+          "acceptance_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "hard_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "statement", "strategy", "required_gate", "failure_action"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "type": {"type": "string", "enum": ["hard", "enforcement"]},
+          "statement": {"type": "string", "minLength": 1},
+          "strategy": {"type": "string", "minLength": 1},
+          "required_gate": {"type": "boolean"},
+          "failure_action": {"type": "string"}
+        }
+      }
+    },
+    "soft_preferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "preference", "tradeoff"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "type": {"type": "string", "const": "soft"},
+          "preference": {"type": "string", "minLength": 1},
+          "tradeoff": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "risk_points": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "kind": {
+            "type": "string",
+            "enum": ["text", "json", "markdown", "python", "javascript", "typescript", "yaml", "file"]
+          }
+        }
+      }
+    },
+    "validation_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validators"],
+      "properties": {
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "path_scope",
+                  "files_exist",
+                  "json_exact",
+                  "json_schema",
+                  "markdown_headings",
+                  "python_compile",
+                  "forbidden_imports",
+                  "forbidden_pattern",
+                  "command",
+                  "javascript_syntax",
+                  "typescript_check",
+                  "yaml_parse"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

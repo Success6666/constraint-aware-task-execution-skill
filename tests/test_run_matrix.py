@@ -60,6 +60,25 @@ class RunMatrixTests(unittest.TestCase):
         selected = select_variants(["full-v2", "baseline", "full-v2"])
         self.assertEqual([variant.name for variant in selected], ["full-v2", "baseline"])
 
+    def test_plan_output_schema_is_strict_for_model_apis(self) -> None:
+        schema = json.loads(run_matrix.OUTPUT_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        def assert_strict(value: object) -> None:
+            if isinstance(value, dict):
+                properties = value.get("properties")
+                if isinstance(properties, dict):
+                    self.assertEqual(set(value.get("required", [])), set(properties))
+                    self.assertFalse(value.get("additionalProperties", True))
+                    for property_schema in properties.values():
+                        self.assertIn("type", property_schema)
+                for child in value.values():
+                    assert_strict(child)
+            elif isinstance(value, list):
+                for child in value:
+                    assert_strict(child)
+
+        assert_strict(schema)
+
     def test_workspace_installs_only_variant_specific_skill(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -101,6 +120,23 @@ class RunMatrixTests(unittest.TestCase):
         )
         self.assertIn("ARTIFACT_RESPONSE_FORMAT", prompt_text)
         self.assertNotIn("overoptimization_score", prompt_text)
+        self.assertNotIn("objective_coverage", prompt_text)
+
+    def test_plan_retry_preserves_complete_plan_and_reclassifies_constraint(self) -> None:
+        previous = json.dumps(plan(), ensure_ascii=False)
+        prompt_text = run_matrix.plan_prompt(
+            self.case,
+            VARIANTS["full-v2"],
+            previous,
+            [
+                {"code": "USER_CONSTRAINT_MISSING", "path": "hard_constraints"},
+                {"code": "ENFORCEMENT_GATE_REQUIRED", "path": "hard_constraints[0].required_gate"},
+            ],
+        )
+        self.assertIn("Preserve its objective, complete requirement set", prompt_text)
+        self.assertIn("Move every explicit user constraint into hard_constraints", prompt_text)
+        self.assertIn("change type from enforcement to hard", prompt_text)
+        self.assertIn(previous, prompt_text)
         self.assertNotIn("objective_coverage", prompt_text)
 
     def test_full_v2_runs_plan_execution_and_targeted_repair(self) -> None:

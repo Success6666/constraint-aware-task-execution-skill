@@ -1,0 +1,2818 @@
+{
+  "experiment": "smoke-codex-representative",
+  "generated_at": "2026-08-17T08:33:48.495599+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "medium",
+  "executor": "codex",
+  "transport_attempts": 2,
+  "execution_runtime_policy": {
+    "transport_retry": {
+      "backoff_seconds": 15.0,
+      "max_backoff_seconds": 60.0
+    },
+    "scheduler": {
+      "max_concurrency": 1,
+      "cooldown_seconds": 15.0
+    }
+  },
+  "inter_stage_delay": 15.0,
+  "models": [
+    "gpt-5.6-sol"
+  ],
+  "variants": [
+    "baseline",
+    "v1-full",
+    "full-v2"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis",
+    "webhook-fewer-dependencies",
+    "upload-block-executables"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "8d7c010629098ae12d6740a7614f7b7c14d9f7da9b43a2bd595d340aa91b0753",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 55.294,
+          "usage": {
+            "input_tokens": 17102,
+            "cached_input_tokens": 3840,
+            "output_tokens": 2201,
+            "reasoning_output_tokens": 296
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 55.29394250002224,
+              "usage": {
+                "input_tokens": 17102,
+                "output_tokens": 2201,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 296,
+                "total_tokens": 19303,
+                "raw": {
+                  "input_tokens": 17102,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2201,
+                  "reasoning_output_tokens": 296
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:baseline:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:34:43.844868+00:00",
+            "finished_at": "2026-08-17T08:34:43.844868+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 55.294,
+                "usage": {
+                  "input_tokens": 17102,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2201,
+                  "reasoning_output_tokens": 296
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 55.29394250002224,
+                    "usage": {
+                      "input_tokens": 17102,
+                      "output_tokens": 2201,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 296,
+                      "total_tokens": 19303,
+                      "raw": {
+                        "input_tokens": 17102,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 2201,
+                        "reasoning_output_tokens": 296
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:34:43.872479+00:00",
+            "finished_at": "2026-08-17T08:34:43.872479+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 1,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 1.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17102,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2201,
+        "reasoning_output_tokens": 296
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/baseline/fastapi-no-redis.md"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "baseline",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "7a435c11e00f241d41eb8b17e5c4e07a70d19a3ba6dfbbbf2bb4b38a90c496da",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 51.006,
+          "usage": {
+            "input_tokens": 17094,
+            "cached_input_tokens": 13056,
+            "output_tokens": 2042,
+            "reasoning_output_tokens": 43
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 51.005913000000874,
+              "usage": {
+                "input_tokens": 17094,
+                "output_tokens": 2042,
+                "cached_input_tokens": 13056,
+                "reasoning_tokens": 43,
+                "total_tokens": 19136,
+                "raw": {
+                  "input_tokens": 17094,
+                  "cached_input_tokens": 13056,
+                  "output_tokens": 2042,
+                  "reasoning_output_tokens": 43
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:baseline:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:35:49.872013+00:00",
+            "finished_at": "2026-08-17T08:35:49.872013+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 51.006,
+                "usage": {
+                  "input_tokens": 17094,
+                  "cached_input_tokens": 13056,
+                  "output_tokens": 2042,
+                  "reasoning_output_tokens": 43
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 51.005913000000874,
+                    "usage": {
+                      "input_tokens": 17094,
+                      "output_tokens": 2042,
+                      "cached_input_tokens": 13056,
+                      "reasoning_tokens": 43,
+                      "total_tokens": 19136,
+                      "raw": {
+                        "input_tokens": 17094,
+                        "cached_input_tokens": 13056,
+                        "output_tokens": 2042,
+                        "reasoning_output_tokens": 43
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:35:49.947472+00:00",
+            "finished_at": "2026-08-17T08:35:49.947472+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17094,
+        "cached_input_tokens": 13056,
+        "output_tokens": 2042,
+        "reasoning_output_tokens": 43
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/baseline/webhook-fewer-dependencies.md"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "baseline",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "84ce2dae46eaff105caf681b17e18fa6c117bbb6fc898d30699ef4877aa80292",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 59.151,
+          "usage": {
+            "input_tokens": 17098,
+            "cached_input_tokens": 3840,
+            "output_tokens": 1726,
+            "reasoning_output_tokens": 61
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 59.151084000011906,
+              "usage": {
+                "input_tokens": 17098,
+                "output_tokens": 1726,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 61,
+                "total_tokens": 18824,
+                "raw": {
+                  "input_tokens": 17098,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1726,
+                  "reasoning_output_tokens": 61
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:baseline:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:37:04.041444+00:00",
+            "finished_at": "2026-08-17T08:37:04.041444+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 59.151,
+                "usage": {
+                  "input_tokens": 17098,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1726,
+                  "reasoning_output_tokens": 61
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 59.151084000011906,
+                    "usage": {
+                      "input_tokens": 17098,
+                      "output_tokens": 1726,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 61,
+                      "total_tokens": 18824,
+                      "raw": {
+                        "input_tokens": 17098,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 1726,
+                        "reasoning_output_tokens": 61
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\baseline\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\baseline\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:37:04.058061+00:00",
+            "finished_at": "2026-08-17T08:37:04.058061+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17098,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1726,
+        "reasoning_output_tokens": 61
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/baseline/upload-block-executables.md"
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "v1-full",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "487cc1a6f5fa4d1fe7a6301bcbbd24dbf224d135c56782f423591d81f2f3ef19",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 54.034,
+          "usage": {
+            "input_tokens": 17445,
+            "cached_input_tokens": 3840,
+            "output_tokens": 2220,
+            "reasoning_output_tokens": 94
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 54.03421770001296,
+              "usage": {
+                "input_tokens": 17445,
+                "output_tokens": 2220,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 94,
+                "total_tokens": 19665,
+                "raw": {
+                  "input_tokens": 17445,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2220,
+                  "reasoning_output_tokens": 94
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:v1-full:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:38:13.093264+00:00",
+            "finished_at": "2026-08-17T08:38:13.093264+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 54.034,
+                "usage": {
+                  "input_tokens": 17445,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2220,
+                  "reasoning_output_tokens": 94
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 54.03421770001296,
+                    "usage": {
+                      "input_tokens": 17445,
+                      "output_tokens": 2220,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 94,
+                      "total_tokens": 19665,
+                      "raw": {
+                        "input_tokens": 17445,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 2220,
+                        "reasoning_output_tokens": 94
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:38:13.157877+00:00",
+            "finished_at": "2026-08-17T08:38:13.157877+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17445,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2220,
+        "reasoning_output_tokens": 94
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/v1-full/fastapi-no-redis.md"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "v1-full",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "b924212a325665f317b9189021380452d43c9166ce93674051155fb535676c38",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 41.649,
+          "usage": {
+            "input_tokens": 17437,
+            "cached_input_tokens": 3840,
+            "output_tokens": 1533,
+            "reasoning_output_tokens": 200
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 41.64926919998834,
+              "usage": {
+                "input_tokens": 17437,
+                "output_tokens": 1533,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 200,
+                "total_tokens": 18970,
+                "raw": {
+                  "input_tokens": 17437,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1533,
+                  "reasoning_output_tokens": 200
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:v1-full:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:39:09.759856+00:00",
+            "finished_at": "2026-08-17T08:39:09.759856+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 41.649,
+                "usage": {
+                  "input_tokens": 17437,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1533,
+                  "reasoning_output_tokens": 200
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 41.64926919998834,
+                    "usage": {
+                      "input_tokens": 17437,
+                      "output_tokens": 1533,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 200,
+                      "total_tokens": 18970,
+                      "raw": {
+                        "input_tokens": 17437,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 1533,
+                        "reasoning_output_tokens": 200
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:39:09.787921+00:00",
+            "finished_at": "2026-08-17T08:39:09.787921+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 1,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 1.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17437,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1533,
+        "reasoning_output_tokens": 200
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/v1-full/webhook-fewer-dependencies.md"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "v1-full",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "1231c26a132f90ba9cd0cc9c5b2230ccdf26d9ac028516ad7aded8c7c35595a6",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 52.148,
+          "usage": {
+            "input_tokens": 17430,
+            "cached_input_tokens": 3840,
+            "output_tokens": 1489,
+            "reasoning_output_tokens": 277
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 52.147776600002544,
+              "usage": {
+                "input_tokens": 17430,
+                "output_tokens": 1489,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 277,
+                "total_tokens": 18919,
+                "raw": {
+                  "input_tokens": 17430,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1489,
+                  "reasoning_output_tokens": 277
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:v1-full:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:40:16.929605+00:00",
+            "finished_at": "2026-08-17T08:40:16.929605+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 52.148,
+                "usage": {
+                  "input_tokens": 17430,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 1489,
+                  "reasoning_output_tokens": 277
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 52.147776600002544,
+                    "usage": {
+                      "input_tokens": 17430,
+                      "output_tokens": 1489,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 277,
+                      "total_tokens": 18919,
+                      "raw": {
+                        "input_tokens": 17430,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 1489,
+                        "reasoning_output_tokens": 277
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\v1-full\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\v1-full\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:40:16.941660+00:00",
+            "finished_at": "2026-08-17T08:40:16.941660+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 17430,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1489,
+        "reasoning_output_tokens": 277
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/v1-full/upload-block-executables.md"
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "full-v2",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "fbcaf0305ac08fd7e8bd419089421d7b86b45811d49b8caf396d8f0c4e2dec87",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Produce a concrete implementation plan and file layout for a production-ready FastAPI URL shortener that creates persistent aliases, enforces expiration, performs HTTP redirects, and has automated tests.",
+        "requirements": [
+          {
+            "id": "REQ-001",
+            "statement": "Define a concrete FastAPI application architecture and implementation sequence.",
+            "acceptance_criteria": [
+              "The plan identifies the API, service, persistence, configuration, and test layers.",
+              "The plan orders implementation work from project setup and schema migration through endpoint implementation, testing, and production verification.",
+              "Each implementation step names the files it creates or changes and the observable behavior it delivers."
+            ]
+          },
+          {
+            "id": "REQ-002",
+            "statement": "Define an API for creating and retrieving shortened URLs.",
+            "acceptance_criteria": [
+              "The plan specifies a typed request containing a destination URL and optional custom alias and expiration.",
+              "The plan specifies a typed creation response containing the alias, short URL, destination URL, creation time, and expiration time.",
+              "The plan defines validation and HTTP error behavior for malformed URLs, invalid aliases, alias conflicts, and missing aliases.",
+              "The API is implemented through FastAPI routers and Pydantic schemas."
+            ]
+          },
+          {
+            "id": "REQ-003",
+            "statement": "Persist alias records across application restarts.",
+            "acceptance_criteria": [
+              "The plan uses a relational database-backed repository with a versioned migration for the alias table.",
+              "The alias table includes a unique alias, destination URL, creation timestamp, and nullable expiration timestamp.",
+              "Database uniqueness, rather than an in-process check alone, prevents duplicate aliases under concurrent requests.",
+              "An integration test recreates the application or database session and confirms that a previously created alias remains resolvable."
+            ]
+          },
+          {
+            "id": "REQ-004",
+            "statement": "Support generated and user-supplied aliases.",
+            "acceptance_criteria": [
+              "The plan defines an alias character set, minimum length, maximum length, and normalization or case-sensitivity rule.",
+              "When no alias is supplied, the service generates an alias with enough entropy for production use and retries bounded uniqueness conflicts.",
+              "When an alias is supplied, the service validates it and returns HTTP 409 if it already exists.",
+              "Tests cover generated aliases, valid custom aliases, invalid aliases, and collisions."
+            ]
+          },
+          {
+            "id": "REQ-005",
+            "statement": "Support optional alias expiration.",
+            "acceptance_criteria": [
+              "Creation accepts either the selected absolute expiration representation or a documented relative lifetime representation.",
+              "The service rejects expiration values that are not in the future.",
+              "Expiration comparisons use timezone-aware UTC timestamps.",
+              "An unexpired alias redirects successfully, an expired alias returns the documented non-redirect response, and a missing alias remains distinguishable from an expired alias.",
+              "Tests use an injected clock or explicit timestamps so expiration behavior is deterministic."
+            ]
+          },
+          {
+            "id": "REQ-006",
+            "statement": "Redirect valid aliases to their persisted destination URLs.",
+            "acceptance_criteria": [
+              "The plan defines a path operation that resolves an alias and returns an HTTP redirect with a Location header.",
+              "The plan selects and documents a redirect status code whose method-preservation and caching behavior are intentional.",
+              "The redirect lookup reads through the persistence layer and applies expiration rules before responding.",
+              "Tests assert the exact status code and Location header without automatically following the redirect."
+            ]
+          },
+          {
+            "id": "REQ-007",
+            "statement": "Include production-readiness measures appropriate to the service.",
+            "acceptance_criteria": [
+              "Configuration is loaded from environment variables through a typed settings object, including the database URL and public base URL.",
+              "Database sessions have explicit lifecycle management, transaction rollback behavior, and connection health checks.",
+              "The application exposes a health endpoint that verifies process readiness and database connectivity.",
+              "The plan defines structured logging, centralized expected-error mapping, startup behavior, and graceful resource cleanup.",
+              "The deployment layout includes a production ASGI server configuration and documents migration execution before serving traffic."
+            ]
+          },
+          {
+            "id": "REQ-008",
+            "statement": "Define a focused automated test suite.",
+            "acceptance_criteria": [
+              "Unit tests cover alias validation, generation collision handling, and expiration decisions.",
+              "API tests cover creation, custom alias conflict, validation failures, redirect success, missing aliases, expired aliases, and health behavior.",
+              "Persistence tests cover uniqueness and records surviving new sessions or application instances.",
+              "Test configuration isolates database state and does not require a shared external service.",
+              "The plan specifies commands for running tests and coverage, with a deterministic coverage threshold for application code."
+            ]
+          },
+          {
+            "id": "REQ-009",
+            "statement": "Provide a concrete, maintainable file layout.",
+            "acceptance_criteria": [
+              "The layout assigns separate files or packages to application setup, routers, schemas, models, services, repositories, database sessions, settings, migrations, and tests.",
+              "The layout includes dependency metadata, environment example configuration, migration configuration, container or deployment configuration, and operational documentation.",
+              "Every path in the artifact list has a stated architectural purpose in the execution plan.",
+              "The layout avoids speculative components unrelated to the requested shortener behavior."
+            ]
+          }
+        ],
+        "hard_constraints": [
+          {
+            "id": "CON-001",
+            "type": "hard",
+            "statement": "The implementation must not use Redis.",
+            "strategy": "Use the relational database as the durable source of truth and perform alias creation, uniqueness enforcement, expiration lookup, and redirect resolution through the database repository; do not add a cache dependency for the initial implementation.",
+            "required_gate": false,
+            "failure_action": ""
+          }
+        ],
+        "soft_preferences": [],
+        "risk_points": [
+          "Concurrent generated-alias collisions must be handled using database uniqueness constraints and bounded retry logic.",
+          "Expiration behavior can become nondeterministic if timestamps are naive or tests depend on wall-clock sleeps.",
+          "Redirect status and caching semantics must be selected explicitly to avoid unintended permanent caching or method changes.",
+          "A user-supplied database URL may require driver-specific async configuration and migration settings.",
+          "Unrestricted destination URLs can enable abuse or unsafe schemes unless URL validation is narrowly defined.",
+          "Database migrations and application startup can race if deployment does not run migrations as a separate release step."
+        ],
+        "artifacts": [
+          {
+            "path": "pyproject.toml",
+            "kind": "file"
+          },
+          {
+            "path": ".env.example",
+            "kind": "text"
+          },
+          {
+            "path": "README.md",
+            "kind": "markdown"
+          },
+          {
+            "path": "Dockerfile",
+            "kind": "file"
+          },
+          {
+            "path": "compose.yaml",
+            "kind": "yaml"
+          },
+          {
+            "path": "alembic.ini",
+            "kind": "file"
+          },
+          {
+            "path": "app/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/main.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/config.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/database.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/dependencies.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/models/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/models/url_alias.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/schemas/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/schemas/url_alias.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/repositories/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/repositories/url_alias.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/services/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/services/url_shortener.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/api/__init__.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/api/health.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/api/urls.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/errors.py",
+            "kind": "python"
+          },
+          {
+            "path": "app/logging.py",
+            "kind": "python"
+          },
+          {
+            "path": "migrations/env.py",
+            "kind": "python"
+          },
+          {
+            "path": "migrations/script.py.mako",
+            "kind": "file"
+          },
+          {
+            "path": "migrations/versions/0001_create_url_aliases.py",
+            "kind": "python"
+          },
+          {
+            "path": "tests/conftest.py",
+            "kind": "python"
+          },
+          {
+            "path": "tests/unit/test_url_shortener.py",
+            "kind": "python"
+          },
+          {
+            "path": "tests/integration/test_repository.py",
+            "kind": "python"
+          },
+          {
+            "path": "tests/api/test_urls.py",
+            "kind": "python"
+          },
+          {
+            "path": "tests/api/test_health.py",
+            "kind": "python"
+          }
+        ],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "files_exist"
+            },
+            {
+              "type": "python_compile"
+            },
+            {
+              "type": "command"
+            },
+            {
+              "type": "forbidden_imports"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 61.997,
+          "usage": {
+            "input_tokens": 36118,
+            "cached_input_tokens": 0,
+            "output_tokens": 2307,
+            "reasoning_output_tokens": 557
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 61.996615100011695,
+              "usage": {
+                "input_tokens": 36118,
+                "output_tokens": 2307,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 557,
+                "total_tokens": 38425,
+                "raw": {
+                  "input_tokens": 36118,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 2307,
+                  "reasoning_output_tokens": 557
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\plans\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\plans\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 56.52,
+          "usage": {
+            "input_tokens": 19004,
+            "cached_input_tokens": 3840,
+            "output_tokens": 2374,
+            "reasoning_output_tokens": 516
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 56.519928199995775,
+              "usage": {
+                "input_tokens": 19004,
+                "output_tokens": 2374,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 516,
+                "total_tokens": 21378,
+                "raw": {
+                  "input_tokens": 19004,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2374,
+                  "reasoning_output_tokens": 516
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:full-v2:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:41:33.945932+00:00",
+            "finished_at": "2026-08-17T08:41:33.945932+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:42:45.496832+00:00",
+            "finished_at": "2026-08-17T08:42:45.496832+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 56.52,
+                "usage": {
+                  "input_tokens": 19004,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2374,
+                  "reasoning_output_tokens": 516
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 56.519928199995775,
+                    "usage": {
+                      "input_tokens": 19004,
+                      "output_tokens": 2374,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 516,
+                      "total_tokens": 21378,
+                      "raw": {
+                        "input_tokens": 19004,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 2374,
+                        "reasoning_output_tokens": 516
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:42:45.549175+00:00",
+            "finished_at": "2026-08-17T08:42:45.549175+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 55122,
+        "cached_input_tokens": 3840,
+        "output_tokens": 4681,
+        "reasoning_output_tokens": 1073
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/full-v2/fastapi-no-redis.md",
+        "plan": "raw/plans/gpt-5.6-sol/r1/full-v2/fastapi-no-redis.a1.json"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "full-v2",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "ef3cea0e472f5628d843cdf9ed2ae4f1f2ab70262dcdf42ab7271be03fd09e9d",
+      "plan": {
+        "artifacts": [],
+        "hard_constraints": [],
+        "objective": "Produce an implementation plan for a webhook receiver with signature verification, idempotent processing, retry handling, and audit logging.",
+        "requirements": [
+          {
+            "acceptance_criteria": [
+              "The plan identifies the HTTP endpoint, request inputs, and response status behavior.",
+              "The plan specifies that signature verification uses the exact raw request body.",
+              "The plan defines where payload parsing, validation, and business-handler invocation occur in the request flow."
+            ],
+            "id": "REQ-1",
+            "statement": "Plan the webhook receiver request and response flow."
+          },
+          {
+            "acceptance_criteria": [
+              "The plan specifies the signature inputs, configured secret or key, signing algorithm, and comparison mechanism.",
+              "The plan defines behavior for valid, missing, malformed, and invalid signatures.",
+              "The plan includes tests showing whether the business handler is invoked for each signature outcome."
+            ],
+            "id": "REQ-2",
+            "statement": "Plan webhook signature verification."
+          },
+          {
+            "acceptance_criteria": [
+              "The plan identifies the stable delivery or event identifier used as the idempotency key.",
+              "The plan defines persistent processing states and the atomic operation used to claim a delivery.",
+              "The plan defines duplicate-delivery behavior for both sequential and concurrent requests.",
+              "The plan includes tests demonstrating that duplicate deliveries do not produce duplicate business effects."
+            ],
+            "id": "REQ-3",
+            "statement": "Plan idempotent webhook processing."
+          },
+          {
+            "acceptance_criteria": [
+              "The plan distinguishes retryable processing failures from permanent failures.",
+              "The plan defines the HTTP response behavior that causes or suppresses sender retries.",
+              "The plan defines repeated-delivery handling after successful, in-progress, retryable-failure, and terminal-failure states.",
+              "The plan includes tests for transient failure, later successful retry, permanent failure, and retry exhaustion or operator escalation."
+            ],
+            "id": "REQ-4",
+            "statement": "Plan webhook retry handling."
+          },
+          {
+            "acceptance_criteria": [
+              "The plan identifies audit events for receipt, signature verification, idempotency decisions, processing outcomes, and retry transitions.",
+              "The plan specifies trace fields including delivery identifier, timestamp, correlation identifier, and outcome.",
+              "The plan defines redaction or exclusion of secrets, signature material, and sensitive payload fields.",
+              "The plan includes tests for audit records produced by successful, invalid, duplicate, retryable-failure, and terminal-failure paths."
+            ],
+            "id": "REQ-5",
+            "statement": "Plan lifecycle audit logging."
+          }
+        ],
+        "risk_points": [
+          "Reading or transforming the payload before verification can invalidate signatures or verify different bytes from those received.",
+          "Non-atomic idempotency claims can allow concurrent duplicate business effects.",
+          "Incorrect response classification can cause lost deliveries or unnecessary retries.",
+          "Audit records can expose secrets or sensitive payload data.",
+          "A process crash between a business effect and its persisted completion state can leave an ambiguous delivery outcome."
+        ],
+        "schema_version": "1.0",
+        "soft_preferences": [
+          {
+            "id": "SP-1",
+            "preference": "Avoid unnecessary dependencies by preferring existing project libraries and runtime capabilities.",
+            "tradeoff": "Add a narrowly scoped dependency when existing capabilities cannot provide the required correctness, security, durability, or maintainability.",
+            "type": "soft"
+          }
+        ],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "json_schema"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 1,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 37.585,
+          "usage": {
+            "input_tokens": 17853,
+            "cached_input_tokens": 0,
+            "output_tokens": 1320,
+            "reasoning_output_tokens": 477
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 37.585195000021486,
+              "usage": {
+                "input_tokens": 17853,
+                "output_tokens": 1320,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 477,
+                "total_tokens": 19173,
+                "raw": {
+                  "input_tokens": 17853,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1320,
+                  "reasoning_output_tokens": 477
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\plans\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\plans\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ],
+          "validation": {
+            "valid": false,
+            "issues": [
+              {
+                "code": "CONSTRAINT_NOT_GROUNDED",
+                "path": "hard_constraints[0].statement",
+                "message": "constraint is not grounded in an explicit user constraint"
+              },
+              {
+                "code": "UNREQUESTED_REQUIRED_GATE",
+                "path": "hard_constraints[0].required_gate",
+                "message": "the user contract does not require a rejection or enforcement gate"
+              },
+              {
+                "code": "SOFT_PREFERENCE_HARDENED",
+                "path": "hard_constraints[0]",
+                "message": "a soft-only user preference was promoted to a hard constraint"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "plan",
+          "attempt": 2,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 37.689,
+          "usage": {
+            "input_tokens": 34236,
+            "cached_input_tokens": 0,
+            "output_tokens": 814,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 37.688777500006836,
+              "usage": {
+                "input_tokens": 34236,
+                "output_tokens": 814,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 35050,
+                "raw": {
+                  "input_tokens": 34236,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 814,
+                  "reasoning_output_tokens": 0
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\plans\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.a2.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\plans\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.a2.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 80.332,
+          "usage": {
+            "input_tokens": 18054,
+            "cached_input_tokens": 3840,
+            "output_tokens": 2749,
+            "reasoning_output_tokens": 515
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 80.33223349999753,
+              "usage": {
+                "input_tokens": 18054,
+                "output_tokens": 2749,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 515,
+                "total_tokens": 20803,
+                "raw": {
+                  "input_tokens": 18054,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2749,
+                  "reasoning_output_tokens": 515
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:full-v2:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "fail",
+            "started_at": "2026-08-17T08:43:38.093088+00:00",
+            "finished_at": "2026-08-17T08:43:38.093088+00:00",
+            "errors": [
+              "CONSTRAINT_NOT_GROUNDED",
+              "UNREQUESTED_REQUIRED_GATE",
+              "SOFT_PREFERENCE_HARDENED"
+            ],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": false,
+                "issues": [
+                  {
+                    "code": "CONSTRAINT_NOT_GROUNDED",
+                    "path": "hard_constraints[0].statement",
+                    "message": "constraint is not grounded in an explicit user constraint"
+                  },
+                  {
+                    "code": "UNREQUESTED_REQUIRED_GATE",
+                    "path": "hard_constraints[0].required_gate",
+                    "message": "the user contract does not require a rejection or enforcement gate"
+                  },
+                  {
+                    "code": "SOFT_PREFERENCE_HARDENED",
+                    "path": "hard_constraints[0]",
+                    "message": "a soft-only user preference was promoted to a hard constraint"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "plan",
+            "index": 2,
+            "status": "pass",
+            "started_at": "2026-08-17T08:44:30.807165+00:00",
+            "finished_at": "2026-08-17T08:44:30.807165+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:46:06.171712+00:00",
+            "finished_at": "2026-08-17T08:46:06.171712+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 80.332,
+                "usage": {
+                  "input_tokens": 18054,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 2749,
+                  "reasoning_output_tokens": 515
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 80.33223349999753,
+                    "usage": {
+                      "input_tokens": 18054,
+                      "output_tokens": 2749,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 515,
+                      "total_tokens": 20803,
+                      "raw": {
+                        "input_tokens": 18054,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 2749,
+                        "reasoning_output_tokens": 515
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:46:06.263180+00:00",
+            "finished_at": "2026-08-17T08:46:06.263180+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 2,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 2.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 70143,
+        "cached_input_tokens": 3840,
+        "output_tokens": 4883,
+        "reasoning_output_tokens": 992
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 2,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 2.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/full-v2/webhook-fewer-dependencies.md",
+        "plan": "raw/plans/gpt-5.6-sol/r1/full-v2/webhook-fewer-dependencies.a2.json"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "full-v2",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "5fdbd53c59f1199867ca23bb3c42af82156fe557bfcc9f6c086f80b84f9a20ea",
+      "plan": {
+        "artifacts": [],
+        "hard_constraints": [
+          {
+            "failure_action": "Reject the upload with a clear client error, persist neither file bytes nor success metadata, and record the rejection in the audit log.",
+            "id": "HC-1",
+            "required_gate": true,
+            "statement": "The API must reject executable content even when the file extension or declared MIME type is misleading.",
+            "strategy": "Inspect content independently of the filename extension and client-supplied MIME type before durable persistence, using deterministic content-signature and executable-format detection (including renamed executable samples); only allow content that passes the executable check.",
+            "type": "hard"
+          }
+        ],
+        "objective": "Design a file-upload API with durable storage, metadata, download, audit logs, and automated tests.",
+        "requirements": [
+          {
+            "acceptance_criteria": [
+              "An upload endpoint accepts file bytes and returns a stable file identifier on success.",
+              "The API documents request, response, and error contracts, including size and validation failures."
+            ],
+            "id": "REQ-1",
+            "statement": "Provide a file-upload API endpoint with explicit request, response, and error behavior."
+          },
+          {
+            "acceptance_criteria": [
+              "Successfully uploaded bytes remain available after process restart and are stored through a durable storage abstraction.",
+              "Storage failures produce a deterministic API error and do not create successful metadata without corresponding durable bytes."
+            ],
+            "id": "REQ-2",
+            "statement": "Persist uploaded file content in durable storage."
+          },
+          {
+            "acceptance_criteria": [
+              "Each successful upload has metadata containing a stable identifier, original filename, detected/content-derived media type, size, creation time, storage reference, and integrity checksum.",
+              "Metadata can be retrieved by stable identifier and remains consistent with the stored object."
+            ],
+            "id": "REQ-3",
+            "statement": "Create and expose persistent metadata for each successfully stored file."
+          },
+          {
+            "acceptance_criteria": [
+              "A download endpoint retrieves a file by stable identifier and returns stored bytes unchanged.",
+              "Download responses include appropriate content type and disposition metadata and return a deterministic not-found error for unknown identifiers."
+            ],
+            "id": "REQ-4",
+            "statement": "Provide file download by stable file identifier."
+          },
+          {
+            "acceptance_criteria": [
+              "Upload acceptance, rejection, download, not-found, and storage/error outcomes generate audit records.",
+              "Each audit record includes event type, timestamp, file identifier when available, outcome, and request/actor correlation data sufficient for traceability.",
+              "Audit records are durably persisted and queryable through a documented interface or administrative sink."
+            ],
+            "id": "REQ-5",
+            "statement": "Record durable audit logs for file lifecycle and security-relevant outcomes."
+          },
+          {
+            "acceptance_criteria": [
+              "Automated tests cover successful upload, durable retrieval after restart or storage reinitialization, metadata consistency, download fidelity, audit events, malformed requests, storage failures, and unknown-file handling.",
+              "Automated tests include executable samples whose extensions and declared MIME types are non-executable and verify rejection with no successful persistence.",
+              "The test suite runs deterministically with documented setup and pass/fail behavior."
+            ],
+            "id": "REQ-6",
+            "statement": "Deliver automated tests covering API behavior, persistence, auditing, error paths, and executable-content rejection."
+          }
+        ],
+        "risk_points": [
+          "Executable detection must inspect content before persistence and must not trust filename extensions or client MIME declarations.",
+          "Durability and metadata consistency require atomic or recoverable coordination between object storage and metadata storage.",
+          "Audit logging of rejected uploads must avoid retaining rejected executable bytes or leaking sensitive content.",
+          "Download authorization and identifier handling must prevent unintended access to stored files."
+        ],
+        "schema_version": "1.0",
+        "soft_preferences": [],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "json_schema"
+            },
+            {
+              "type": "command"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 52.84,
+          "usage": {
+            "input_tokens": 17851,
+            "cached_input_tokens": 0,
+            "output_tokens": 1743,
+            "reasoning_output_tokens": 323
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 52.84034630001406,
+              "usage": {
+                "input_tokens": 17851,
+                "output_tokens": 1743,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 323,
+                "total_tokens": 19594,
+                "raw": {
+                  "input_tokens": 17851,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1743,
+                  "reasoning_output_tokens": 323
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\plans\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\plans\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 80.486,
+          "usage": {
+            "input_tokens": 36658,
+            "cached_input_tokens": 7680,
+            "output_tokens": 2451,
+            "reasoning_output_tokens": 372
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 80.48610290000215,
+              "usage": {
+                "input_tokens": 36658,
+                "output_tokens": 2451,
+                "cached_input_tokens": 7680,
+                "reasoning_tokens": 372,
+                "total_tokens": 39109,
+                "raw": {
+                  "input_tokens": 36658,
+                  "cached_input_tokens": 7680,
+                  "output_tokens": 2451,
+                  "reasoning_output_tokens": 372
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:full-v2:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:47:14.026415+00:00",
+            "finished_at": "2026-08-17T08:47:14.026415+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:48:49.532781+00:00",
+            "finished_at": "2026-08-17T08:48:49.532781+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 80.486,
+                "usage": {
+                  "input_tokens": 36658,
+                  "cached_input_tokens": 7680,
+                  "output_tokens": 2451,
+                  "reasoning_output_tokens": 372
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 80.48610290000215,
+                    "usage": {
+                      "input_tokens": 36658,
+                      "output_tokens": 2451,
+                      "cached_input_tokens": 7680,
+                      "reasoning_tokens": 372,
+                      "total_tokens": 39109,
+                      "raw": {
+                        "input_tokens": 36658,
+                        "cached_input_tokens": 7680,
+                        "output_tokens": 2451,
+                        "reasoning_output_tokens": 372
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-representative\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-representative\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:48:49.565837+00:00",
+            "finished_at": "2026-08-17T08:48:49.565837+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 54509,
+        "cached_input_tokens": 7680,
+        "output_tokens": 4194,
+        "reasoning_output_tokens": 695
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/full-v2/upload-block-executables.md",
+        "plan": "raw/plans/gpt-5.6-sol/r1/full-v2/upload-block-executables.a1.json"
+      }
+    }
+  ]
+}

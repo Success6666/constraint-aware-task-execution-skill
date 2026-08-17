@@ -167,6 +167,8 @@ def mask_negated_adoption(text: str, terms: list[str]) -> str:
             rf"install(?:ing|s)?|deploy(?:ing|s)?|run(?:ning|s)?|depend(?:s|ing)?\s+on)\s+"
             rf"(?:an?\s+)?{escaped}\b",
             rf"\b{escaped}\b\s+(?:is|was|will be)\s+not\s+(?:used|required|installed|deployed)\b",
+            rf"\b{escaped}(?:-backed|-based)?\b[^.!?\n]{{0,80}}\b(?:is|are|was|were)\s+"
+            rf"(?:not|never)\s+(?:available|used|required|installed|deployed|selected|enabled)\b",
             rf"(?:不使用|不能使用|不可使用|不会使用|不要使用|避免使用|禁止使用|不得使用|"
             rf"无需使用|而不是使用|不采用|不能采用|不可采用|不会采用|不要采用|避免采用|"
             rf"禁止采用|不得采用|不引入|不能引入|不可引入|不会引入|不要引入|避免引入|"

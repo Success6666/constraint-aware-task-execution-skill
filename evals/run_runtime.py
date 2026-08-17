@@ -8,22 +8,23 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 from execution_state import ExecutionState, Stage
-from executors import create_executor
+from executors import create_executor, execution_runtime_policy
 from experiment_variants import VARIANTS
-from protocol import parse_plan
+from protocol import merge_plan_validations, parse_plan, validate_plan_context
 from validators import validate_workspace_contract
 from run_matrix import (
     DEFAULT_OUTPUT_ROOT,
-    SCHEMA_PATH,
+    OUTPUT_SCHEMA_PATH,
     add_usage,
     plan_prompt,
     prepare_workspace,
-    dispatch_generation,
+    dispatch_generation as matrix_dispatch_generation,
+    run_codex,
     slug,
-    usage_from_trace,
 )
 
 
@@ -31,6 +32,52 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "evals" / "runtime_cases.json"
 RUNTIME_PROTOCOL = "workspace-artifact-v2-v1"
 MODES = ("direct", "full-v2")
+
+
+def dispatch_generation(
+    prompt: str,
+    model: str,
+    reasoning_effort: str,
+    workspace: Path,
+    temp_root: Path,
+    output_path: Path,
+    trace_path: Path,
+    timeout: int,
+    output_schema: Path | None = None,
+    sandbox: str = "read-only",
+    executor_name: str = "codex",
+    transport_attempts: int = 1,
+) -> dict[str, Any]:
+    """Keep the historical run_runtime.run_codex replacement seam."""
+
+    if executor_name == "codex":
+        try:
+            return run_codex(
+                prompt, model, reasoning_effort, workspace, temp_root, output_path,
+                trace_path, timeout, output_schema, sandbox=sandbox,
+                transport_attempts=transport_attempts,
+            )
+        except TypeError as error:
+            if "unexpected keyword argument" not in str(error):
+                raise
+            return run_codex(
+                prompt, model, reasoning_effort, workspace, temp_root, output_path,
+                trace_path, timeout, output_schema, sandbox=sandbox,
+            )
+    return matrix_dispatch_generation(
+        prompt,
+        model,
+        reasoning_effort,
+        workspace,
+        temp_root,
+        output_path,
+        trace_path,
+        timeout,
+        output_schema,
+        sandbox,
+        executor_name,
+        transport_attempts,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,6 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repair-attempts", type=int, default=2)
     parser.add_argument("--plan-attempts", type=int, default=2)
     parser.add_argument("--transport-attempts", type=int, default=2)
+    parser.add_argument("--inter-stage-delay", type=float, default=0.0)
     parser.add_argument("--reasoning-effort", choices=("low", "medium", "high", "xhigh"), default="medium")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--resume", action="store_true")
@@ -134,6 +182,7 @@ def run_runtime_job(
     case: dict, mode: str, model: str, repeat: int, root: Path,
     effort: str, timeout: int, repair_attempts: int, plan_attempts: int = 2,
     executor_name: str = "codex", transport_attempts: int = 2,
+    inter_stage_delay: float = 0.0,
 ) -> dict[str, Any]:
     variant = VARIANTS["full-v2"] if mode == "full-v2" else VARIANTS["baseline"]
     workspace = prepare_workspace(root, model, repeat, variant, f"runtime-{case['id']}")
@@ -160,7 +209,7 @@ def run_runtime_job(
             trace_path = root / "traces" / "plans" / base.with_suffix(f".a{index + 1}.jsonl")
             call = dispatch_generation(
                 plan_prompt({"prompt": case["prompt"]}, variant, previous, issues), model, effort,
-                workspace, root / ".codex-homes", plan_path, trace_path, timeout, SCHEMA_PATH,
+                workspace, root / ".codex-homes", plan_path, trace_path, timeout, OUTPUT_SCHEMA_PATH,
                 executor_name=executor_name, transport_attempts=transport_attempts,
             )
             add_usage(usage, call["usage"])
@@ -170,9 +219,18 @@ def run_runtime_job(
                 state.add_attempt(Stage.PLAN, "fail", errors=["PLAN_CALL_FAILED"], evidence={"call": call})
                 previous = plan_path.read_text(encoding="utf-8") if plan_path.is_file() else ""
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$"}]
+                if inter_stage_delay > 0 and index + 1 < plan_attempts:
+                    time.sleep(inter_stage_delay)
                 continue
             previous = plan_path.read_text(encoding="utf-8")
-            _parsed, validation = parse_plan(previous, allow_legacy_aliases=False)
+            parsed, structural_validation = parse_plan(previous, allow_legacy_aliases=False)
+            contextual_validation = validate_plan_context(
+                parsed or {},
+                case.get("constraint_terms", []),
+                required_gates_allowed=bool(case.get("required_enforcement_patterns")),
+                soft_preference_only=bool(case.get("soft_preference")),
+            )
+            validation = merge_plan_validations(structural_validation, contextual_validation)
             attempt["validation"] = validation.to_dict()
             state.add_attempt(
                 Stage.PLAN,
@@ -184,6 +242,8 @@ def run_runtime_job(
             if validation.valid:
                 plan_text = previous
                 break
+            if inter_stage_delay > 0 and index + 1 < plan_attempts:
+                time.sleep(inter_stage_delay)
         plan_retry_count = max(0, sum(item["phase"] == "plan" for item in attempts) - 1)
         if plan_text is None:
             state.finish(False, "plan_validation_exhausted")
@@ -196,6 +256,9 @@ def run_runtime_job(
                 "transport_retry_count": sum(int(item.get("transport_retry_count", 0) or 0) for item in attempts),
                 "usage": usage, "state": state.to_dict(),
             }
+
+    if plan_text is not None and inter_stage_delay > 0:
+        time.sleep(inter_stage_delay)
 
     output_path = root / "messages" / base.with_suffix(".md")
     trace_path = root / "traces" / "execute" / base.with_suffix(".jsonl")
@@ -228,6 +291,8 @@ def run_runtime_job(
         for index in range(repair_attempts):
             if not errors:
                 break
+            if inter_stage_delay > 0:
+                time.sleep(inter_stage_delay)
             repair_count += 1
             repair_output = root / "messages" / "repairs" / base.with_suffix(f".a{index + 1}.md")
             repair_trace = root / "traces" / "repairs" / base.with_suffix(f".a{index + 1}.jsonl")
@@ -302,7 +367,12 @@ def checkpoint(path: Path, metadata: dict, rows: dict[tuple[str, int, str, str],
 
 def main() -> int:
     args = parse_args()
-    if args.plan_attempts < 1 or args.repair_attempts < 0 or args.transport_attempts < 1:
+    if (
+        args.plan_attempts < 1
+        or args.repair_attempts < 0
+        or args.transport_attempts < 1
+        or args.inter_stage_delay < 0
+    ):
         raise ValueError("retry attempt counts must be non-negative and plan attempts must be positive")
     modes = list(dict.fromkeys(args.modes or MODES))
     unknown = set(modes) - set(MODES)
@@ -329,6 +399,8 @@ def main() -> int:
         "experiment": args.experiment, "protocol": RUNTIME_PROTOCOL,
         "generated_at": datetime.now(timezone.utc).isoformat(), "models": args.models,
         "executor": args.executor, "transport_attempts": args.transport_attempts,
+        "execution_runtime_policy": execution_runtime_policy(args.executor),
+        "inter_stage_delay": args.inter_stage_delay,
         "modes": modes, "repeats": args.repeat, "cases": [case["id"] for case in cases],
     }
     checkpoint(results_path, metadata, rows)
@@ -336,7 +408,8 @@ def main() -> int:
         future_map = {
             executor.submit(run_runtime_job, case, mode, model, repeat, root, args.reasoning_effort,
                             args.timeout, args.repair_attempts, args.plan_attempts,
-                            args.executor, args.transport_attempts): (case, mode, model, repeat)
+                            args.executor, args.transport_attempts, args.inter_stage_delay):
+                (case, mode, model, repeat)
             for case, mode, model, repeat in jobs
         }
         for future in as_completed(future_map):

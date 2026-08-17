@@ -1,8 +1,8 @@
 {
   "$schema": "schemas/release-experiment.schema.json",
   "schema_version": "1.0",
-  "release_candidate": "0.4.0-rc.2",
-  "experiment": "release-0.4.0-rc.2",
+  "release_candidate": "0.4.0-rc.3",
+  "experiment": "release-0.4.0-rc.3",
   "output_root": "evals/experiments/releases",
   "limits": {
     "max_model_jobs": 600,
@@ -33,9 +33,10 @@
         "full-v2"
       ],
       "repeats": 1,
-      "jobs": 3,
+      "jobs": 1,
       "timeout_seconds": 600,
       "transport_attempts": 2,
+      "inter_stage_delay_seconds": 15,
       "plan_attempts": 2,
       "artifact_attempts": 2
     },
@@ -46,9 +47,10 @@
       "reasoning_effort": "medium",
       "variants": ["baseline", "v1-full", "full-v2"],
       "repeats": 1,
-      "jobs": 3,
+      "jobs": 1,
       "timeout_seconds": 600,
       "transport_attempts": 2,
+      "inter_stage_delay_seconds": 15,
       "plan_attempts": 2,
       "artifact_attempts": 2
     },
@@ -59,9 +61,10 @@
       "reasoning_effort": "medium",
       "variants": ["baseline", "v1-full", "full-v2"],
       "repeats": 1,
-      "jobs": 3,
+      "jobs": 1,
       "timeout_seconds": 600,
       "transport_attempts": 2,
+      "inter_stage_delay_seconds": 15,
       "plan_attempts": 2,
       "artifact_attempts": 2
     },
@@ -75,6 +78,7 @@
       "jobs": 1,
       "timeout_seconds": 900,
       "transport_attempts": 2,
+      "inter_stage_delay_seconds": 0,
       "plan_attempts": 2,
       "artifact_attempts": 2
     }
@@ -87,9 +91,10 @@
       "reasoning_effort": "medium",
       "modes": ["direct", "full-v2"],
       "repeats": 1,
-      "jobs": 2,
+      "jobs": 1,
       "timeout_seconds": 900,
       "transport_attempts": 2,
+      "inter_stage_delay_seconds": 15,
       "plan_attempts": 2,
       "repair_attempts": 2
     }

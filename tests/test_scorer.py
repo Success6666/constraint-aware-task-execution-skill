@@ -100,6 +100,13 @@ class ScorerTests(unittest.TestCase):
         score = score_response(self.case, "We do not depend on Redis. Build FastAPI redirects and tests with SQLite.")
         self.assertEqual(score.constraint_violation_hits, 0)
 
+    def test_negated_backed_capability_is_not_a_violation(self) -> None:
+        score = score_response(
+            self.case,
+            "Redis-based counters are not available, so build FastAPI redirects and tests with PostgreSQL.",
+        )
+        self.assertEqual(score.constraint_violation_hits, 0)
+
     def test_chinese_negated_adoption_is_not_a_violation(self) -> None:
         score = score_response(self.case, "不引入 Redis，使用 SQLite 实现 FastAPI redirect 和 test。")
         self.assertEqual(score.constraint_violation_hits, 0)

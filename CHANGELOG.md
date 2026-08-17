@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0-rc.3 - 2026-08-17
+
+- Replaced the local-model shell adapter with a bounded Ollama HTTP executor and normalized usage evidence.
+- Preserved only the active Codex provider route in isolated execution homes and added serialized scheduling, cooldown, and recoverable backoff.
+- Added a strict provider-compatible execution-plan output schema while retaining canonical deterministic validation.
+- Added request-grounded plan validation for requirements, constraints, preferences, and explicit enforcement gates.
+- Made plan retries preserve complete plans and repair only reported classification or structural errors.
+- Added paired capability-retention gates that distinguish functional regressions from latency and token cost.
+- Fixed negated backend phrasing in the scorer and retained failed-contract rows when usable score evidence exists.
+- Verified representative Codex and Ollama pairs without observed capability regression before the full release matrix.
+
 ## 0.4.0-rc.2 - 2026-08-17
 
 - Renamed the Skill and invocation to `constraint-exec`.

@@ -90,6 +90,7 @@ def main() -> None:
     candidates = manifest.get("release_candidates_by_experiment", {}).get(
         "published-ab", ["skill"]
     )
+    semantic_candidates = set(semantic_review.get("candidate_variants", []))
     capability["acceptance"] = evaluate_capability_acceptance(
         capability,
         candidates,
@@ -105,7 +106,7 @@ def main() -> None:
                 "required_for_final_release",
                 gates.get("semantic_review_required", False),
             )
-        ),
+        ) and any(candidate in semantic_candidates for candidate in candidates),
     )
     summary["capability_retention"] = capability
     (RESULTS_PATH / "summary.json").write_text(

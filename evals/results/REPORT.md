@@ -77,3 +77,36 @@ Aggregate constraint adherence changed by `+0.0000`.
 Per case: `7` improved, `0` worsened, and `23` tied.
 
 This is a small, single-model regression experiment with a strong baseline. The deterministic scorer is not a statistical significance test or a substitute for blind human review. Inspect the committed raw responses when a metric changes unexpectedly.
+
+## Capability Retention
+
+- Paired rows: `30/30`
+- Quality retention ratio: `1.0000`
+- Non-constraint requirement retention: `1.0000`
+- Capability regression rate: `0.0000`
+- Efficiency regression rate: `0.0000`
+- Valid information retention: `n/a`
+- Semantic review coverage: `0.0000`
+- Cost ratio: `n/a`
+- Latency ratio: `n/a`
+- General semantic capability: `partial`
+- Capability acceptance: `pass`
+- Semantic review required: `False`
+
+Only successful baseline/skill pairs enter retention denominators. Missing pairs are reported as coverage gaps, not zero scores. General semantic preservation remains partial unless an explicit semantic evaluator supplies observations.
+
+| Component | Observed Pairs | Missing Candidate Evidence | Retention | Regression Rate |
+| --- | ---: | ---: | ---: | ---: |
+| `objective_coverage` | 30 | 0 | 1.0000 | 0.0000 |
+| `non_constraint_requirement_coverage` | 0 | 0 | n/a | 0.0000 |
+| `declared_quality_score` | 0 | 0 | n/a | 0.0000 |
+| `constraint_compliance` | 30 | 0 | 1.0000 | 0.0000 |
+| `format_compliance` | 30 | 0 | 1.0000 | 0.0000 |
+| `path_compliance` | 30 | 0 | 1.0000 | 0.0000 |
+| `artifact_contract` | 0 | 0 | n/a | 0.0000 |
+
+Behavioral regression observations:
+
+- `unnecessary_refusal`: `0/30` (rate `0.0000`)
+- `unnecessary_clarification`: `0/30` (rate `0.0000`)
+- `over_conservative`: `0/30` (rate `0.0000`)

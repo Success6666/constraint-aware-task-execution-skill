@@ -2,7 +2,7 @@
 
 ## Version status
 
-`0.4.0-rc.2` is the non-test implementation candidate. Keep `v0.3.0` results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the deferred validation and model matrices satisfy the task acceptance gates.
+`0.4.0-rc.3` is the stabilized experiment candidate. Keep `v0.3.0` results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the complete model matrices and blinded semantic review satisfy the task acceptance gates.
 
 ## Skill rename
 

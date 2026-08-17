@@ -12,18 +12,26 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
 from typing import Any
 
 from execution_state import ExecutionState, Stage
-from executors import GenerationRequest, attempt_summary, create_executor, generate_with_transport_retries
+from executors import (
+    GenerationRequest,
+    attempt_summary,
+    create_executor,
+    execution_runtime_policy,
+    generate_with_transport_retries,
+)
 from experiment_variants import VARIANTS, Variant, select_variants
-from protocol import choose_retry, parse_plan
+from protocol import choose_retry, merge_plan_validations, parse_plan, validate_plan_context
 from scorer import score_response
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "evals" / "cases.json"
 SCHEMA_PATH = ROOT / "evals" / "schemas" / "execution-plan.schema.json"
+OUTPUT_SCHEMA_PATH = ROOT / "evals" / "schemas" / "execution-plan.output.schema.json"
 SKILL_PATH = ROOT / "skills" / "constraint-exec" / "SKILL.md"
 PROTOCOL_PATH = ROOT / "evals" / "protocol.py"
 DEFAULT_OUTPUT_ROOT = ROOT / "evals" / "experiments"
@@ -49,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plan-attempts", type=int, default=2)
     parser.add_argument("--artifact-attempts", type=int, default=2)
     parser.add_argument("--transport-attempts", type=int, default=2)
+    parser.add_argument("--inter-stage-delay", type=float, default=0.0)
     parser.add_argument("--reasoning-effort", choices=("low", "medium", "high", "xhigh"), default="medium")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--resume", action="store_true")
@@ -190,19 +199,36 @@ def dispatch_generation(
     transport_attempts: int = 1,
 ) -> dict[str, Any]:
     if executor_name == "codex":
-        return run_codex(
-            prompt,
-            model,
-            reasoning_effort,
-            workspace,
-            temp_root,
-            output_path,
-            trace_path,
-            timeout,
-            output_schema,
-            sandbox,
-            transport_attempts,
-        )
+        try:
+            return run_codex(
+                prompt,
+                model,
+                reasoning_effort,
+                workspace,
+                temp_root,
+                output_path,
+                trace_path,
+                timeout,
+                output_schema,
+                sandbox=sandbox,
+                transport_attempts=transport_attempts,
+            )
+        except TypeError as error:
+            # Existing integrations commonly replace this compatibility entry
+            # point with the original nine-argument callable.
+            if "unexpected keyword argument" not in str(error):
+                raise
+            return run_codex(
+                prompt,
+                model,
+                reasoning_effort,
+                workspace,
+                temp_root,
+                output_path,
+                trace_path,
+                timeout,
+                output_schema,
+            )
     return run_executor(
         prompt,
         model,
@@ -228,8 +254,35 @@ def skill_invocation(variant: Variant) -> str:
 def plan_prompt(case: dict, variant: Variant, previous: str | None = None, errors: list[dict] | None = None) -> str:
     repair = ""
     if previous is not None:
+        repair_rules: list[str] = []
+        error_codes = {str(error.get("code", "")) for error in errors or []}
+        if "USER_CONSTRAINT_MISSING" in error_codes:
+            repair_rules.append(
+                "Move every explicit user constraint into hard_constraints with its implementation strategy. "
+                "A constraint mentioned in requirements does not replace the required hard_constraints entry."
+            )
+        if "USER_PREFERENCE_MISSING" in error_codes:
+            repair_rules.append(
+                "Move every explicit user preference into soft_preferences with its tradeoff."
+            )
+        if "REQUIRED_GATE_NOT_PLANNED" in error_codes:
+            repair_rules.append(
+                "Represent the user's explicit enforcement requirement as a hard constraint with "
+                "required_gate=true and a concrete failure_action."
+            )
+        if "ENFORCEMENT_GATE_REQUIRED" in error_codes:
+            repair_rules.append(
+                "For a normal prohibition that does not explicitly require rejection or a safety gate, change "
+                "type from enforcement to hard and keep required_gate=false with an empty failure_action. Only "
+                "explicit rejection/enforcement requirements may remain type=enforcement."
+            )
+        repair_guidance = "\n".join(f"- {rule}" for rule in repair_rules)
         repair = (
-            "\n\nThe previous plan failed deterministic validation. Repair only the reported structural problems."
+            "\n\nThe previous plan failed deterministic validation. Preserve its objective, complete requirement "
+            "set, acceptance criteria, artifacts, and valid classifications. Repair only the reported problems; "
+            "do not replace the plan with a smaller or unrelated plan."
+            + (f"\nREPAIR_RULES:\n{repair_guidance}" if repair_guidance else "")
+            +
             f"\nVALIDATION_ERRORS={json.dumps(errors or [], ensure_ascii=False)}"
             f"\nPREVIOUS_PLAN={previous}"
         )
@@ -239,14 +292,21 @@ def plan_prompt(case: dict, variant: Variant, previous: str | None = None, error
         "List every independent non-constraint requirement with observable acceptance criteria. Separate each "
         "constraint statement from its implementation strategy. Set required_gate=true only when the "
         "user explicitly requires rejection/enforcement or safety requires it; otherwise use false and an empty "
-        "failure_action. List only deterministic validators for observable contracts. Return only the schema object."
+        "failure_action. Hard constraints must come only from the USER_REQUEST. Do not encode instructions about "
+        "this planning step, schema formatting, the workspace, tools, or later answer stages as user requirements "
+        "or constraints. List only deterministic validators for observable contracts. Return only the schema object."
         f"\n\nUSER_REQUEST:\n{case['prompt']}"
         + repair
     )
 
 
 def execution_prompt(case: dict, variant: Variant, plan: str | None = None) -> str:
-    plan_block = f"\n\nVALIDATED_EXECUTION_PLAN:\n{plan}" if plan else ""
+    plan_block = (
+        "\n\nUse the validated plan only as an internal checklist. Cover every requirement and acceptance "
+        "criterion in the final answer, but do not reproduce the plan JSON or its planning-stage instructions."
+        f"\nVALIDATED_EXECUTION_PLAN:\n{plan}"
+        if plan else ""
+    )
     instruction = "" if variant.use_skill else variant.instruction
     return (
         skill_invocation(variant)
@@ -308,6 +368,7 @@ def signature(
     effort: str,
     executor_name: str = "codex",
     transport_attempts: int = 1,
+    inter_stage_delay: float = 0.0,
 ) -> str:
     payload = {
         "case": case,
@@ -317,8 +378,11 @@ def signature(
         "reasoning_effort": effort,
         "executor": executor_name,
         "transport_attempts": transport_attempts,
+        "execution_runtime_policy": execution_runtime_policy(executor_name),
+        "inter_stage_delay": inter_stage_delay,
         "runner_protocol": RUNNER_PROTOCOL,
         "plan_schema": hashlib.sha256(SCHEMA_PATH.read_bytes()).hexdigest(),
+        "plan_output_schema": hashlib.sha256(OUTPUT_SCHEMA_PATH.read_bytes()).hexdigest(),
         "protocol_digest": hashlib.sha256(PROTOCOL_PATH.read_bytes()).hexdigest(),
         "skill_digest": hashlib.sha256(SKILL_PATH.read_bytes()).hexdigest() if variant.use_skill else None,
     }
@@ -331,6 +395,7 @@ def sampling_signature(model: str, effort: str, executor_name: str, transport_at
         "reasoning_effort": effort,
         "executor": executor_name,
         "transport_attempts": transport_attempts,
+        "execution_runtime_policy": execution_runtime_policy(executor_name),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -352,6 +417,7 @@ def run_job(
     artifact_attempts: int,
     executor_name: str = "codex",
     transport_attempts: int = 1,
+    inter_stage_delay: float = 0.0,
 ) -> dict[str, Any]:
     workspace = prepare_workspace(experiment_root, model, repeat, variant, case["id"])
     base = Path(slug(model)) / f"r{repeat}" / variant.name / case["id"]
@@ -374,7 +440,7 @@ def run_job(
             trace_path = trace_root / "plans" / base.with_suffix(f".a{attempt + 1}.jsonl")
             call = dispatch_generation(
                 plan_prompt(case, variant, previous, issues), model, effort, workspace, temp_root,
-                plan_path, trace_path, timeout, SCHEMA_PATH, executor_name=executor_name,
+                plan_path, trace_path, timeout, OUTPUT_SCHEMA_PATH, executor_name=executor_name,
                 transport_attempts=transport_attempts,
             )
             add_usage(usage, call["usage"])
@@ -384,9 +450,18 @@ def run_job(
                 state.add_attempt(Stage.PLAN, "fail", errors=["PLAN_CALL_FAILED"], evidence={"call": call})
                 previous = plan_path.read_text(encoding="utf-8") if plan_path.is_file() else ""
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$", "message": call["error"][-500:]}]
+                if inter_stage_delay > 0 and attempt + 1 < attempts:
+                    time.sleep(inter_stage_delay)
                 continue
             previous = plan_path.read_text(encoding="utf-8")
-            parsed, validation = parse_plan(previous, allow_legacy_aliases=False)
+            parsed, structural_validation = parse_plan(previous, allow_legacy_aliases=False)
+            contextual_validation = validate_plan_context(
+                parsed or {},
+                case.get("constraint_terms", []),
+                required_gates_allowed=bool(case.get("required_enforcement_patterns")),
+                soft_preference_only=bool(case.get("soft_preference")),
+            )
+            validation = merge_plan_validations(structural_validation, contextual_validation)
             issues = [{"code": issue.code, "path": issue.path} for issue in validation.issues]
             stage["validation"] = validation.to_dict()
             state.add_attempt(
@@ -400,6 +475,8 @@ def run_job(
                 plan_result = parsed
                 selected_plan_path = plan_path
                 break
+            if inter_stage_delay > 0 and attempt + 1 < attempts:
+                time.sleep(inter_stage_delay)
         if plan_text is None:
             state.finish(False, "plan_validation_exhausted")
             return {
@@ -410,6 +487,9 @@ def run_job(
                 "transport_retry_count": sum(int(stage.get("transport_retry_count", 0) or 0) for stage in stages),
                 "state": state.to_dict(), "termination_reason": state.termination_reason,
             }
+
+    if plan_text is not None and inter_stage_delay > 0:
+        time.sleep(inter_stage_delay)
 
     answer_path = raw_root / "answers" / base.with_suffix(".md")
     answer_trace = trace_root / "answers" / base.with_suffix(".jsonl")
@@ -449,6 +529,8 @@ def run_job(
             retry_events.append({"attempt": attempt + 1, "errors": errors, "decision": decision})
             if decision["level"] == "stop":
                 break
+            if inter_stage_delay > 0:
+                time.sleep(inter_stage_delay)
             repair_path = raw_root / "repairs" / base.with_suffix(f".a{attempt + 1}.md")
             repair_trace = trace_root / "repairs" / base.with_suffix(f".a{attempt + 1}.jsonl")
             repair = dispatch_generation(
@@ -485,7 +567,10 @@ def run_job(
         "repeat": repeat,
         "success": success,
         "failure_stage": None if success else "artifact",
-        "signature": signature(case, variant, model, repeat, effort, executor_name, transport_attempts),
+        "signature": signature(
+            case, variant, model, repeat, effort, executor_name, transport_attempts,
+            inter_stage_delay,
+        ),
         "plan": plan_result,
         "artifact_errors": errors,
         "artifact_validation_status": artifact_status,
@@ -536,6 +621,8 @@ def main() -> int:
         raise ValueError("--repeat must be positive")
     if args.transport_attempts < 1:
         raise ValueError("--transport-attempts must be positive")
+    if args.inter_stage_delay < 0:
+        raise ValueError("--inter-stage-delay must be non-negative")
     cases = load_cases(args.cases, args.case_ids)
     variants = select_variants(args.variants)
     experiment_root = args.output_root / args.experiment
@@ -558,7 +645,7 @@ def main() -> int:
                     previous = rows.get(key)
                     expected = signature(
                         case, variant, model, repeat, args.reasoning_effort, args.executor,
-                        args.transport_attempts,
+                        args.transport_attempts, args.inter_stage_delay,
                     )
                     if (
                         args.resume and not args.force and previous and previous.get("success")
@@ -575,6 +662,8 @@ def main() -> int:
         "reasoning_effort": args.reasoning_effort,
         "executor": args.executor,
         "transport_attempts": args.transport_attempts,
+        "execution_runtime_policy": execution_runtime_policy(args.executor),
+        "inter_stage_delay": args.inter_stage_delay,
         "models": args.models,
         "variants": [variant.name for variant in variants],
         "repeats": args.repeat,
@@ -589,7 +678,7 @@ def main() -> int:
         return run_job(
             case, variant, model, repeat, experiment_root, args.reasoning_effort,
             args.timeout, args.plan_attempts, args.artifact_attempts, args.executor,
-            args.transport_attempts,
+            args.transport_attempts, args.inter_stage_delay,
         )
 
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:

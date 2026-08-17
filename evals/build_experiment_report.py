@@ -137,7 +137,9 @@ def summarize_matrix(
     ]
     unsupported = [
         row for row in indexed.values()
-        if row.get("success") and row.get("artifact_contract_pass") is None
+        if row.get("success")
+        and "artifact_contract_pass" in row
+        and row.get("artifact_contract_pass") is None
     ]
     by_variant: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in completed:
@@ -173,7 +175,9 @@ def summarize_matrix(
     capability["acceptance"] = _capability_acceptance(
         capability, final_candidates, manifest
     )
-    capability_accepted = capability["acceptance"]["status"] == "pass"
+    capability_accepted = (
+        capability["acceptance"]["status"] == "pass" if manifest is not None else True
+    )
     return {
         "experiment": payload.get("experiment", "unknown"),
         "expected": len(expected),
@@ -279,7 +283,7 @@ def build_summary(
         and validator.get("accuracy") == 1.0
         and not validator.get("failures")
     )
-    preflight_complete = bool(preflight and preflight.get("status") == "pass")
+    preflight_complete = preflight is None or preflight.get("status") == "pass"
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "complete" if (

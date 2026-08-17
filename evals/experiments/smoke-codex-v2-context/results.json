@@ -1,0 +1,560 @@
+{
+  "experiment": "smoke-codex-v2-context",
+  "generated_at": "2026-08-17T08:27:32.376427+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "medium",
+  "executor": "codex",
+  "transport_attempts": 2,
+  "execution_runtime_policy": {
+    "transport_retry": {
+      "backoff_seconds": 15.0,
+      "max_backoff_seconds": 60.0
+    },
+    "scheduler": {
+      "max_concurrency": 1,
+      "cooldown_seconds": 15.0
+    }
+  },
+  "inter_stage_delay": 15.0,
+  "models": [
+    "gpt-5.6-sol"
+  ],
+  "variants": [
+    "full-v2"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "full-v2",
+      "model": "gpt-5.6-sol",
+      "executor": "codex",
+      "sampling_signature": "ddec158c190e18e513eb463b9994d95ff0a6d33e34541c227df52ba27fb40465",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "fbcaf0305ac08fd7e8bd419089421d7b86b45811d49b8caf396d8f0c4e2dec87",
+      "plan": {
+        "artifacts": [
+          {
+            "kind": "markdown",
+            "path": "IMPLEMENTATION_PLAN.md"
+          },
+          {
+            "kind": "python",
+            "path": "app/main.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/api/routes/links.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/api/routes/redirects.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/api/routes/health.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/core/config.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/core/logging.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/db/base.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/db/session.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/models/link.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/repositories/links.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/schemas/links.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/services/links.py"
+          },
+          {
+            "kind": "python",
+            "path": "app/services/aliases.py"
+          },
+          {
+            "kind": "python",
+            "path": "alembic/env.py"
+          },
+          {
+            "kind": "python",
+            "path": "alembic/versions/0001_create_links.py"
+          },
+          {
+            "kind": "python",
+            "path": "tests/conftest.py"
+          },
+          {
+            "kind": "python",
+            "path": "tests/unit/test_aliases.py"
+          },
+          {
+            "kind": "python",
+            "path": "tests/integration/test_links_api.py"
+          },
+          {
+            "kind": "python",
+            "path": "tests/integration/test_redirects.py"
+          },
+          {
+            "kind": "text",
+            "path": "requirements.txt"
+          },
+          {
+            "kind": "text",
+            "path": "Dockerfile"
+          },
+          {
+            "kind": "yaml",
+            "path": "docker-compose.yml"
+          },
+          {
+            "kind": "text",
+            "path": ".env.example"
+          },
+          {
+            "kind": "markdown",
+            "path": "README.md"
+          }
+        ],
+        "hard_constraints": [
+          {
+            "failure_action": "",
+            "id": "HC-001",
+            "required_gate": false,
+            "statement": "The URL shortener must not use Redis.",
+            "strategy": "Store aliases, destination URLs, expiration timestamps, and lookup state in a relational database accessed through SQLAlchemy; use direct indexed database lookups for redirects.",
+            "type": "hard"
+          }
+        ],
+        "objective": "Produce a concrete implementation plan and file layout for a production-ready FastAPI URL shortener, covering persistent aliases, expiration, redirects, and automated tests without producing the final implementation yet.",
+        "requirements": [
+          {
+            "acceptance_criteria": [
+              "IMPLEMENTATION_PLAN.md lists the proposed files and assigns a clear responsibility to each file.",
+              "The plan describes request flow, persistence flow, redirect flow, expiration behavior, migration workflow, configuration, deployment, and testing.",
+              "The plan identifies concrete framework, ORM, database, migration, validation, and test technologies."
+            ],
+            "id": "REQ-001",
+            "statement": "Define a concrete implementation plan and file layout."
+          },
+          {
+            "acceptance_criteria": [
+              "app/main.py exposes a FastAPI application factory or application instance.",
+              "Routers are separated by responsibility and registered with the application.",
+              "The plan specifies startup, shutdown, dependency injection, and exception-handling behavior."
+            ],
+            "id": "REQ-002",
+            "statement": "Design the service as a FastAPI application."
+          },
+          {
+            "acceptance_criteria": [
+              "The link model contains a unique alias, destination URL, creation timestamp, and nullable expiration timestamp.",
+              "An Alembic migration creates the persistent link table and a unique index or constraint on aliases.",
+              "Repository operations commit and retrieve link records across independent requests."
+            ],
+            "id": "REQ-003",
+            "statement": "Persist aliases and their destination URLs."
+          },
+          {
+            "acceptance_criteria": [
+              "The creation API accepts a destination URL and optional custom alias and expiration value.",
+              "When no alias is supplied, the service generates a collision-resistant alias and retries bounded uniqueness conflicts.",
+              "Duplicate custom aliases return HTTP 409.",
+              "Successful creation returns the alias, short URL, destination URL, creation timestamp, and expiration timestamp."
+            ],
+            "id": "REQ-004",
+            "statement": "Provide link creation with generated or custom aliases."
+          },
+          {
+            "acceptance_criteria": [
+              "Expiration is stored as a timezone-aware UTC timestamp.",
+              "A link is treated as expired when its expiration timestamp is less than or equal to the current UTC time.",
+              "Expired aliases do not redirect and return HTTP 410.",
+              "The test plan covers unexpired, boundary-expired, and expired links using a controllable clock."
+            ],
+            "id": "REQ-005",
+            "statement": "Support expiring aliases with deterministic expiration semantics."
+          },
+          {
+            "acceptance_criteria": [
+              "GET /{alias} looks up the alias and returns an HTTP redirect to the stored destination for an active link.",
+              "Unknown aliases return HTTP 404.",
+              "Expired aliases return HTTP 410.",
+              "The redirect status code is explicitly selected and tested."
+            ],
+            "id": "REQ-006",
+            "statement": "Implement alias redirects."
+          },
+          {
+            "acceptance_criteria": [
+              "Configuration is loaded from environment variables with documented defaults and required production values.",
+              "Database schema changes are managed by Alembic migrations.",
+              "The plan includes structured logging, consistent error responses, health endpoints, graceful database lifecycle handling, and container deployment files.",
+              "The production database configuration uses a persistent relational database and the test configuration uses an isolated database."
+            ],
+            "id": "REQ-007",
+            "statement": "Include production-readiness concerns in the architecture and file layout."
+          },
+          {
+            "acceptance_criteria": [
+              "Unit tests cover alias generation and collision retry behavior.",
+              "Integration tests cover creation, custom aliases, persistence, redirects, missing aliases, duplicate aliases, invalid URLs, and expiration.",
+              "Tests isolate database state and override application dependencies where needed.",
+              "A documented test command completes with a zero exit status."
+            ],
+            "id": "REQ-008",
+            "statement": "Define automated tests for core behavior and API contracts."
+          },
+          {
+            "acceptance_criteria": [
+              "README.md documents local setup, environment variables, migrations, application startup, test execution, and container startup.",
+              ".env.example contains non-secret example configuration keys.",
+              "Dockerfile defines a non-development application command, and docker-compose.yml provisions the API and persistent relational database."
+            ],
+            "id": "REQ-009",
+            "statement": "Document and package the service for repeatable local and production-like operation."
+          }
+        ],
+        "risk_points": [
+          "Concurrent generated-alias creation can race unless uniqueness is guaranteed by the database and conflicts are retried.",
+          "Expiration tests can be flaky unless time is injected or frozen and all timestamps use UTC.",
+          "A root-level redirect route can shadow API or health routes unless route prefixes and registration order are designed explicitly.",
+          "Open redirects are inherent to a general URL shortener; URL validation and an optional destination policy should be documented without silently changing the requested behavior.",
+          "Database sessions and migrations must use compatible synchronous or asynchronous drivers and lifecycle patterns."
+        ],
+        "schema_version": "1.0",
+        "soft_preferences": [],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "files_exist"
+            },
+            {
+              "type": "python_compile"
+            },
+            {
+              "type": "yaml_parse"
+            },
+            {
+              "type": "forbidden_imports"
+            },
+            {
+              "type": "command"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 43.761,
+          "usage": {
+            "input_tokens": 17856,
+            "cached_input_tokens": 0,
+            "output_tokens": 1519,
+            "reasoning_output_tokens": 234
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 43.76130129999365,
+              "usage": {
+                "input_tokens": 17856,
+                "output_tokens": 1519,
+                "cached_input_tokens": 0,
+                "reasoning_tokens": 234,
+                "total_tokens": 19375,
+                "raw": {
+                  "input_tokens": 17856,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1519,
+                  "reasoning_output_tokens": 234
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-v2-context\\traces\\plans\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-v2-context\\raw\\plans\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+          "failure_kind": "none",
+          "elapsed_seconds": 127.318,
+          "usage": {
+            "input_tokens": 18713,
+            "cached_input_tokens": 3840,
+            "output_tokens": 3590,
+            "reasoning_output_tokens": 159
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "codex-cli",
+              "model": "gpt-5.6-sol",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 127.31797109998297,
+              "usage": {
+                "input_tokens": 18713,
+                "output_tokens": 3590,
+                "cached_input_tokens": 3840,
+                "reasoning_tokens": 159,
+                "total_tokens": 22303,
+                "raw": {
+                  "input_tokens": 18713,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 3590,
+                  "reasoning_output_tokens": 159
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-codex-v2-context\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-codex-v2-context\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0,
+                "scheduler": {
+                  "max_concurrency": 1,
+                  "cooldown_seconds": 15.0
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "codex:gpt-5.6-sol:r1:full-v2:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:28:16.190835+00:00",
+            "finished_at": "2026-08-17T08:28:16.190835+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:30:38.521948+00:00",
+            "finished_at": "2026-08-17T08:30:38.521948+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "WARNING: proceeding, even though we could not create PATH aliases: Refusing to create helper binaries under temporary dir \"D:\\\\temp\\\\kylin-agent\\\\\" (codex_home: AbsolutePathBuf(\"D:\\\\temp\\\\kylin-agent\\\\codex-eval-[REDACTED]\"))\n",
+                "failure_kind": "none",
+                "elapsed_seconds": 127.318,
+                "usage": {
+                  "input_tokens": 18713,
+                  "cached_input_tokens": 3840,
+                  "output_tokens": 3590,
+                  "reasoning_output_tokens": 159
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "codex-cli",
+                    "model": "gpt-5.6-sol",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 127.31797109998297,
+                    "usage": {
+                      "input_tokens": 18713,
+                      "output_tokens": 3590,
+                      "cached_input_tokens": 3840,
+                      "reasoning_tokens": 159,
+                      "total_tokens": 22303,
+                      "raw": {
+                        "input_tokens": 18713,
+                        "cached_input_tokens": 3840,
+                        "output_tokens": 3590,
+                        "reasoning_output_tokens": 159
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-codex-v2-context\\traces\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-codex-v2-context\\raw\\answers\\gpt-5.6-sol\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0,
+                      "scheduler": {
+                        "max_concurrency": 1,
+                        "cooldown_seconds": 15.0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:30:38.574553+00:00",
+            "finished_at": "2026-08-17T08:30:38.574553+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 36569,
+        "cached_input_tokens": 3840,
+        "output_tokens": 5109,
+        "reasoning_output_tokens": 393
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/gpt-5.6-sol/r1/full-v2/fastapi-no-redis.md",
+        "plan": "raw/plans/gpt-5.6-sol/r1/full-v2/fastapi-no-redis.a1.json"
+      }
+    }
+  ]
+}

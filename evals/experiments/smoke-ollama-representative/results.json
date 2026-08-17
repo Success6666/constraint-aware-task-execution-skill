@@ -1,0 +1,2390 @@
+{
+  "experiment": "smoke-ollama-representative",
+  "generated_at": "2026-08-17T08:33:48.509010+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "medium",
+  "executor": "ollama",
+  "transport_attempts": 2,
+  "execution_runtime_policy": {
+    "transport_retry": {
+      "backoff_seconds": 15.0,
+      "max_backoff_seconds": 60.0
+    }
+  },
+  "inter_stage_delay": 0.0,
+  "models": [
+    "qwen3.5:9b"
+  ],
+  "variants": [
+    "baseline",
+    "v1-full",
+    "full-v2"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis",
+    "webhook-fewer-dependencies",
+    "upload-block-executables"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "baseline",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": false,
+      "failure_stage": "artifact",
+      "signature": "50bf3056f6de09b17dd0b85317732fbb69aafac68204cb0ebe8c5b4233fd5280",
+      "plan": null,
+      "artifact_errors": [
+        "CONSTRAINT_VIOLATION"
+      ],
+      "artifact_validation_status": "fail",
+      "artifact_contract_pass": false,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "artifact_validation_exhausted",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 101.024,
+          "usage": {
+            "input_tokens": 91,
+            "cached_input_tokens": 0,
+            "output_tokens": 1654,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 101.02440629998455,
+              "usage": {
+                "input_tokens": 91,
+                "output_tokens": 1654,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 1745,
+                "raw": {
+                  "total_duration": 100920047200,
+                  "load_duration": 32434845900,
+                  "prompt_eval_duration": 274843000,
+                  "eval_duration": 68198579000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:baseline:fastapi-no-redis",
+        "stage": "failed",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:35:29.578096+00:00",
+            "finished_at": "2026-08-17T08:35:29.578096+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 101.024,
+                "usage": {
+                  "input_tokens": 91,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1654,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 101.02440629998455,
+                    "usage": {
+                      "input_tokens": 91,
+                      "output_tokens": 1654,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 1745,
+                      "raw": {
+                        "total_duration": 100920047200,
+                        "load_duration": 32434845900,
+                        "prompt_eval_duration": 274843000,
+                        "eval_duration": 68198579000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "fail",
+            "started_at": "2026-08-17T08:35:29.657134+00:00",
+            "finished_at": "2026-08-17T08:35:29.657134+00:00",
+            "errors": [
+              "CONSTRAINT_VIOLATION"
+            ],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": false,
+                "required_pass": false,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 0.0,
+                "constraint_compliance": 0.0,
+                "constraint_violation_hits": 2,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 3,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 3.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "artifact_validation_exhausted",
+        "completed": false
+      },
+      "usage": {
+        "input_tokens": 91,
+        "cached_input_tokens": 0,
+        "output_tokens": 1654,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": false,
+        "required_pass": false,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 0.0,
+        "constraint_compliance": 0.0,
+        "constraint_violation_hits": 2,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 3,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 3.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/baseline/fastapi-no-redis.md"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "baseline",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "15bad05b4492751a068bef2e8d78a42c1220316819c83f7d5da2f7323292fe43",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 90.277,
+          "usage": {
+            "input_tokens": 89,
+            "cached_input_tokens": 0,
+            "output_tokens": 2063,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 90.27658080001129,
+              "usage": {
+                "input_tokens": 89,
+                "output_tokens": 2063,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2152,
+                "raw": {
+                  "total_duration": 90249520800,
+                  "load_duration": 350841800,
+                  "prompt_eval_duration": 174301000,
+                  "eval_duration": 89663299000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:baseline:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:37:00.012286+00:00",
+            "finished_at": "2026-08-17T08:37:00.012286+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 90.277,
+                "usage": {
+                  "input_tokens": 89,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 2063,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 90.27658080001129,
+                    "usage": {
+                      "input_tokens": 89,
+                      "output_tokens": 2063,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2152,
+                      "raw": {
+                        "total_duration": 90249520800,
+                        "load_duration": 350841800,
+                        "prompt_eval_duration": 174301000,
+                        "eval_duration": 89663299000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:37:00.102196+00:00",
+            "finished_at": "2026-08-17T08:37:00.102196+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 4,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 4.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 89,
+        "cached_input_tokens": 0,
+        "output_tokens": 2063,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 4,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 4.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/baseline/webhook-fewer-dependencies.md"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "baseline",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "bc31f77533f6ab58e2a013e36bddcc1389c367673c64a2811d0fc2c7029eb829",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 74.969,
+          "usage": {
+            "input_tokens": 92,
+            "cached_input_tokens": 0,
+            "output_tokens": 1706,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 74.9692069000157,
+              "usage": {
+                "input_tokens": 92,
+                "output_tokens": 1706,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 1798,
+                "raw": {
+                  "total_duration": 74922565000,
+                  "load_duration": 332823000,
+                  "prompt_eval_duration": 183339000,
+                  "eval_duration": 74344433000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:baseline:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:38:15.163115+00:00",
+            "finished_at": "2026-08-17T08:38:15.163115+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 74.969,
+                "usage": {
+                  "input_tokens": 92,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1706,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 74.9692069000157,
+                    "usage": {
+                      "input_tokens": 92,
+                      "output_tokens": 1706,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 1798,
+                      "raw": {
+                        "total_duration": 74922565000,
+                        "load_duration": 332823000,
+                        "prompt_eval_duration": 183339000,
+                        "eval_duration": 74344433000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\baseline\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\baseline\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:38:15.191006+00:00",
+            "finished_at": "2026-08-17T08:38:15.191006+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 92,
+        "cached_input_tokens": 0,
+        "output_tokens": 1706,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/baseline/upload-block-executables.md"
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "v1-full",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "5e65ff0c57834650c3201eb4f5f6f0ec1262edf167818458710934b13d06d14f",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 89.215,
+          "usage": {
+            "input_tokens": 102,
+            "cached_input_tokens": 0,
+            "output_tokens": 2029,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 89.21535299997777,
+              "usage": {
+                "input_tokens": 102,
+                "output_tokens": 2029,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2131,
+                "raw": {
+                  "total_duration": 89166444800,
+                  "load_duration": 396276200,
+                  "prompt_eval_duration": 202787000,
+                  "eval_duration": 88508463000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:v1-full:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:39:44.486384+00:00",
+            "finished_at": "2026-08-17T08:39:44.486384+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 89.215,
+                "usage": {
+                  "input_tokens": 102,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 2029,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 89.21535299997777,
+                    "usage": {
+                      "input_tokens": 102,
+                      "output_tokens": 2029,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2131,
+                      "raw": {
+                        "total_duration": 89166444800,
+                        "load_duration": 396276200,
+                        "prompt_eval_duration": 202787000,
+                        "eval_duration": 88508463000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:39:44.557356+00:00",
+            "finished_at": "2026-08-17T08:39:44.557356+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 4,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 4.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 102,
+        "cached_input_tokens": 0,
+        "output_tokens": 2029,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 4,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 4.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/v1-full/fastapi-no-redis.md"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "v1-full",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "3b2bb48e0265fb3459311f6006d19f6ae89016853209ed1d70c82624f901933b",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 109.124,
+          "usage": {
+            "input_tokens": 100,
+            "cached_input_tokens": 0,
+            "output_tokens": 2454,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 109.12432830000762,
+              "usage": {
+                "input_tokens": 100,
+                "output_tokens": 2454,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2554,
+                "raw": {
+                  "total_duration": 109086234100,
+                  "load_duration": 410266100,
+                  "prompt_eval_duration": 181599000,
+                  "eval_duration": 108429002000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:v1-full:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:41:33.764093+00:00",
+            "finished_at": "2026-08-17T08:41:33.764093+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 109.124,
+                "usage": {
+                  "input_tokens": 100,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 2454,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 109.12432830000762,
+                    "usage": {
+                      "input_tokens": 100,
+                      "output_tokens": 2454,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2554,
+                      "raw": {
+                        "total_duration": 109086234100,
+                        "load_duration": 410266100,
+                        "prompt_eval_duration": 181599000,
+                        "eval_duration": 108429002000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:41:33.859800+00:00",
+            "finished_at": "2026-08-17T08:41:33.859800+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 5,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 5.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 100,
+        "cached_input_tokens": 0,
+        "output_tokens": 2454,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 5,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 5.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/v1-full/webhook-fewer-dependencies.md"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "v1-full",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "438e688738a457edfc124c20c92751cbc2c254e5c3ad2ae916a49bef5681eba2",
+      "plan": null,
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 90.026,
+          "usage": {
+            "input_tokens": 103,
+            "cached_input_tokens": 0,
+            "output_tokens": 2037,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 90.02620809999644,
+              "usage": {
+                "input_tokens": 103,
+                "output_tokens": 2037,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2140,
+                "raw": {
+                  "total_duration": 89979396700,
+                  "load_duration": 431709000,
+                  "prompt_eval_duration": 188144000,
+                  "eval_duration": 89300236000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:v1-full:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:43:03.999348+00:00",
+            "finished_at": "2026-08-17T08:43:03.999348+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 90.026,
+                "usage": {
+                  "input_tokens": 103,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 2037,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 90.02620809999644,
+                    "usage": {
+                      "input_tokens": 103,
+                      "output_tokens": 2037,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2140,
+                      "raw": {
+                        "total_duration": 89979396700,
+                        "load_duration": 431709000,
+                        "prompt_eval_duration": 188144000,
+                        "eval_duration": 89300236000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\v1-full\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\v1-full\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:43:04.030901+00:00",
+            "finished_at": "2026-08-17T08:43:04.030901+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 103,
+        "cached_input_tokens": 0,
+        "output_tokens": 2037,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/v1-full/upload-block-executables.md"
+      }
+    },
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "full-v2",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "1a925f05ebe8ce1e65a01bb331918c645150dcf182b722de530edc8323656034",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Design a concrete implementation plan and file layout for a production-ready FastAPI URL shortener.",
+        "requirements": [
+          {
+            "id": "REQ-001",
+            "statement": "The application must be built using the FastAPI framework with Python as the programming language.",
+            "acceptance_criteria": [
+              "Import statements in main entry points use 'fastapi', 'pydantic', etc.",
+              "Dependencies list includes fastapi and uvicorn for production."
+            ]
+          },
+          {
+            "id": "/REQ-002",
+            "statement": "The system must implement persistent URL alias storage with support for expiration times without using Redis.",
+            "acceptance_criteria": [
+              "A database schema (e.g., PostgreSQL) is defined including columns: id, original_url, short_code, expires_at.",
+              "Code logic checks `datetime.utcnow() < expires_at` before generating a redirect response."
+            ]
+          },
+          {
+            "id": "/REQ-003",
+            "statement": "The system must handle HTTP redirects for valid short codes and return appropriate status/codes for invalid or expired ones.",
+            "acceptance_criteria": [
+              "GET /{short_code} returns 301/302 with Location header containing `original_url` if active.",
+              "GET /{invalid_code} returns 404 Not Found.",
+              "GET /{expired_code} returns 410 Gone or custom message."
+            ]
+          },
+          {
+            "id": "/REQ-004",
+            "statement": "The application must include unit tests for core logic and integration tests for API endpoints.",
+            "acceptance_criteria": [
+              "'tests' directory exists in root folder.",
+              "pytest or unittest is configured via `pyproject.toml` or `setup.cfg` with test coverage > 0%.",
+              "Tests verify short code generation uniqueness and expiration logic."
+            ]
+          },
+          {
+            "id": "/REQ-005",
+            "statement": "The file layout must follow a standard production-ready structure suitable for deployment (e.g., Docker).",
+            "acceptance_criteria": [
+              "Directory hierarchy includes: app/, tests/, docker-compose.yml, .env.example, requirements.txt.",
+              "Dockerfile exists with multi-stage build if applicable."
+            ]
+          }
+        ],
+        "hard_constraints": [],
+        "soft_preferences": [],
+        "risk_points": [
+          "Collision probability during high-concurrency short code generation without Redis atomicity must be addressed in plan (e.g., DB unique constraints with retry logic)."
+        ],
+        "artifacts": [
+          {
+            "path": "/",
+            "kind": "file"
+          }
+        ],
+        "validation_profile": {
+          "validators": []
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 32.109,
+          "usage": {
+            "input_tokens": 178,
+            "cached_input_tokens": 0,
+            "output_tokens": 668,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 32.10884920001263,
+              "usage": {
+                "input_tokens": 178,
+                "output_tokens": 668,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 846,
+                "raw": {
+                  "total_duration": 32074795800,
+                  "load_duration": 394862800,
+                  "prompt_eval_duration": 258928000,
+                  "eval_duration": 31347345000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 70.937,
+          "usage": {
+            "input_tokens": 772,
+            "cached_input_tokens": 0,
+            "output_tokens": 1586,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 70.93670319998637,
+              "usage": {
+                "input_tokens": 772,
+                "output_tokens": 1586,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2358,
+                "raw": {
+                  "total_duration": 70910051400,
+                  "load_duration": 456324700,
+                  "prompt_eval_duration": 702380000,
+                  "eval_duration": 69699428000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:full-v2:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:43:36.227463+00:00",
+            "finished_at": "2026-08-17T08:43:36.227463+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:44:47.170163+00:00",
+            "finished_at": "2026-08-17T08:44:47.170163+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 70.937,
+                "usage": {
+                  "input_tokens": 772,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1586,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 70.93670319998637,
+                    "usage": {
+                      "input_tokens": 772,
+                      "output_tokens": 1586,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2358,
+                      "raw": {
+                        "total_duration": 70910051400,
+                        "load_duration": 456324700,
+                        "prompt_eval_duration": 702380000,
+                        "eval_duration": 69699428000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:44:47.242595+00:00",
+            "finished_at": "2026-08-17T08:44:47.242595+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": false,
+                "required_pass": true,
+                "objective_coverage": 0.8,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 1,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 3,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 5.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 950,
+        "cached_input_tokens": 0,
+        "output_tokens": 2254,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": false,
+        "required_pass": true,
+        "objective_coverage": 0.8,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 1,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 3,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 5.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/full-v2/fastapi-no-redis.md",
+        "plan": "raw/plans/qwen3.5-9b/r1/full-v2/fastapi-no-redis.a1.json"
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "full-v2",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "ac5e08c1a23942bf758c65c961438053eca99f2454aace6cbbe372a956f343c2",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Build an implementation plan for a webhook receiver ensuring secure ingestion via signature verification, preventing duplicate processing via idempotency, managing transient failures via retry handling, and maintaining compliance via audit logs.",
+        "requirements": [
+          {
+            "id": "REQ-01",
+            "statement": "The system must verify the authenticity of incoming webhook payloads before any business logic execution.",
+            "acceptance_criteria": [
+              "System rejects requests missing a valid signature header.",
+              "System recalculates payload hash and compares against provided signature using configured secret key."
+            ]
+          },
+          {
+            "id": "REQ-02",
+            "statement": "The system must prevent duplicate processing of the same event by external clients that retry on failure.",
+            "acceptance_criteria": [
+              "System stores a unique identifier (e.g., message_id) upon first successful receipt or within a short TTL window."
+            ]
+          },
+          {
+            "id": "REQ-03",
+            "statement": "The system must implement retry logic for transient network failures without indefinite blocking.",
+            "acceptance_criteria": [
+              "System distinguishes between 4xx/5xx errors and retries only on specific error codes (e.g., 502, 503, 504)."
+            ]
+          },
+          {
+            "id": "REQ-04",
+            "statement": "The system must create an immutable audit log for every received webhook.",
+            "acceptance_criteria": [
+              "Log entry includes timestamp, source IP, payload hash (redacted), and processing status."
+            ]
+          }
+        ],
+        "hard_constraints": [],
+        "soft_preferences": [
+          {
+            "id": "PREF-01",
+            "type": "soft",
+            "preference": "Minimize external dependencies to reduce attack surface and deployment complexity.",
+            "tradeoff": "May require implementing cryptographic primitives (hashing, verification) using standard library modules instead of specialized libraries like PyJWT or pydantic for schema validation if strict dependency constraints apply."
+          }
+        ],
+        "risk_points": [],
+        "artifacts": [],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "command"
+            },
+            {
+              "type": "files_exist"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "unsupported",
+      "artifact_contract_pass": null,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "unsupported",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 29.327,
+          "usage": {
+            "input_tokens": 176,
+            "cached_input_tokens": 0,
+            "output_tokens": 563,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 29.32749349999358,
+              "usage": {
+                "input_tokens": 176,
+                "output_tokens": 563,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 739,
+                "raw": {
+                  "total_duration": 29297298600,
+                  "load_duration": 386726900,
+                  "prompt_eval_duration": 277587000,
+                  "eval_duration": 28546705000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 143.334,
+          "usage": {
+            "input_tokens": 659,
+            "cached_input_tokens": 0,
+            "output_tokens": 3014,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 143.3336244999955,
+              "usage": {
+                "input_tokens": 659,
+                "output_tokens": 3014,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 3673,
+                "raw": {
+                  "total_duration": 143288494900,
+                  "load_duration": 462408400,
+                  "prompt_eval_duration": 636900000,
+                  "eval_duration": 142142253000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:full-v2:webhook-fewer-dependencies",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:45:16.650996+00:00",
+            "finished_at": "2026-08-17T08:45:16.650996+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:47:39.993429+00:00",
+            "finished_at": "2026-08-17T08:47:39.993429+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 143.334,
+                "usage": {
+                  "input_tokens": 659,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 3014,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 143.3336244999955,
+                    "usage": {
+                      "input_tokens": 659,
+                      "output_tokens": 3014,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 3673,
+                      "raw": {
+                        "total_duration": 143288494900,
+                        "load_duration": 462408400,
+                        "prompt_eval_duration": 636900000,
+                        "eval_duration": 142142253000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\webhook-fewer-dependencies.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "unsupported",
+            "started_at": "2026-08-17T08:47:40.139624+00:00",
+            "finished_at": "2026-08-17T08:47:40.139624+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 9,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 9.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "unsupported",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 835,
+        "cached_input_tokens": 0,
+        "output_tokens": 3577,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 9,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 9.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/full-v2/webhook-fewer-dependencies.md",
+        "plan": "raw/plans/qwen3.5-9b/r1/full-v2/webhook-fewer-dependencies.a1.json"
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "full-v2",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "dbb09f84abd15d748c91019eba3b7127e0c57df786954e262a7dd348d11cabd4",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Design a secure file-upload API with durable storage, comprehensive metadata support, retrieval capabilities, audit logging, and robust testing suite.",
+        "requirements": [
+          {
+            "id": "REQ-001",
+            "statement": "Implement a RESTful interface for uploading files to a persistent backend store.",
+            "acceptance_criteria": [
+              "POST /upload endpoint returns 201 Created upon successful ingestion.",
+              "GET /files/{id} endpoint serves the uploaded content with correct MIME type headers.",
+              "Storage layer guarantees data durability via WAL or transactional replication mechanisms."
+            ]
+          },
+          {
+            "id": "REQ-002",
+            "statement": "Extract and store comprehensive metadata for every ingested file (e.g., size, hash, upload timestamp, uploader ID).",
+            "acceptance_criteria": [
+              "Database schema includes fields for filename_hash, checksum_sha256, uploaded_at_iso8601."
+            ]
+          },
+          {
+            "id": "REQ-003",
+            "statement": "Implement an immutable audit log recording all upload attempts and download events with user context.",
+            "acceptance_criteria": [
+              "Every API call to /upload or /files/{id} appends a JSON entry to an append-only storage layer.",
+              "Logs are searchable by event type, status code, and originating IP address."
+            ]
+          },
+          {
+            "id": "REQ-004",
+            "statement": "Construct a test suite covering functional correctness of CRUD operations and edge cases in metadata handling.",
+            "acceptance_criteria": [
+              "Unit tests mock the storage layer to verify logic without I/O.",
+              "Integration tests spin up ephemeral containers for end-to-end verification."
+            ]
+          }
+        ],
+        "hard_constraints": [],
+        "soft_preferences": [],
+        "risk_points": [
+          "Conflicting extension/MIME claims vs. file content",
+          "Path traversal via filename metadata"
+        ],
+        "artifacts": [
+          {
+            "path": "schema/file_store.proto",
+            "kind": "file"
+          },
+          {
+            "path": "api/upload_gateway.yml",
+            "kind": "file"
+          },
+          {
+            "path": "tests/security_test_suite.py",
+            "kind": "file"
+          }
+        ],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "yaml_parse"
+            },
+            {
+              "type": "json_schema"
+            },
+            {
+              "type": "files_exist"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 33.655,
+          "usage": {
+            "input_tokens": 179,
+            "cached_input_tokens": 0,
+            "output_tokens": 660,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 33.65548660000786,
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 660,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 839,
+                "raw": {
+                  "total_duration": 33618828300,
+                  "load_duration": 328563600,
+                  "prompt_eval_duration": 280968000,
+                  "eval_duration": 32926978000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 85.569,
+          "usage": {
+            "input_tokens": 760,
+            "cached_input_tokens": 0,
+            "output_tokens": 1909,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 85.56908809999004,
+              "usage": {
+                "input_tokens": 760,
+                "output_tokens": 1909,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2669,
+                "raw": {
+                  "total_duration": 85519909700,
+                  "load_duration": 411066100,
+                  "prompt_eval_duration": 670798000,
+                  "eval_duration": 84398472000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:full-v2:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:48:14.235507+00:00",
+            "finished_at": "2026-08-17T08:48:14.235507+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:49:39.811300+00:00",
+            "finished_at": "2026-08-17T08:49:39.811300+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 85.569,
+                "usage": {
+                  "input_tokens": 760,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1909,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 85.56908809999004,
+                    "usage": {
+                      "input_tokens": 760,
+                      "output_tokens": 1909,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2669,
+                      "raw": {
+                        "total_duration": 85519909700,
+                        "load_duration": 411066100,
+                        "prompt_eval_duration": 670798000,
+                        "eval_duration": 84398472000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-representative\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-representative\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:49:39.840794+00:00",
+            "finished_at": "2026-08-17T08:49:39.840794+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": false,
+                "required_pass": true,
+                "objective_coverage": 0.8333,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 1,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 2.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 939,
+        "cached_input_tokens": 0,
+        "output_tokens": 2569,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": false,
+        "required_pass": true,
+        "objective_coverage": 0.8333,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 1,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 2.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/full-v2/upload-block-executables.md",
+        "plan": "raw/plans/qwen3.5-9b/r1/full-v2/upload-block-executables.a1.json"
+      }
+    }
+  ]
+}

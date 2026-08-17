@@ -19,6 +19,7 @@ from protocol import (  # noqa: E402
     validate_markdown_artifact,
     validate_path_scope,
     validate_plan,
+    validate_plan_context,
     validate_python_artifact,
 )
 from ablation import summarize  # noqa: E402
@@ -77,6 +78,78 @@ class ProtocolTests(unittest.TestCase):
         self.assertIn("FAILURE_ACTION_REQUIRED", {issue.code for issue in result.issues})
         constraint["failure_action"] = "Reject the build"
         self.assertTrue(validate_plan(plan).valid)
+
+    def test_context_rejects_runner_constraints_and_unrequested_gates(self) -> None:
+        plan = valid_plan()
+        plan["hard_constraints"] = [
+            {
+                "id": "no-redis",
+                "type": "hard",
+                "statement": "Do not use Redis",
+                "strategy": "Use PostgreSQL",
+                "required_gate": True,
+                "failure_action": "Reject Redis dependencies",
+            },
+            {
+                "id": "schema-output",
+                "type": "hard",
+                "statement": "Return only the planning schema",
+                "strategy": "Emit JSON",
+                "required_gate": False,
+                "failure_action": "",
+            },
+        ]
+        result = validate_plan_context(
+            plan,
+            ["redis"],
+            required_gates_allowed=False,
+        )
+        codes = {issue.code for issue in result.issues}
+        self.assertIn("UNREQUESTED_REQUIRED_GATE", codes)
+        self.assertIn("CONSTRAINT_NOT_GROUNDED", codes)
+
+    def test_context_allows_explicit_enforcement_gate(self) -> None:
+        plan = valid_plan()
+        plan["hard_constraints"] = [{
+            "id": "executable-upload",
+            "type": "enforcement",
+            "statement": "Reject executable uploads",
+            "strategy": "Inspect file signatures",
+            "required_gate": True,
+            "failure_action": "Reject the upload",
+        }]
+        result = validate_plan_context(
+            plan,
+            ["executable"],
+            required_gates_allowed=True,
+        )
+        self.assertTrue(result.valid)
+
+    def test_context_requires_every_user_constraint_and_soft_preference(self) -> None:
+        plan = valid_plan()
+        plan["hard_constraints"] = []
+        missing_constraint = validate_plan_context(
+            plan,
+            ["executable"],
+            required_gates_allowed=True,
+        )
+        self.assertEqual(
+            {issue.code for issue in missing_constraint.issues},
+            {"USER_CONSTRAINT_MISSING", "REQUIRED_GATE_NOT_PLANNED"},
+        )
+
+        plan["soft_preferences"] = [{
+            "type": "soft",
+            "preference": "Prefer fewer dependencies",
+            "tradeoff": "Use a dependency when it removes material risk",
+        }]
+        soft = validate_plan_context(
+            plan,
+            ["dependencies"],
+            required_gates_allowed=False,
+            soft_preference_only=True,
+        )
+        self.assertTrue(soft.valid)
 
     def test_artifact_validators_have_pass_fail_and_unsupported_states(self) -> None:
         self.assertEqual(validate_artifact("json", '{"ok": true}').status, "pass")

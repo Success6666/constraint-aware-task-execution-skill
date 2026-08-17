@@ -1,0 +1,477 @@
+{
+  "experiment": "smoke-ollama-fastapi-iter4",
+  "generated_at": "2026-08-17T09:25:34.849603+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "medium",
+  "executor": "ollama",
+  "transport_attempts": 2,
+  "execution_runtime_policy": {
+    "transport_retry": {
+      "backoff_seconds": 15.0,
+      "max_backoff_seconds": 60.0
+    }
+  },
+  "inter_stage_delay": 0.0,
+  "models": [
+    "qwen3.5:9b"
+  ],
+  "variants": [
+    "full-v2"
+  ],
+  "repeats": 1,
+  "cases": [
+    "fastapi-no-redis"
+  ],
+  "results": [
+    {
+      "case_id": "fastapi-no-redis",
+      "variant": "full-v2",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "3343cb77048e38d70eb577a6394fee31ca6d05386660a1c4bc65e50932848f68",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Produce a complete implementation plan and directory structure for a high-throughput FastAPI application managing unique URL shortening with time-based expiration, utilizing persistent storage instead of Redis.",
+        "requirements": [
+          {
+            "id": "REQ-URL-SHORTENING",
+            "statement": "The system must accept an arbitrary source URL (up to 2048 chars) and return a compact alias generated deterministically or sequentially from a persistent store, returning HTTP 409 Conflict if the chosen alias already exists.",
+            "acceptance_criteria": [
+              "API endpoint POST /shorten returns status_code 201 with JSON body containing 'alias' key for new unique URLs.",
+              "API endpoint POST /shorten returns status_code 409 when attempting to reuse a taken short code (if configured) or duplicate URL if exact match logic applies, failing fast on collision detection within transactional scope."
+            ]
+          },
+          {
+            "id": "REQ-PERSISTENCE",
+            "statement": "All aliases and their mappings must persist across application restarts without in-memory stores like Redis.",
+            "acceptance_criteria": [
+              "Database migrations execute successfully upon startup before server binding occurs."
+            ]
+          },
+          {
+            "id": "REQ-EXPIRATION",
+            "statement": "Every short link must support a configurable 'expires_at' timestamp; requests to expired links return HTTP 410 Gone.",
+            "acceptance_criteria": [
+              "POST /shorten accepts an optional integer parameter or header for seconds-to-live, defaulting to infinite if omitted."
+            ]
+          },
+          {
+            "id": "REQ-REDIRECT",
+            "statement": "GET requests on any valid alias must perform a 302 redirect to the original target URL.",
+            "acceptance_criteria": [
+              "HTTP headers Location is set correctly for all active aliases."
+            ]
+          },
+          {
+            "id": "REQ-TESTING",
+            "statement": "The project root must contain a test suite with unit and integration tests achieving coverage >80% on the core redirect logic.",
+            "acceptance_criteria": [
+              "pytest or equivalent runner executes successfully from command line without linting errors."
+            ]
+          },
+          {
+            "id": "REQ-ERROR-HANDLING",
+            "statement": "Malformed requests and database connection failures must be caught globally, returning appropriate HTTP error codes.",
+            "acceptance_criteria": [
+              "/docs page is accessible even when internal validation fails gracefully."
+            ]
+          }
+        ],
+        "hard_constraints": [
+          {
+            "id": "HARD-NO-REDIS",
+            "type": "hard",
+            "statement": "Do not use Redis; all persistence must be handled via a relational database (e.g., PostgreSQL, MySQL) or file-based storage compatible with persistent aliases.",
+            "strategy": "Implement SQLAlchemy ORM using SQLite/PostgreSQL driver. Replace any `redis` import statements with appropriate DB2Django/SQAlchemy models.",
+            "required_gate": false,
+            "failure_action": ""
+          }
+        ],
+        "soft_preferences": [
+          {
+            "id": "SOFT-EXPIRATION-DEFAULT",
+            "type": "soft",
+            "preference": "Default expiration to infinite when no parameter is provided unless explicitly configured otherwise.",
+            "tradeoff": "Prevents accidental deletion of permanent links while allowing specific campaigns with time limits."
+          }
+        ],
+        "risk_points": [
+          "Database contention during high-concurrency shortening may cause transaction rollbacks; use optimistic locking or row-level locks.",
+          "Expired record cleanup must be periodic to prevent database bloat but not affect immediate redirect responses for active links."
+        ],
+        "artifacts": [],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "files_exist"
+            },
+            {
+              "type": "markdown_headings"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 1,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 26.441,
+          "usage": {
+            "input_tokens": 178,
+            "cached_input_tokens": 0,
+            "output_tokens": 628,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 26.44130090001272,
+              "usage": {
+                "input_tokens": 178,
+                "output_tokens": 628,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 806,
+                "raw": {
+                  "total_duration": 26355641000,
+                  "load_duration": 256193400,
+                  "prompt_eval_duration": 411235000,
+                  "eval_duration": 25572323000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": false,
+            "issues": [
+              {
+                "code": "USER_CONSTRAINT_MISSING",
+                "path": "hard_constraints",
+                "message": "explicit user term is missing from the plan: redis"
+              }
+            ]
+          }
+        },
+        {
+          "stage": "plan",
+          "attempt": 2,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 41.729,
+          "usage": {
+            "input_tokens": 901,
+            "cached_input_tokens": 0,
+            "output_tokens": 919,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 41.729496500018286,
+              "usage": {
+                "input_tokens": 901,
+                "output_tokens": 919,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 1820,
+                "raw": {
+                  "total_duration": 41714917400,
+                  "load_duration": 296462700,
+                  "prompt_eval_duration": 790468000,
+                  "eval_duration": 40582997000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a2.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.a2.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 72.61,
+          "usage": {
+            "input_tokens": 1058,
+            "cached_input_tokens": 0,
+            "output_tokens": 1621,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 72.6096908999898,
+              "usage": {
+                "input_tokens": 1058,
+                "output_tokens": 1621,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2679,
+                "raw": {
+                  "total_duration": 72567949700,
+                  "load_duration": 420287000,
+                  "prompt_eval_duration": 915163000,
+                  "eval_duration": 71151026000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:full-v2:fastapi-no-redis",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "fail",
+            "started_at": "2026-08-17T09:26:01.335487+00:00",
+            "finished_at": "2026-08-17T09:26:01.335487+00:00",
+            "errors": [
+              "USER_CONSTRAINT_MISSING"
+            ],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": false,
+                "issues": [
+                  {
+                    "code": "USER_CONSTRAINT_MISSING",
+                    "path": "hard_constraints",
+                    "message": "explicit user term is missing from the plan: redis"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "plan",
+            "index": 2,
+            "status": "pass",
+            "started_at": "2026-08-17T09:26:43.077656+00:00",
+            "finished_at": "2026-08-17T09:26:43.077656+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T09:27:55.695939+00:00",
+            "finished_at": "2026-08-17T09:27:55.695939+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 72.61,
+                "usage": {
+                  "input_tokens": 1058,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1621,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 72.6096908999898,
+                    "usage": {
+                      "input_tokens": 1058,
+                      "output_tokens": 1621,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2679,
+                      "raw": {
+                        "total_duration": 72567949700,
+                        "load_duration": 420287000,
+                        "prompt_eval_duration": 915163000,
+                        "eval_duration": 71151026000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-fastapi-iter4\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\fastapi-no-redis.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T09:27:55.771591+00:00",
+            "finished_at": "2026-08-17T09:27:55.771591+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 1,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 1.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 2137,
+        "cached_input_tokens": 0,
+        "output_tokens": 3168,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/full-v2/fastapi-no-redis.md",
+        "plan": "raw/plans/qwen3.5-9b/r1/full-v2/fastapi-no-redis.a2.json"
+      }
+    }
+  ]
+}

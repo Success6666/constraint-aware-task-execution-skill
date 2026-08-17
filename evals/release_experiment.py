@@ -213,6 +213,7 @@ def matrix_command(item: Mapping[str, Any], output_root: Path, resume: bool) -> 
         "--jobs", str(item.get("jobs", 1)),
         "--timeout", str(item.get("timeout_seconds", 600)),
         "--transport-attempts", str(item.get("transport_attempts", 2)),
+        "--inter-stage-delay", str(item.get("inter_stage_delay_seconds", 0)),
         "--plan-attempts", str(item.get("plan_attempts", 2)),
         "--artifact-attempts", str(item.get("artifact_attempts", 2)),
     ]
@@ -235,6 +236,7 @@ def runtime_command(item: Mapping[str, Any], output_root: Path, resume: bool) ->
         "--jobs", str(item.get("jobs", 1)),
         "--timeout", str(item.get("timeout_seconds", 900)),
         "--transport-attempts", str(item.get("transport_attempts", 2)),
+        "--inter-stage-delay", str(item.get("inter_stage_delay_seconds", 0)),
         "--plan-attempts", str(item.get("plan_attempts", 2)),
         "--repair-attempts", str(item.get("repair_attempts", 2)),
     ]

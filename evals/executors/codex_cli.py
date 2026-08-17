@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 import time
-from typing import Any
+from typing import Any, Iterator
 
 from .base import (
     ExecutorCapabilities,
@@ -54,6 +56,54 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
         process.kill()
 
 
+def _environment_number(name: str, default: str, *, integer: bool = False) -> float | int:
+    raw = os.environ.get(name, default)
+    try:
+        value = int(raw) if integer else float(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be numeric") from error
+    if value < (1 if integer else 0):
+        qualifier = "positive" if integer else "non-negative"
+        raise ValueError(f"{name} must be {qualifier}")
+    return value
+
+
+_CODEX_MAX_CONCURRENCY = int(
+    _environment_number("CONSTRAINT_EXEC_CODEX_MAX_CONCURRENCY", "1", integer=True)
+)
+_CODEX_COOLDOWN_SECONDS = float(
+    _environment_number("CONSTRAINT_EXEC_CODEX_COOLDOWN_SECONDS", "15")
+)
+_CODEX_SEMAPHORE = threading.BoundedSemaphore(_CODEX_MAX_CONCURRENCY)
+_CODEX_SCHEDULE_LOCK = threading.Lock()
+_CODEX_LAST_FINISHED_AT = 0.0
+
+
+def codex_scheduler_policy() -> dict[str, float | int]:
+    return {
+        "max_concurrency": _CODEX_MAX_CONCURRENCY,
+        "cooldown_seconds": _CODEX_COOLDOWN_SECONDS,
+    }
+
+
+@contextmanager
+def _codex_call_slot() -> Iterator[None]:
+    """Bound concurrent CLI calls and leave recovery time between them."""
+
+    global _CODEX_LAST_FINISHED_AT
+    _CODEX_SEMAPHORE.acquire()
+    try:
+        with _CODEX_SCHEDULE_LOCK:
+            remaining = _CODEX_COOLDOWN_SECONDS - (time.monotonic() - _CODEX_LAST_FINISHED_AT)
+        if remaining > 0:
+            time.sleep(remaining)
+        yield
+    finally:
+        with _CODEX_SCHEDULE_LOCK:
+            _CODEX_LAST_FINISHED_AT = time.monotonic()
+        _CODEX_SEMAPHORE.release()
+
+
 def _usage_from_jsonl(stdout: str) -> Usage:
     latest: dict[str, Any] = {}
     for line in stdout.splitlines():
@@ -95,6 +145,10 @@ class CodexCliExecutor(GenerationExecutor):
     )
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
+        with _codex_call_slot():
+            return self._generate(request)
+
+    def _generate(self, request: GenerationRequest) -> GenerationResult:
         started = time.monotonic()
         if not request.cwd.is_dir():
             return self._failure(
@@ -121,7 +175,6 @@ class CodexCliExecutor(GenerationExecutor):
                 )
             command = launcher + [
                 "exec",
-                "--ignore-user-config",
                 "--ephemeral",
                 "--config",
                 "features.plugins=false",
@@ -199,6 +252,14 @@ class CodexCliExecutor(GenerationExecutor):
                 atomic_write_text(request.trace_path, trace + ("\n" if trace else ""))
             if request.output_path:
                 atomic_write_text(request.output_path, safe_output)
+            failure_message = None
+            if not success:
+                failure_message = self._failure_message(failure_kind, combined)
+                if timed_out:
+                    failure_message = (
+                        f"timeout after {request.timeout_seconds:g}s"
+                        + (f"; last event: {failure_message}" if failure_message else "")
+                    )
             return GenerationResult(
                 executor=self.name,
                 model=request.model,
@@ -209,11 +270,11 @@ class CodexCliExecutor(GenerationExecutor):
                 duration_seconds=time.monotonic() - started,
                 usage=_usage_from_jsonl(stdout),
                 failure_kind=failure_kind,
-                failure_message=None if success else self._failure_message(failure_kind, combined),
+                failure_message=failure_message,
                 capabilities=self.capabilities,
                 trace_path=request.trace_path,
                 output_path=request.output_path,
-                metadata=request.metadata,
+                metadata={**request.metadata, "scheduler": codex_scheduler_policy()},
             )
 
     def _failure(
@@ -238,7 +299,7 @@ class CodexCliExecutor(GenerationExecutor):
             capabilities=self.capabilities,
             trace_path=request.trace_path,
             output_path=request.output_path,
-            metadata=request.metadata,
+            metadata={**request.metadata, "scheduler": codex_scheduler_policy()},
         )
 
     @staticmethod

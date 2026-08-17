@@ -66,7 +66,7 @@
     "matrix": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "executor", "model", "reasoning_effort", "variants", "repeats", "jobs", "timeout_seconds", "transport_attempts", "plan_attempts", "artifact_attempts"],
+      "required": ["id", "executor", "model", "reasoning_effort", "variants", "repeats", "jobs", "timeout_seconds", "transport_attempts", "inter_stage_delay_seconds", "plan_attempts", "artifact_attempts"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
         "executor": {"enum": ["codex", "ollama"]},
@@ -77,6 +77,7 @@
         "jobs": {"type": "integer", "minimum": 1},
         "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
         "transport_attempts": {"type": "integer", "minimum": 1},
+        "inter_stage_delay_seconds": {"type": "number", "minimum": 0, "maximum": 120},
         "plan_attempts": {"type": "integer", "minimum": 1},
         "artifact_attempts": {"type": "integer", "minimum": 0}
       }
@@ -84,7 +85,7 @@
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "executor", "model", "reasoning_effort", "modes", "repeats", "jobs", "timeout_seconds", "transport_attempts", "plan_attempts", "repair_attempts"],
+      "required": ["id", "executor", "model", "reasoning_effort", "modes", "repeats", "jobs", "timeout_seconds", "transport_attempts", "inter_stage_delay_seconds", "plan_attempts", "repair_attempts"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
         "executor": {"enum": ["codex", "ollama"]},
@@ -95,6 +96,7 @@
         "jobs": {"type": "integer", "minimum": 1},
         "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
         "transport_attempts": {"type": "integer", "minimum": 1},
+        "inter_stage_delay_seconds": {"type": "number", "minimum": 0, "maximum": 120},
         "plan_attempts": {"type": "integer", "minimum": 1},
         "repair_attempts": {"type": "integer", "minimum": 0}
       }

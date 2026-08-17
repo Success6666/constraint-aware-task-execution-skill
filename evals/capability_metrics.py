@@ -197,12 +197,13 @@ def _semantic_evidence(
 def pair_results(
     records: Sequence[Mapping[str, Any]], baseline_variant: str = "baseline"
 ) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
-    """Pair successful baseline/variant rows; incomplete rows are not fabricated."""
+    """Pair rows with score evidence, even when the task contract itself failed."""
 
     baseline_groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = {}
     variants: list[Mapping[str, Any]] = []
     for record in records:
-        if record.get("success") is False:
+        score = record.get("score", record.get("scores"))
+        if not isinstance(score, Mapping):
             continue
         if record.get("variant") == baseline_variant:
             baseline_groups.setdefault(pair_key(record), []).append(record)

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 import os
 from pathlib import Path
 import shutil
 import stat
 import tempfile
+import tomllib
 from typing import Iterator, Mapping
 
 
@@ -103,6 +105,48 @@ def _secure_copy(source: Path, destination: Path) -> None:
         pass
 
 
+def _write_minimal_codex_config(source: Path, destination: Path) -> None:
+    """Copy only the active provider routing needed by an isolated CLI run."""
+
+    config_file = source / "config.toml"
+    if not config_file.is_file():
+        return
+    try:
+        config = tomllib.loads(config_file.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return
+    provider_name = config.get("model_provider")
+    providers = config.get("model_providers")
+    if not isinstance(provider_name, str) or not isinstance(providers, dict):
+        return
+    provider = providers.get(provider_name)
+    if not isinstance(provider, dict):
+        return
+
+    allowed_provider_keys = (
+        "name",
+        "base_url",
+        "wire_api",
+        "requires_openai_auth",
+        "env_key",
+    )
+    lines = [f"model_provider = {json.dumps(provider_name)}", ""]
+    lines.append(f"[model_providers.{json.dumps(provider_name)}]")
+    for key in allowed_provider_keys:
+        value = provider.get(key)
+        if isinstance(value, bool):
+            lines.append(f"{key} = {'true' if value else 'false'}")
+        elif isinstance(value, str):
+            lines.append(f"{key} = {json.dumps(value)}")
+    if len(lines) == 3:
+        return
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    try:
+        destination.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
+
+
 @contextmanager
 def temporary_codex_home(
     *,
@@ -119,6 +163,7 @@ def temporary_codex_home(
         auth_file = source / "auth.json"
         if auth_file.is_file():
             _secure_copy(auth_file, temp_home / "auth.json")
+        _write_minimal_codex_config(source, temp_home / "config.toml")
         yield temp_home
     finally:
         shutil.rmtree(temp_home, ignore_errors=True)

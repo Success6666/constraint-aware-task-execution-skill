@@ -92,6 +92,76 @@ def _is_nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def validate_plan_context(
+    plan: Mapping[str, Any],
+    constraint_terms: list[str] | tuple[str, ...],
+    *,
+    required_gates_allowed: bool,
+    soft_preference_only: bool = False,
+) -> PlanValidation:
+    """Validate that model-declared constraints come from the user contract."""
+
+    issues: list[PlanIssue] = []
+    terms = [str(term).strip().casefold() for term in constraint_terms if str(term).strip()]
+    constraints = plan.get("hard_constraints", [])
+    if not isinstance(constraints, list):
+        return PlanValidation(False, (_issue("CONSTRAINTS_TYPE", "hard_constraints", "must be an array"),))
+    grounded_constraint_texts: list[str] = []
+    for index, constraint in enumerate(constraints):
+        if not isinstance(constraint, Mapping):
+            continue
+        path = f"hard_constraints[{index}]"
+        statement = str(constraint.get("statement", "")).casefold()
+        grounded_constraint_texts.append(statement)
+        if terms and not any(term in statement for term in terms):
+            issues.append(_issue(
+                "CONSTRAINT_NOT_GROUNDED",
+                f"{path}.statement",
+                "constraint is not grounded in an explicit user constraint",
+            ))
+        if constraint.get("required_gate") is True and not required_gates_allowed:
+            issues.append(_issue(
+                "UNREQUESTED_REQUIRED_GATE",
+                f"{path}.required_gate",
+                "the user contract does not require a rejection or enforcement gate",
+            ))
+        if soft_preference_only:
+            issues.append(_issue(
+                "SOFT_PREFERENCE_HARDENED",
+                path,
+                "a soft-only user preference was promoted to a hard constraint",
+            ))
+    preferences = plan.get("soft_preferences", [])
+    preference_texts = [
+        str(preference.get("preference", "")).casefold()
+        for preference in preferences
+        if isinstance(preference, Mapping)
+    ] if isinstance(preferences, list) else []
+    grounding_texts = preference_texts if soft_preference_only else grounded_constraint_texts
+    for term in terms:
+        if not any(term in text for text in grounding_texts):
+            issues.append(_issue(
+                "USER_CONSTRAINT_MISSING" if not soft_preference_only else "USER_PREFERENCE_MISSING",
+                "hard_constraints" if not soft_preference_only else "soft_preferences",
+                f"explicit user term is missing from the plan: {term}",
+            ))
+    if required_gates_allowed and not any(
+        isinstance(constraint, Mapping) and constraint.get("required_gate") is True
+        for constraint in constraints
+    ):
+        issues.append(_issue(
+            "REQUIRED_GATE_NOT_PLANNED",
+            "hard_constraints",
+            "the user contract explicitly requires an enforcement gate",
+        ))
+    return PlanValidation(not issues, tuple(issues))
+
+
+def merge_plan_validations(*validations: PlanValidation) -> PlanValidation:
+    issues = tuple(issue for validation in validations for issue in validation.issues)
+    return PlanValidation(not issues, issues)
+
+
 def detect_gate_relation(text: str, targets: list[str] | None = None) -> bool:
     """Detect a high-confidence target + mechanism + failure relation."""
     normalized = text.casefold()

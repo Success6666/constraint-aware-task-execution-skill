@@ -43,5 +43,3084 @@
       "safety_or_explicit_enforcement": 6,
       "soft_preference": 6
     }
+  },
+  "capability_retention": {
+    "baseline_variant": "baseline",
+    "eligible_variant_rows": 30,
+    "paired_rows": 30,
+    "quality_retention_ratio": 1.0,
+    "non_constraint_requirement_retention": 1.0,
+    "capability_regression_hits": 0,
+    "capability_regression_hit": false,
+    "capability_regression_rate": 0.0,
+    "component_retention": {
+      "objective_coverage": {
+        "observed_pairs": 30,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": 1.0,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "non_constraint_requirement_coverage": {
+        "observed_pairs": 0,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": null,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "declared_quality_score": {
+        "observed_pairs": 0,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": null,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "constraint_compliance": {
+        "observed_pairs": 30,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": 1.0,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "format_compliance": {
+        "observed_pairs": 30,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": 1.0,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "path_compliance": {
+        "observed_pairs": 30,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": 1.0,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "artifact_contract": {
+        "observed_pairs": 0,
+        "missing_variant_evidence_hits": 0,
+        "retention_ratio": null,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      }
+    },
+    "efficiency_regression_hits": 0,
+    "efficiency_regression_hit": false,
+    "efficiency_regression_rate": 0.0,
+    "behavioral_regressions": {
+      "unnecessary_refusal": {
+        "observed_pairs": 30,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "unnecessary_clarification": {
+        "observed_pairs": 30,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      },
+      "over_conservative": {
+        "observed_pairs": 30,
+        "regression_hits": 0,
+        "regression_rate": 0.0
+      }
+    },
+    "valid_information_retention": null,
+    "semantic_reviewed_pairs": 0,
+    "semantic_review_coverage": 0.0,
+    "semantic_regression_hits": 0,
+    "semantic_regression_rate": null,
+    "semantic_capability_status": "partial",
+    "cost_ratio": null,
+    "latency_ratio": null,
+    "missing_pair_rows": 0,
+    "pair_coverage": 1.0,
+    "duplicate_rows": 0,
+    "ambiguous_baseline_keys": 0,
+    "by_variant": {
+      "skill": {
+        "paired_rows": 30,
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "capability_regression_hits": 0,
+        "capability_regression_hit": false,
+        "capability_regression_rate": 0.0,
+        "component_retention": {
+          "objective_coverage": {
+            "observed_pairs": 30,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": 1.0,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "non_constraint_requirement_coverage": {
+            "observed_pairs": 0,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": null,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "declared_quality_score": {
+            "observed_pairs": 0,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": null,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "constraint_compliance": {
+            "observed_pairs": 30,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": 1.0,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "format_compliance": {
+            "observed_pairs": 30,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": 1.0,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "path_compliance": {
+            "observed_pairs": 30,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": 1.0,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "artifact_contract": {
+            "observed_pairs": 0,
+            "missing_variant_evidence_hits": 0,
+            "retention_ratio": null,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          }
+        },
+        "efficiency_regression_hits": 0,
+        "efficiency_regression_hit": false,
+        "efficiency_regression_rate": 0.0,
+        "behavioral_regressions": {
+          "unnecessary_refusal": {
+            "observed_pairs": 30,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "unnecessary_clarification": {
+            "observed_pairs": 30,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          },
+          "over_conservative": {
+            "observed_pairs": 30,
+            "regression_hits": 0,
+            "regression_rate": 0.0
+          }
+        },
+        "valid_information_retention": null,
+        "semantic_reviewed_pairs": 0,
+        "semantic_review_coverage": 0.0,
+        "semantic_regression_hits": 0,
+        "semantic_regression_rate": null,
+        "semantic_capability_status": "partial",
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "eligible_rows": 30,
+        "missing_pair_rows": 0,
+        "pair_coverage": 1.0,
+        "duplicate_rows": 0,
+        "ambiguous_baseline_pairs": 0
+      }
+    },
+    "pairs": [
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "fastapi-no-redis",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "jobs-no-celery",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "csv-no-pandas",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "inventory-no-orm",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "qa-no-langchain",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "etl-no-spark",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "webhook-fewer-dependencies",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "crawler-prefer-stdlib",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "notifications-avoid-global-state",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "upload-block-executables",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "url-fetcher-ssrf",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "license-ci-enforcement",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "json-output-only-en",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "orders-modular-monolith-en",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "parser-three-files-en",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "fastapi-no-celery-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "config-no-yaml-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "tests-no-mocks-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "local-dev-no-docker-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "events-no-kafka-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "search-no-elasticsearch-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "rate-limit-avoid-global-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "client-avoid-singleton-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "log-analyzer-fewer-dependencies-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "image-upload-safety-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "webhook-replay-safety-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "secret-scan-ci-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "json-output-only-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "billing-modular-monolith-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      },
+      {
+        "pair": {
+          "executor": null,
+          "model": null,
+          "case_id": "auth-two-files-zh",
+          "repeat": 0,
+          "sampling_signature": null,
+          "baseline_variant": "baseline",
+          "variant": "skill"
+        },
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "component_retention": {
+          "objective_coverage": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "non_constraint_requirement_coverage": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "declared_quality_score": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "constraint_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "format_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "path_compliance": {
+            "baseline": 1.0,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
+            "supported": true,
+            "missing_variant_evidence": false,
+            "regression": false
+          },
+          "artifact_contract": {
+            "baseline": null,
+            "variant": null,
+            "delta": null,
+            "retention_ratio": null,
+            "supported": false,
+            "missing_variant_evidence": false,
+            "regression": false
+          }
+        },
+        "behavioral_regressions": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "valid_information_retention": {
+          "status": "unsupported",
+          "value": null,
+          "regression": false,
+          "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
+        },
+        "cost_ratio": null,
+        "latency_ratio": null,
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
+        "efficiency_regression_hit": false,
+        "efficiency_regression_reasons": [],
+        "supported_component_count": 4
+      }
+    ],
+    "acceptance": {
+      "status": "pass",
+      "candidate_variants": [
+        "skill"
+      ],
+      "quality_retention_floor": 1.0,
+      "semantic_retention_floor": 1.0,
+      "semantic_review_required": false,
+      "failures": []
+    }
   }
 }

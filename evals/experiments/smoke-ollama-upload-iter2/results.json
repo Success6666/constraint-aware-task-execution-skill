@@ -1,0 +1,392 @@
+{
+  "experiment": "smoke-ollama-upload-iter2",
+  "generated_at": "2026-08-17T08:56:29.296470+00:00",
+  "runner_protocol": "orthogonal-v2-matrix-v1",
+  "reasoning_effort": "medium",
+  "executor": "ollama",
+  "transport_attempts": 2,
+  "execution_runtime_policy": {
+    "transport_retry": {
+      "backoff_seconds": 15.0,
+      "max_backoff_seconds": 60.0
+    }
+  },
+  "inter_stage_delay": 0.0,
+  "models": [
+    "qwen3.5:9b"
+  ],
+  "variants": [
+    "full-v2"
+  ],
+  "repeats": 1,
+  "cases": [
+    "upload-block-executables"
+  ],
+  "results": [
+    {
+      "case_id": "upload-block-executables",
+      "variant": "full-v2",
+      "model": "qwen3.5:9b",
+      "executor": "ollama",
+      "sampling_signature": "c2642e18709c819df127820254346f9552f447d645b06bd822ce916e39f22e05",
+      "repeat": 1,
+      "success": true,
+      "failure_stage": null,
+      "signature": "6684a263bb6b218fae7b6e996da230226944e40ff5466d84e6e741499aecb707",
+      "plan": {
+        "schema_version": "1.0",
+        "objective": "Design a secure file-upload API system with durable storage, metadata management, download capabilities, audit logging, and comprehensive testing.",
+        "requirements": [
+          {
+            "id": "REQ-001",
+            "statement": "API must support file uploads to durable storage systems (e.g., S3 compatible), including retention of original content if permitted by security rules.",
+            "acceptance_criteria": [
+              "Files are persisted in an object store with unique, immutable keys upon successful upload.",
+              "Metadata is stored independently from the binary blob and includes timestamp, uploader ID, filename, size (bytes), MIME type declaration."
+            ]
+          },
+          {
+            "id": "REQ-002",
+            "statement": "API must provide a mechanism to retrieve/download previously uploaded files.",
+            "acceptance_criteria": [
+              "A public or authenticated endpoint returns the file stream associated with a specific resource ID.",
+              "HTTP status 404 is returned if no matching record exists for the provided identifier."
+            ]
+          },
+          {
+            "id": "REQ-003",
+            "statement": "API must maintain an immutable audit log of all upload and download attempts (successes and failures).",
+            "acceptance_criteria": [
+              "Every request receives a corresponding entry in the audit stream containing timestamp, user agent, IP address, operation type, status code.",
+              "Audit entries are stored with integrity controls preventing tampering or deletion."
+            ]
+          },
+          {
+            "id": "REQ-004",
+            "statement": "System must automatically generate and execute test cases validating all functional behaviors defined in REQ-001 through REQ-003.",
+            "acceptance_criteria": [
+              "Test suite exists within the repository covering edge cases for file size, metadata corruption simulation, missing permissions."
+            ]
+          },
+          {
+            "id": "REQ-005",
+            "statement": "API must reject uploads containing executable content even if submitted via a misleading extension (e.g., .txt wrapping PowerShell script) or an incorrect MIME type.",
+            "acceptance_criteria": [
+              "Upload endpoint returns HTTP 422/403 for any file failing the static analysis heuristic check regardless of provided filename."
+            ]
+          }
+        ],
+        "hard_constraints": [
+          {
+            "id": "HARD-01",
+            "type": "enforcement",
+            "statement": "Reject all executable content even when the extension or MIME type is misleading.",
+            "strategy": "Implement a dual-layer validation: (a) Static pattern matching on file magic numbers against a known-bad signature list; (b) Heuristic analysis of binary headers and string patterns common in executables. Reject immediately upon detection without storing to durable bucket.",
+            "required_gate": true,
+            "failure_action": "Immediately terminate upload request and return error response with explanation that 'Executable content blocked' was the reason code."
+          }
+        ],
+        "soft_preferences": [
+          {
+            "id": "SOFT-01",
+            "type": "soft",
+            "preference": "Use server-side signature detection rather than client-side restrictions to ensure enforceability.",
+            "tradeoff": "Increases initial latency slightly compared to simple extension checking but prevents zero-day bypass."
+          },
+          {
+            "id": "SOFT-02",
+            "type": "soft",
+            "preference": "Audit logs should be streamed separately from the data plane for performance isolation during high-load uploads.",
+            "tradeoff": "Increases architectural complexity (requires event bus)."
+          }
+        ],
+        "risk_points": [
+          "MIME sniffing attacks: Browsers or clients might force non-standard content types; validation must ignore HTTP Content-Type header and rely on file analysis."
+        ],
+        "artifacts": [],
+        "validation_profile": {
+          "validators": [
+            {
+              "type": "files_exist"
+            }
+          ]
+        }
+      },
+      "artifact_errors": [],
+      "artifact_validation_status": "pass",
+      "artifact_contract_pass": true,
+      "retry_events": [],
+      "retry_count": 0,
+      "transport_retry_count": 0,
+      "plan_retry_count": 0,
+      "artifact_retry_count": 0,
+      "repair_success": false,
+      "termination_reason": "success",
+      "stages": [
+        {
+          "stage": "plan",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 67.293,
+          "usage": {
+            "input_tokens": 179,
+            "cached_input_tokens": 0,
+            "output_tokens": 902,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 67.2934316000028,
+              "usage": {
+                "input_tokens": 179,
+                "output_tokens": 902,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 1081,
+                "raw": {
+                  "total_duration": 67173798600,
+                  "load_duration": 16625708700,
+                  "prompt_eval_duration": 356696000,
+                  "eval_duration": 50173366000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-upload-iter2\\traces\\plans\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.a1.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-upload-iter2\\raw\\plans\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.a1.transport-01.json",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ],
+          "validation": {
+            "valid": true,
+            "issues": []
+          }
+        },
+        {
+          "stage": "execute",
+          "attempt": 1,
+          "success": true,
+          "returncode": 0,
+          "error": "",
+          "failure_kind": "none",
+          "elapsed_seconds": 77.425,
+          "usage": {
+            "input_tokens": 1039,
+            "cached_input_tokens": 0,
+            "output_tokens": 1428,
+            "reasoning_output_tokens": 0
+          },
+          "transport_retry_count": 0,
+          "transport_attempts": [
+            {
+              "executor": "ollama",
+              "model": "qwen3.5:9b",
+              "success": true,
+              "returncode": 0,
+              "duration_seconds": 77.42535439998028,
+              "usage": {
+                "input_tokens": 1039,
+                "output_tokens": 1428,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": 2467,
+                "raw": {
+                  "total_duration": 77383681200,
+                  "load_duration": 569515700,
+                  "prompt_eval_duration": 1229808000,
+                  "eval_duration": 75532099000
+                }
+              },
+              "failure_kind": "none",
+              "failure_message": null,
+              "recoverable": false,
+              "zero_token_timeout": false,
+              "trace_path": "evals\\experiments\\smoke-ollama-upload-iter2\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+              "output_path": "evals\\experiments\\smoke-ollama-upload-iter2\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.md",
+              "metadata": {
+                "transport_attempt": 1,
+                "transport_attempts": 2,
+                "transport_retry_delay_seconds": 0.0
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "run_id": "ollama:qwen3.5-9b:r1:full-v2:upload-block-executables",
+        "stage": "complete",
+        "attempts": [
+          {
+            "stage": "plan",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:57:36.659585+00:00",
+            "finished_at": "2026-08-17T08:57:36.659585+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "validation": {
+                "valid": true,
+                "issues": []
+              }
+            }
+          },
+          {
+            "stage": "execute",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:58:54.099726+00:00",
+            "finished_at": "2026-08-17T08:58:54.099726+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "call": {
+                "success": true,
+                "returncode": 0,
+                "error": "",
+                "failure_kind": "none",
+                "elapsed_seconds": 77.425,
+                "usage": {
+                  "input_tokens": 1039,
+                  "cached_input_tokens": 0,
+                  "output_tokens": 1428,
+                  "reasoning_output_tokens": 0
+                },
+                "transport_retry_count": 0,
+                "transport_attempts": [
+                  {
+                    "executor": "ollama",
+                    "model": "qwen3.5:9b",
+                    "success": true,
+                    "returncode": 0,
+                    "duration_seconds": 77.42535439998028,
+                    "usage": {
+                      "input_tokens": 1039,
+                      "output_tokens": 1428,
+                      "cached_input_tokens": null,
+                      "reasoning_tokens": null,
+                      "total_tokens": 2467,
+                      "raw": {
+                        "total_duration": 77383681200,
+                        "load_duration": 569515700,
+                        "prompt_eval_duration": 1229808000,
+                        "eval_duration": 75532099000
+                      }
+                    },
+                    "failure_kind": "none",
+                    "failure_message": null,
+                    "recoverable": false,
+                    "zero_token_timeout": false,
+                    "trace_path": "evals\\experiments\\smoke-ollama-upload-iter2\\traces\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.jsonl",
+                    "output_path": "evals\\experiments\\smoke-ollama-upload-iter2\\raw\\answers\\qwen3.5-9b\\r1\\full-v2\\upload-block-executables.transport-01.md",
+                    "metadata": {
+                      "transport_attempt": 1,
+                      "transport_attempts": 2,
+                      "transport_retry_delay_seconds": 0.0
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stage": "validate",
+            "index": 1,
+            "status": "pass",
+            "started_at": "2026-08-17T08:58:54.154147+00:00",
+            "finished_at": "2026-08-17T08:58:54.154147+00:00",
+            "errors": [],
+            "changed_paths": [],
+            "evidence": {
+              "score": {
+                "evaluation_pass": true,
+                "required_pass": true,
+                "objective_coverage": 1.0,
+                "non_constraint_requirement_coverage": null,
+                "declared_quality_score": null,
+                "required_coverage": 1.0,
+                "missing_objective_markers": 0,
+                "constraint_adherence": 1.0,
+                "constraint_compliance": 1.0,
+                "constraint_violation_hits": 0,
+                "required_enforcement_coverage": 1.0,
+                "under_enforcement_hits": 0,
+                "response_format_compliance": 1.0,
+                "path_scope_compliance": 1.0,
+                "artifact_contract": null,
+                "valid_information_retention": null,
+                "observations": {
+                  "unnecessary_refusal": false,
+                  "unnecessary_clarification": false,
+                  "over_conservative": false
+                },
+                "semantic_capability_status": "unsupported",
+                "failure_gate_hits": 0,
+                "constraint_component_hits": 0,
+                "constraint_echo": 0,
+                "soft_preference_hardening": 0,
+                "overoptimization_score": 0.0
+              }
+            }
+          }
+        ],
+        "passed_validators": {},
+        "termination_reason": "success",
+        "completed": true
+      },
+      "usage": {
+        "input_tokens": 1218,
+        "cached_input_tokens": 0,
+        "output_tokens": 2330,
+        "reasoning_output_tokens": 0
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      },
+      "evidence": {
+        "answer": "raw/answers/qwen3.5-9b/r1/full-v2/upload-block-executables.md",
+        "plan": "raw/plans/qwen3.5-9b/r1/full-v2/upload-block-executables.a1.json"
+      }
+    }
+  ]
+}
