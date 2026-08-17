@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "constraint-aware-task-execution"
+SKILL = ROOT / "skills" / "constraint-exec"
 
 
 class SkillStructureTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class SkillStructureTests(unittest.TestCase):
 
     def test_openai_metadata_invokes_exact_skill(self) -> None:
         content = (SKILL / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        self.assertIn("$constraint-aware-task-execution", content)
+        self.assertIn("$constraint-exec", content)
 
 
 if __name__ == "__main__":

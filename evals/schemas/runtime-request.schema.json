@@ -1,28 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/constraint-aware/runtime-request.schema.json",
+  "$id": "https://constraint-exec.local/schemas/runtime-request.schema.json",
+  "title": "Constraint Exec Runtime Request",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "run_id", "prompt", "workspace", "executor"],
   "properties": {
     "schema_version": {"const": "1.0"},
-    "run_id": {"type": "string", "minLength": 1},
-    "prompt": {"type": "string", "minLength": 1},
-    "workspace": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._-]+$"},
+    "prompt": {"type": "string", "minLength": 1, "maxLength": 1000000},
+    "workspace": {"type": "string", "minLength": 1, "maxLength": 4096},
     "executor": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type", "model"],
       "properties": {
         "type": {"enum": ["codex", "codex-cli", "ollama", "ollama-cli"]},
-        "model": {"type": "string"},
+        "model": {"type": "string", "minLength": 1},
         "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]}
       }
     },
     "structured_plan": {"type": "boolean", "default": true},
     "workspace_required": {"type": "boolean", "default": true},
-    "allowed_paths": {"type": "array", "items": {"type": "string"}},
-    "validators": {"type": "array", "items": {"type": "object", "required": ["type"]}},
+    "allowed_paths": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 4096}},
+    "validators": {"type": "array", "items": {"$ref": "#/$defs/validator"}},
     "budgets": {
       "type": "object",
       "additionalProperties": false,
@@ -32,11 +33,46 @@
         "artifact": {"type": "integer", "minimum": 0}
       }
     },
-    "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
-    "sandbox": {"type": "string"},
-    "environment": {"type": "object", "additionalProperties": {"type": "string"}},
-    "output_root": {"type": "string"},
-    "result_path": {"type": "string"},
+    "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
+    "sandbox": {"enum": ["read-only", "workspace-write"]},
+    "environment": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "enum": [
+          "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "LANG", "LC_ALL", "NO_COLOR", "NO_PROXY",
+          "OLLAMA_HOST", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "TERM", "TZ", "all_proxy", "http_proxy",
+          "https_proxy", "no_proxy"
+        ]
+      },
+      "additionalProperties": {"type": "string", "maxLength": 32768}
+    },
+    "output_root": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "result_path": {"type": "string", "minLength": 1, "maxLength": 4096},
     "resume": {"type": "boolean"}
+  },
+  "$defs": {
+    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "pathList": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/path"}},
+    "validator": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "type": {"enum": ["path_scope", "files_exist", "json_exact", "json_schema", "markdown_headings", "python_compile", "forbidden_imports", "forbidden_pattern", "command", "javascript_syntax", "typescript_check", "yaml_parse"]},
+        "required": {"type": "boolean"},
+        "path": {"$ref": "#/$defs/path"},
+        "paths": {"$ref": "#/$defs/pathList"},
+        "allowed_paths": {"$ref": "#/$defs/pathList"},
+        "value": {},
+        "schema": {"type": "object"},
+        "headings": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "imports": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "patterns": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "command": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "timeout": {"type": "integer", "minimum": 1, "maximum": 120}
+      },
+      "additionalProperties": false
+    }
   }
 }

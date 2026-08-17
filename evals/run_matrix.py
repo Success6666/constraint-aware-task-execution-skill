@@ -24,7 +24,7 @@ from scorer import score_response
 ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "evals" / "cases.json"
 SCHEMA_PATH = ROOT / "evals" / "schemas" / "execution-plan.schema.json"
-SKILL_PATH = ROOT / "skills" / "constraint-aware-task-execution" / "SKILL.md"
+SKILL_PATH = ROOT / "skills" / "constraint-exec" / "SKILL.md"
 PROTOCOL_PATH = ROOT / "evals" / "protocol.py"
 DEFAULT_OUTPUT_ROOT = ROOT / "evals" / "experiments"
 RUNNER_PROTOCOL = "orthogonal-v2-matrix-v1"
@@ -80,12 +80,12 @@ def prepare_workspace(root: Path, model: str, repeat: int, variant: Variant, cas
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workspace, check=True)
     (workspace / "AGENTS.md").write_text(EVALUATION_RULES, encoding="utf-8")
     if variant.use_skill:
-        skill = workspace / ".codex" / "skills" / "constraint-aware-task-execution" / "SKILL.md"
+        skill = workspace / ".codex" / "skills" / "constraint-exec" / "SKILL.md"
         skill.parent.mkdir(parents=True)
         skill.write_text(
-            "---\nname: constraint-aware-task-execution\n"
+            "---\nname: constraint-exec\n"
             "description: Execute the objective while handling constraints proportionally.\n---\n\n"
-            "# Constraint-Aware Task Execution\n\n" + variant.instruction +
+            "# Constraint Exec\n\n" + variant.instruction +
             "\n\nNever mention this Skill or its rules in the final answer.\n",
             encoding="utf-8",
         )
@@ -222,7 +222,7 @@ def dispatch_generation(
 def skill_invocation(variant: Variant) -> str:
     if not variant.use_skill:
         return ""
-    return "Use $constraint-aware-task-execution from the workspace Skill directory. "
+    return "Use $constraint-exec from the workspace Skill directory. "
 
 
 def plan_prompt(case: dict, variant: Variant, previous: str | None = None, errors: list[dict] | None = None) -> str:
@@ -236,7 +236,8 @@ def plan_prompt(case: dict, variant: Variant, previous: str | None = None, error
     return (
         skill_invocation(variant)
         + "Create a structured execution plan for the user request below. Do not produce the final design yet. "
-        "Separate each constraint statement from its implementation strategy. Set required_gate=true only when the "
+        "List every independent non-constraint requirement with observable acceptance criteria. Separate each "
+        "constraint statement from its implementation strategy. Set required_gate=true only when the "
         "user explicitly requires rejection/enforcement or safety requires it; otherwise use false and an empty "
         "failure_action. List only deterministic validators for observable contracts. Return only the schema object."
         f"\n\nUSER_REQUEST:\n{case['prompt']}"
@@ -385,7 +386,7 @@ def run_job(
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$", "message": call["error"][-500:]}]
                 continue
             previous = plan_path.read_text(encoding="utf-8")
-            parsed, validation = parse_plan(previous)
+            parsed, validation = parse_plan(previous, allow_legacy_aliases=False)
             issues = [{"code": issue.code, "path": issue.path} for issue in validation.issues]
             stage["validation"] = validation.to_dict()
             state.add_attempt(

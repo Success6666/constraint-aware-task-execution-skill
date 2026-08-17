@@ -1,8 +1,8 @@
-# Constraint-Aware Task Execution
+# Constraint Exec
 
 An Agent Skill that keeps the user's primary objective ahead of negative constraints and soft preferences. It reduces the tendency to replace useful work with extra guards, scanners, policy layers, rejection paths, or repeated compliance commentary.
 
-Current protocol version: `0.4.0-rc.1`. This prerelease completes the non-test implementation surface; final promotion remains gated by the full validation and model matrix.
+Current repository version: `0.4.0-rc.2`. This prerelease completes the non-test implementation surface and freezes the release evidence contract; final promotion remains gated by the full validation and model matrix.
 
 ## Measured Result
 
@@ -56,13 +56,15 @@ Constraint compliance is not accepted when it makes the model less useful. The e
 
 Missing or failed pairs are coverage gaps, not zero scores. Output length and keyword counts do not prove quality. A final candidate with a functional, required-content, artifact, or declared-quality regression fails the release gate even if its over-optimization score improves.
 
-For semantic quality that deterministic contracts cannot establish, `evals/pairwise_review.py` prepares anonymized baseline/candidate review packets and a separate mapping key. Reviewers score correctness, completeness, usefulness, and requirement retention on both sides; the applied scores become explicit partial evidence instead of inferred keyword quality.
+For semantic quality that deterministic contracts cannot establish, `evals/pairwise_review.py` prepares anonymized baseline/candidate review packets and separate mapping keys. Final release evidence requires two independent reviewers per pair; disputed pairs require adjudication. Reviewers score correctness, completeness, usefulness, and requirement retention on both sides instead of inferring quality from keywords.
 
 ## Model-independent runtime
 
 `evals/executors/` provides Codex CLI and local Ollama adapters with common request, result, capability, usage, and failure contracts. `scripts/execute_protocol.py` exposes the plan, execute, validate, and bounded-repair flow through versioned JSON input and output. Workspace writes require an executor that declares workspace access; unsupported capabilities terminate explicitly.
 
 Runtime validators are selected from a fixed registry. File access is contained to the workspace, commands must match an allowlist and run without a shell, and unknown validators return `unsupported`. Trace and result persistence redact credential-shaped values and use isolated temporary runtime state.
+
+The runtime is an operator-controlled local interface, not a remote sandbox for untrusted JSON. Only load request files from trusted automation. Constrain workspace and output roots before invocation, pass the minimum environment needed by the executor, keep credentials outside the workspace, and treat redaction as defense in depth rather than secret storage.
 
 ## Install
 
@@ -71,15 +73,15 @@ Use Node.js 22.20 or later. The commands below install a copied Skill globally a
 Install for Codex, Claude Code, and OpenCode in one command:
 
 ```bash
-npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --skill constraint-aware-task-execution --agent codex --agent claude-code --agent opencode --global --copy --yes
+npx --yes skills@1.5.22 add Success6666/constraint-exec --skill constraint-exec --agent codex --agent claude-code --agent opencode --global --copy --yes
 ```
 
 Install for one agent:
 
 ```bash
-npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --skill constraint-aware-task-execution --agent codex --global --copy --yes
-npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --skill constraint-aware-task-execution --agent claude-code --global --copy --yes
-npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --skill constraint-aware-task-execution --agent opencode --global --copy --yes
+npx --yes skills@1.5.22 add Success6666/constraint-exec --skill constraint-exec --agent codex --global --copy --yes
+npx --yes skills@1.5.22 add Success6666/constraint-exec --skill constraint-exec --agent claude-code --global --copy --yes
+npx --yes skills@1.5.22 add Success6666/constraint-exec --skill constraint-exec --agent opencode --global --copy --yes
 ```
 
 For a project-local installation, run the same command from the project root and omit `--global`.
@@ -87,7 +89,7 @@ For a project-local installation, run the same command from the project root and
 Verify repository discovery before installation:
 
 ```bash
-npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --list
+npx --yes skills@1.5.22 add Success6666/constraint-exec --list
 ```
 
 ## Use
@@ -95,7 +97,7 @@ npx --yes skills@1.5.22 add Success6666/constraint-aware-task-execution-skill --
 Invoke the Skill explicitly:
 
 ```text
-Use $constraint-aware-task-execution to complete this task.
+Use $constraint-exec to complete this task.
 ```
 
 Its description also supports automatic discovery for requests containing negative constraints, banned tools, soft preferences, or multiple guardrails.
@@ -137,8 +139,10 @@ Run an isolated orthogonal matrix or workspace-artifact experiment:
 python evals/run_matrix.py --experiment full-matrix --model MODEL --variant baseline --variant full-v2
 python evals/run_matrix.py --experiment local-matrix --executor ollama --model qwen3.5:9b --variant baseline --variant full-v2
 python evals/run_runtime.py --experiment runtime-matrix --model MODEL --mode direct --mode full-v2
-python evals/pairwise_review.py prepare --results RESULTS.json --experiment-root EXPERIMENT_DIR --variant full-v2 --seed REVIEW_SEED --cases evals/cases.json --reviews reviews.json --key reviews.key.json
-python evals/pairwise_review.py apply --results RESULTS.json --reviews reviews.json --key reviews.key.json --output RESULTS.reviewed.json
+python evals/pairwise_review.py prepare --results RESULTS.json --experiment-root EXPERIMENT_DIR --variant full-v2 --seed-file reviewer-1.seed --reviewer-id reviewer-1 --cases evals/cases.json --reviews reviewer-1.json --key reviewer-1.key.json
+python evals/pairwise_review.py prepare --results RESULTS.json --experiment-root EXPERIMENT_DIR --variant full-v2 --seed-file reviewer-2.seed --reviewer-id reviewer-2 --cases evals/cases.json --reviews reviewer-2.json --key reviewer-2.key.json
+python evals/pairwise_review.py apply --results RESULTS.json --reviews reviewer-1.json --key reviewer-1.key.json --reviews reviewer-2.json --key reviewer-2.key.json --minimum-reviewers 2 --output RESULTS.reviewed.json
+python evals/release_experiment.py --dry-run --allow-dirty --allow-untagged
 ```
 
 Run the stable Agent Runtime interface:
@@ -146,14 +150,16 @@ Run the stable Agent Runtime interface:
 ```bash
 python evals/agent_runtime.py --describe
 python evals/agent_runtime.py --request generation-request.json --response generation-response.json
-python scripts/execute_protocol.py request.json --output result.json
+python scripts/execute_protocol.py request.json --workspace-root WORKSPACE_ROOT --artifact-root ARTIFACT_ROOT --output result.json
 ```
 
 The first interface performs one model generation with normalized capabilities and failures. The second executes the full plan, validate, and bounded-repair protocol.
 
-The request and result contracts are defined in `evals/schemas/runtime-request.schema.json` and `evals/schemas/result.schema.json`. Benchmark pairing and release gates are declared in `evals/benchmark-manifest.json`.
+The full execution request and result contracts are defined in `evals/schemas/runtime-request.schema.json` and `evals/schemas/result.schema.json`. The single-generation interface uses `evals/schemas/generation-request.schema.json` and `evals/schemas/generation-response.schema.json`. Benchmark pairing, frozen datasets, required matrices, semantic review coverage, and release gates are declared in `evals/benchmark-manifest.json`; the benchmark and release configuration have dedicated schemas under `evals/schemas/`.
 
 Each case uses an isolated temporary Git repository and a temporary `CODEX_HOME` containing only a copied authentication file. The authentication copy is deleted after the subprocess exits. Checkpoints are written atomically after each result, and one failed case does not discard completed results.
+
+Release runs first verify frozen dataset hashes, JSON schemas, Skill metadata, and source secret patterns. Resume is valid only when the case, executor, model, sampling configuration, variant, validator profile, and budgets match the saved signature. Human review mapping keys and seeds stay separate from blinded review packets and generated outputs.
 
 The deterministic scorer measures:
 
@@ -166,7 +172,7 @@ The deterministic scorer measures:
 ## Repository Layout
 
 ```text
-skills/constraint-aware-task-execution/  Skill package
+skills/constraint-exec/                  Skill package
 evals/cases.json                         30-case bilingual benchmark
 evals/run_ab.py                          Isolated concurrent A/B runner
 evals/run_matrix.py                      Orthogonal plan/execute/repair matrix runner

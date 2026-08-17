@@ -4,7 +4,7 @@ Use the protocol only when the task needs a verifiable plan or artifact. Ordinar
 
 ## Stages
 
-1. **Plan**: record the objective, independent requirements, hard constraints, soft preferences, artifacts, risks, and validation profile.
+1. **Plan**: record the objective, each independent requirement with observable acceptance criteria, hard constraints, soft preferences, artifacts, risks, and validation profile.
 2. **Plan validation**: validate schema and explicit conflicts. Do not infer a gate from a negative preference.
 3. **Execution**: complete the entire objective using the validated plan as internal context.
 4. **Artifact validation**: run only allowlisted validators derived from the user request or benchmark contract.
@@ -28,3 +28,4 @@ Use the protocol only when the task needs a verifiable plan or artifact. Ordinar
 
 Keep model transport retries separate from plan and artifact retries. Persist every attempt, error code, termination reason, and usage record without exposing credentials.
 
+Bind a resumed checkpoint to the request, dataset, executor, model, sampling, and validation configuration. If the signature changes, start a new run instead of mixing attempts from different conditions.

@@ -1,21 +1,98 @@
 {
+  "$schema": "schemas/benchmark-manifest.schema.json",
   "schema_version": "1.0",
-  "benchmark_id": "constraint-aware-task-execution",
-  "pairing_key": ["case_id", "model", "repeat", "sampling_signature"],
+  "benchmark_id": "constraint-exec",
+  "benchmark_version": "1.1.0",
+  "repository_version": "0.4.0-rc.2",
+  "protocols": {
+    "execution": "constraint-exec/v1",
+    "generation": "constraint-exec-generation/v1"
+  },
+  "pairing_key": ["executor", "model", "case_id", "repeat", "sampling_signature"],
   "missing_sample_policy": "exclude_and_report",
+  "integrity_algorithm": "sha256",
+  "schemas": {
+    "execution_plan": "schemas/execution-plan.schema.json",
+    "generation_request": "schemas/generation-request.schema.json",
+    "generation_response": "schemas/generation-response.schema.json",
+    "runtime_request": "schemas/runtime-request.schema.json",
+    "result": "schemas/result.schema.json",
+    "score": "schemas/score.schema.json",
+    "pairwise_review": "schemas/pairwise-review.schema.json",
+    "pairwise_review_key": "schemas/pairwise-review-key.schema.json",
+    "pairwise_adjudication": "schemas/pairwise-adjudication.schema.json",
+    "release_experiment": "schemas/release-experiment.schema.json"
+  },
+  "datasets": [
+    {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30, "sha256": "c07ef057bef0d9fe912c91285b6c39e49c99253e27fd0e37f181f961840e5471"},
+    {"id": "gate-adversarial-v1", "path": "gate_cases.json", "kind": "classification", "declared_cases": 32, "sha256": "01a3564c2a6da6dc7ef262fa5b9dd3364deb4ddbbc995d619a0d4a1cd8f0c4c9"},
+    {"id": "constraint-adversarial-v1", "path": "adversarial_cases.json", "kind": "answer", "declared_cases": 6, "sha256": "11770920f8d86933afb9cff5754ecb5f1c0cafe874d7a335248b002c567743fa"},
+    {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6, "sha256": "c6e0d59a07a7fa828dd24ecc4ca1085b910e0ce47e0f52c50e7ed8468a8cc117"}
+  ],
+  "variants": [
+    "baseline",
+    "v1-full",
+    "remove-anti-overoptimization",
+    "remove-constraint-echo",
+    "positive-framing-only",
+    "structured-plan-only",
+    "plan-validation",
+    "full-v2"
+  ],
+  "required_matrices": {
+    "primary": {
+      "datasets": ["answer-bilingual-v1", "constraint-adversarial-v1"],
+      "variants": ["baseline", "v1-full", "remove-anti-overoptimization", "remove-constraint-echo", "positive-framing-only", "structured-plan-only", "plan-validation", "full-v2"],
+      "minimum_models": 1,
+      "minimum_repeats": 1
+    },
+    "secondary": {
+      "datasets": ["answer-bilingual-v1"],
+      "variants": ["baseline", "v1-full", "full-v2"],
+      "minimum_models": 2,
+      "minimum_repeats": 1
+    },
+    "runtime": {
+      "datasets": ["workspace-runtime-v1"],
+      "modes": ["direct", "full-v2"],
+      "minimum_models": 1,
+      "minimum_repeats": 1
+    }
+  },
+  "required_checks": [
+    "dataset_integrity",
+    "gate_classifier",
+    "protocol_fixtures",
+    "runtime_validator_fixtures",
+    "schema_validation",
+    "skill_validation",
+    "installation_verification",
+    "secret_scan"
+  ],
+  "semantic_review": {
+    "required_for_final_release": true,
+    "candidate_variants": ["full-v2"],
+    "dimensions": ["correctness", "completeness", "usefulness", "requirement_retention"],
+    "minimum_pair_coverage": 1.0,
+    "minimum_retention_ratio": 1.0,
+    "minimum_reviewers_per_pair": 2,
+    "maximum_dimension_delta_spread": 0.2,
+    "adjudication_required_on_disagreement": true,
+    "mapping_key_must_be_separate": true
+  },
   "release_gates": {
+    "complete_required_matrices": true,
+    "dataset_integrity_required": true,
+    "schema_validation_required": true,
     "capability_regression_rate_max": 0,
     "objective_coverage_not_below_baseline": true,
     "constraint_adherence_not_below_baseline": true,
     "required_enforcement_not_below_baseline": true,
     "functional_contract_not_below_baseline": true,
-    "non_constraint_requirement_retention_not_below_baseline": true
-  },
-  "datasets": [
-    {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30},
-    {"id": "gate-adversarial-v1", "path": "gate_cases.json", "kind": "classification", "declared_cases": 32},
-    {"id": "constraint-adversarial-v1", "path": "adversarial_cases.json", "kind": "answer"},
-    {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6}
-  ]
+    "non_constraint_requirement_retention_not_below_baseline": true,
+    "declared_quality_not_below_baseline": true,
+    "gate_classifier_accuracy_min": 1.0,
+    "required_unsupported_count_max": 0,
+    "unredacted_secret_count_max": 0
+  }
 }
-

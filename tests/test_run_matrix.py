@@ -19,6 +19,11 @@ def plan(required_gate: bool = False, strategy: str = "Use SQLite", failure_acti
     return {
         "schema_version": "1.0",
         "objective": "Return a JSON implementation plan",
+        "requirements": [{
+            "id": "deliverable",
+            "statement": "Return components and tests",
+            "acceptance_criteria": ["The response identifies components and tests"],
+        }],
         "hard_constraints": [{
             "id": "constraint-1",
             "type": "enforcement" if required_gate else "hard",
@@ -30,7 +35,7 @@ def plan(required_gate: bool = False, strategy: str = "Use SQLite", failure_acti
         "soft_preferences": [],
         "risk_points": [],
         "artifacts": [{"path": "response.json", "kind": "json"}],
-        "validation_profile": {"validators": [{"type": "json"}]},
+        "validation_profile": {"validators": [{"type": "json_schema"}]},
     }
 
 
@@ -61,7 +66,7 @@ class RunMatrixTests(unittest.TestCase):
             baseline = run_matrix.prepare_workspace(root, "model", 1, VARIANTS["baseline"], "case")
             skilled = run_matrix.prepare_workspace(root, "model", 1, VARIANTS["v1-full"], "case")
             self.assertFalse((baseline / ".codex" / "skills").exists())
-            skill_path = skilled / ".codex" / "skills" / "constraint-aware-task-execution" / "SKILL.md"
+            skill_path = skilled / ".codex" / "skills" / "constraint-exec" / "SKILL.md"
             self.assertTrue(skill_path.is_file())
             self.assertIn("primary objective", skill_path.read_text(encoding="utf-8"))
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-rc.2 - 2026-08-17
+
+- Renamed the Skill and invocation to `constraint-exec`.
+- Added a frozen release experiment manifest with dataset integrity metadata and required model matrices.
+- Tightened runtime, result, score, plan, review, and benchmark JSON schemas.
+- Documented the local runtime trust boundary, minimal-environment rule, evidence provenance, and semantic review coverage gate.
+- Added ignore rules for local credentials, runtime checkpoints, review mapping keys, and transient model artifacts.
+- Added a release preflight for dataset hashes, schema contracts, Skill metadata, and source secret scanning.
+- Added trusted workspace/artifact roots, minimal subprocess environment inheritance, versioned full checkpoints, and strict canonical plan parsing for new Runtime requests.
+- Added two-reviewer blinded aggregation, disagreement adjudication, and release-orchestrated review pause/resume.
+- Renamed the GitHub repository and local `origin` to `Success6666/constraint-exec`.
+
 ## 0.4.0-rc.1 - 2026-08-17
 
 - Added model-independent Codex CLI and local Ollama executor contracts.

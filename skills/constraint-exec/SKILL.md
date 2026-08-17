@@ -1,9 +1,9 @@
 ---
-name: constraint-aware-task-execution
+name: constraint-exec
 description: Keep the user's primary objective ahead of constraints and preferences. Use when a task contains negative constraints, banned tools or libraries, "do not use X", "without X", "avoid X", "try not to", implementation preferences, or multiple guardrails that could tempt an agent to create unrequested validators, scanners, failure gates, extra architecture, or repetitive compliance commentary.
 ---
 
-# Constraint-Aware Task Execution
+# Constraint Exec
 
 Complete the user's actual task while satisfying constraints proportionally.
 
@@ -40,6 +40,7 @@ section before rebuilding the artifact or replanning.
 Use this order:
 
 1. Preserve the objective and non-constraint requirements in the plan.
+   Record independent requirements separately from constraints and give each an acceptance criterion; do not hide them inside a broad objective sentence.
 2. Validate plan structure and explicit hard/enforcement conflicts.
 3. Execute the whole task.
 4. Validate only allowlisted, observable contracts. Treat unknown checks as `unsupported`, never as passed.

@@ -11,7 +11,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_NAME = "constraint-aware-task-execution"
+SKILL_NAME = "constraint-exec"
 SOURCE_SKILL = ROOT / "skills" / SKILL_NAME
 SKILLS_PACKAGE = "skills@1.5.22"
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")

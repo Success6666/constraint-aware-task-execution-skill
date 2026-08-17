@@ -1,11 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://constraint-aware-task-execution.local/schemas/score.schema.json",
-  "title": "Constraint-Aware Evaluation Score",
+  "$id": "https://constraint-exec.local/schemas/score.schema.json",
+  "title": "Constraint Exec Evaluation Score",
   "type": "object",
   "additionalProperties": true,
+  "required": [
+    "evaluation_pass",
+    "required_pass",
+    "objective_coverage",
+    "constraint_adherence",
+    "constraint_compliance",
+    "overoptimization_score"
+  ],
   "properties": {
+    "evaluation_pass": {"type": "boolean"},
+    "required_pass": {"type": "boolean"},
     "objective_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "non_constraint_requirement_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "declared_quality_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "required_coverage": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "constraint_compliance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "constraint_adherence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
@@ -28,6 +40,57 @@
     "semantic_capability_status": {
       "type": "string",
       "enum": ["supported", "partial", "unsupported"]
-    }
+    },
+    "semantic_reviews": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["review_id", "reviewer_ids", "reviewer_count", "minimum_reviewers", "status", "overall", "dimensions", "disagreement", "adjudication"],
+        "properties": {
+          "review_id": {"type": "string"},
+          "reviewer_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "reviewer_count": {"type": "integer", "minimum": 0},
+          "minimum_reviewers": {"type": "integer", "minimum": 2},
+          "status": {"enum": ["insufficient_reviews", "needs_adjudication", "accepted", "adjudicated"]},
+          "overall": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "dimensions": {
+            "type": "object",
+            "properties": {
+              "correctness": {"type": "number", "minimum": 0, "maximum": 1},
+              "completeness": {"type": "number", "minimum": 0, "maximum": 1},
+              "usefulness": {"type": "number", "minimum": 0, "maximum": 1},
+              "requirement_retention": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          },
+          "disagreement": {"type": "object"},
+          "adjudication": {"type": ["object", "null"]}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"status": {"enum": ["accepted", "adjudicated"]}}},
+            "then": {
+              "properties": {
+                "overall": {"type": "number", "minimum": 0, "maximum": 1},
+                "dimensions": {
+                  "required": ["correctness", "completeness", "usefulness", "requirement_retention"]
+                }
+              }
+            }
+          },
+          {
+            "if": {"properties": {"status": {"const": "adjudicated"}}},
+            "then": {"properties": {"adjudication": {"type": "object"}}}
+          }
+        ]
+      }
+    },
+    "missing_objective_markers": {"type": "integer", "minimum": 0},
+    "constraint_violation_hits": {"type": "integer", "minimum": 0},
+    "under_enforcement_hits": {"type": "integer", "minimum": 0},
+    "failure_gate_hits": {"type": "integer", "minimum": 0},
+    "constraint_component_hits": {"type": "integer", "minimum": 0},
+    "constraint_echo": {"type": "integer", "minimum": 0},
+    "soft_preference_hardening": {"type": "integer", "minimum": 0},
+    "overoptimization_score": {"type": "number", "minimum": 0}
   }
 }

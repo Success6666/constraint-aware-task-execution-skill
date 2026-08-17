@@ -2,7 +2,11 @@
 
 ## Version status
 
-`0.4.0-rc.1` is the non-test implementation candidate. Keep `v0.3.0` results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the deferred validation and model matrices satisfy the task acceptance gates.
+`0.4.0-rc.2` is the non-test implementation candidate. Keep `v0.3.0` results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the deferred validation and model matrices satisfy the task acceptance gates.
+
+## Skill rename
+
+The current Skill name is `constraint-exec`. Replace the former `constraint-aware-task-execution` directory and invocation with `skills/constraint-exec` and `$constraint-exec`. Remove the former installed copy after the new Skill is discoverable so two descriptions do not compete for the same request.
 
 ## Runner changes
 
@@ -25,9 +29,15 @@
 - Use `evals/agent_runtime.py` for a single versioned generation request.
 - Use `scripts/execute_protocol.py` for plan, execution, validation, and bounded repair.
 - Validate integrations against `evals/schemas/runtime-request.schema.json`, `evals/schemas/result.schema.json`, and `evals/schemas/score.schema.json`.
+- Validate one-shot generation integrations against `evals/schemas/generation-request.schema.json` and `evals/schemas/generation-response.schema.json`.
 - Use `evals/benchmark-manifest.json` for pairing keys, missing-sample policy, and release gates.
+- Validate the frozen manifest against `evals/schemas/benchmark-manifest.schema.json` and verify every declared dataset digest before a release run.
 - Use `evals/pairwise_review.py` to create blinded semantic review packets and apply completed review scores without exposing variant labels to reviewers.
 
 ## Capability gate
 
 Final candidates must have complete baseline pairing and zero capability regressions for observable dimensions. Functional, non-constraint requirement, artifact, format, path, or declared-quality loss blocks promotion even when over-optimization improves. Efficiency ratios remain separate diagnostics.
+
+## Runtime trust boundary
+
+The JSON runtime is intended for trusted local operators and CI, not direct exposure to untrusted clients. The caller must constrain workspace and output roots, pass only required environment entries, and keep credentials outside generated workspaces. Redaction reduces accidental persistence but does not make arbitrary requests or inherited secrets safe.

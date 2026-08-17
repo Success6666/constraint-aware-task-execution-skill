@@ -1,9 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/pairwise-review.schema.json",
+  "title": "Blinded Pairwise Capability Review Packet",
   "type": "object",
-  "required": ["schema_version", "blinded", "dimensions", "reviews"],
+  "additionalProperties": false,
+  "required": ["schema_version", "reviewer_id", "blinded", "dimensions", "reviews"],
   "properties": {
     "schema_version": {"const": "1.0"},
+    "reviewer_id": {"type": "string", "minLength": 1},
     "blinded": {"const": true},
     "dimensions": {
       "const": ["correctness", "completeness", "usefulness", "requirement_retention"]
@@ -12,6 +16,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["review_id", "case_id", "prompt", "response_a", "response_b", "scores"],
         "properties": {
           "review_id": {"type": "string"},
@@ -21,6 +26,7 @@
           "response_b": {"type": "string"},
           "scores": {
             "type": "object",
+            "additionalProperties": false,
             "required": ["a", "b"],
             "properties": {
               "a": {"$ref": "#/$defs/sideScore"},
@@ -35,6 +41,7 @@
   "$defs": {
     "sideScore": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["correctness", "completeness", "usefulness", "requirement_retention"],
       "properties": {
         "correctness": {"type": ["number", "null"], "minimum": 1, "maximum": 5},
@@ -45,4 +52,3 @@
     }
   }
 }
-

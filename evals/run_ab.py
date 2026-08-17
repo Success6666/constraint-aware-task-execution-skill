@@ -18,7 +18,7 @@ from scorer import score_response
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES_PATH = ROOT / "evals" / "cases.json"
-SKILL_PATH = ROOT / "skills" / "constraint-aware-task-execution"
+SKILL_PATH = ROOT / "skills" / "constraint-exec"
 RESULTS_PATH = ROOT / "evals" / "results"
 WORKSPACES_PATH = ROOT / "evals" / "workspaces"
 CODEX_HOMES_PATH = WORKSPACES_PATH / ".codex-homes"
@@ -95,8 +95,8 @@ def build_prompt(case: dict, variant: str) -> str:
     task = case["prompt"]
     if variant in {"skill", "positive-framing", "structured-plan", "plan-validation", "full-v2"}:
         task = (
-            "Use $constraint-aware-task-execution at "
-            ".codex/skills/constraint-aware-task-execution to solve this user request: "
+            "Use $constraint-exec at "
+            ".codex/skills/constraint-exec to solve this user request: "
             + task
         )
     variant_instruction = {

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/pairwise-review-key.schema.json",
+  "title": "Blinded Pairwise Review Mapping Key",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reviewer_id", "seed_digest", "mappings"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "reviewer_id": {"type": "string", "minLength": 1},
+    "seed_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["review_id", "candidate_side", "baseline", "candidate"],
+        "properties": {
+          "review_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "candidate_side": {"enum": ["a", "b"]},
+          "baseline": {"$ref": "#/$defs/identity"},
+          "candidate": {"$ref": "#/$defs/identity"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executor", "model", "case_id", "repeat", "sampling_signature", "variant"],
+      "properties": {
+        "executor": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "case_id": {"type": ["string", "null"]},
+        "repeat": {"type": ["integer", "null"]},
+        "sampling_signature": {},
+        "variant": {"type": "string"}
+      }
+    }
+  }
+}

@@ -38,8 +38,18 @@ def project_paths(context: ValidationContext) -> set[str]:
 
 def path_scope(spec: Mapping[str, Any], context: ValidationContext, validator_id: str) -> ValidatorResult:
     allowed = {path.replace("\\", "/") for path in (spec.get("allowed_paths") or context.allowed_paths)}
-    unexpected = sorted(project_paths(context) - allowed)
-    return _result("path_scope", validator_id, [f"PATH_SCOPE:{path}" for path in unexpected], paths=sorted(project_paths(context)))
+    observed = (
+        {path.replace("\\", "/") for path in context.changed_paths}
+        if context.changed_paths is not None
+        else project_paths(context)
+    )
+    unexpected = sorted(observed - allowed)
+    return _result(
+        "path_scope",
+        validator_id,
+        [f"PATH_SCOPE:{path}" for path in unexpected],
+        paths=sorted(observed),
+    )
 
 
 def files_exist(spec: Mapping[str, Any], context: ValidationContext, validator_id: str) -> ValidatorResult:
@@ -69,6 +79,82 @@ def json_exact(spec: Mapping[str, Any], context: ValidationContext, validator_id
     return _result("json_exact", validator_id, errors)
 
 
+_SCHEMA_KEYWORDS = {
+    "$id",
+    "$schema",
+    "additionalProperties",
+    "const",
+    "default",
+    "description",
+    "enum",
+    "examples",
+    "items",
+    "maxItems",
+    "maxLength",
+    "maximum",
+    "minItems",
+    "minLength",
+    "minimum",
+    "pattern",
+    "properties",
+    "required",
+    "title",
+    "type",
+}
+_SCHEMA_TYPES = {"object", "array", "string", "number", "integer", "boolean", "null"}
+
+
+def _schema_support_errors(schema: Mapping[str, Any], path: str = "$") -> list[str]:
+    errors = [f"JSON_SCHEMA_KEYWORD_UNSUPPORTED:{path}:{key}" for key in schema if key not in _SCHEMA_KEYWORDS]
+    expected = schema.get("type")
+    if expected is not None and (not isinstance(expected, str) or expected not in _SCHEMA_TYPES):
+        errors.append(f"JSON_SCHEMA_TYPE_UNSUPPORTED:{path}:{expected}")
+    required = schema.get("required")
+    if required is not None and (
+        not isinstance(required, list) or not all(isinstance(item, str) for item in required)
+    ):
+        errors.append(f"JSON_SCHEMA_DEFINITION:{path}.required")
+    enum = schema.get("enum")
+    if enum is not None and not isinstance(enum, list):
+        errors.append(f"JSON_SCHEMA_DEFINITION:{path}.enum")
+    additional = schema.get("additionalProperties")
+    if additional is not None and not isinstance(additional, bool):
+        errors.append(f"JSON_SCHEMA_KEYWORD_UNSUPPORTED:{path}:additionalProperties")
+    for keyword in ("minLength", "maxLength", "minItems", "maxItems"):
+        value = schema.get(keyword)
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+            errors.append(f"JSON_SCHEMA_DEFINITION:{path}.{keyword}")
+    for keyword in ("minimum", "maximum"):
+        value = schema.get(keyword)
+        if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+            errors.append(f"JSON_SCHEMA_DEFINITION:{path}.{keyword}")
+    properties = schema.get("properties", {})
+    if not isinstance(properties, Mapping):
+        errors.append(f"JSON_SCHEMA_DEFINITION:{path}.properties")
+    else:
+        for key, child in properties.items():
+            if not isinstance(child, Mapping):
+                errors.append(f"JSON_SCHEMA_DEFINITION:{path}.properties.{key}")
+            else:
+                errors.extend(_schema_support_errors(child, f"{path}.{key}"))
+    items = schema.get("items")
+    if items is not None:
+        if not isinstance(items, Mapping):
+            errors.append(f"JSON_SCHEMA_DEFINITION:{path}.items")
+        else:
+            errors.extend(_schema_support_errors(items, f"{path}[]"))
+    pattern = schema.get("pattern")
+    if pattern is not None:
+        if not isinstance(pattern, str):
+            errors.append(f"JSON_SCHEMA_DEFINITION:{path}.pattern")
+        else:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                errors.append(f"JSON_SCHEMA_PATTERN_INVALID:{path}:{exc}")
+    return errors
+
+
 def _schema_errors(value: Any, schema: Mapping[str, Any], path: str = "$") -> list[str]:
     errors: list[str] = []
     expected = schema.get("type")
@@ -83,6 +169,8 @@ def _schema_errors(value: Any, schema: Mapping[str, Any], path: str = "$") -> li
         for key, child in properties.items():
             if key in value and isinstance(child, Mapping):
                 errors.extend(_schema_errors(value[key], child, f"{path}.{key}"))
+        if schema.get("additionalProperties") is False:
+            errors.extend(f"JSON_SCHEMA_ADDITIONAL:{path}.{key}" for key in value if key not in properties)
     if isinstance(value, list) and isinstance(schema.get("items"), Mapping):
         for index, child in enumerate(value):
             errors.extend(_schema_errors(child, schema["items"], f"{path}[{index}]"))
@@ -90,6 +178,23 @@ def _schema_errors(value: Any, schema: Mapping[str, Any], path: str = "$") -> li
         errors.append(f"JSON_SCHEMA_ENUM:{path}")
     if "const" in schema and value != schema["const"]:
         errors.append(f"JSON_SCHEMA_CONST:{path}")
+    if isinstance(value, str):
+        if isinstance(schema.get("minLength"), int) and len(value) < schema["minLength"]:
+            errors.append(f"JSON_SCHEMA_MIN_LENGTH:{path}")
+        if isinstance(schema.get("maxLength"), int) and len(value) > schema["maxLength"]:
+            errors.append(f"JSON_SCHEMA_MAX_LENGTH:{path}")
+        if isinstance(schema.get("pattern"), str) and re.search(schema["pattern"], value) is None:
+            errors.append(f"JSON_SCHEMA_PATTERN:{path}")
+    if isinstance(value, list):
+        if isinstance(schema.get("minItems"), int) and len(value) < schema["minItems"]:
+            errors.append(f"JSON_SCHEMA_MIN_ITEMS:{path}")
+        if isinstance(schema.get("maxItems"), int) and len(value) > schema["maxItems"]:
+            errors.append(f"JSON_SCHEMA_MAX_ITEMS:{path}")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(schema.get("minimum"), (int, float)) and value < schema["minimum"]:
+            errors.append(f"JSON_SCHEMA_MINIMUM:{path}")
+        if isinstance(schema.get("maximum"), (int, float)) and value > schema["maximum"]:
+            errors.append(f"JSON_SCHEMA_MAXIMUM:{path}")
     return errors
 
 
@@ -101,6 +206,9 @@ def json_schema(spec: Mapping[str, Any], context: ValidationContext, validator_i
     schema = spec.get("schema", {})
     if not isinstance(schema, Mapping):
         return ValidatorResult("unsupported", "json_schema", validator_id, ("JSON_SCHEMA_UNSUPPORTED",))
+    support_errors = _schema_support_errors(schema)
+    if support_errors:
+        return ValidatorResult("unsupported", "json_schema", validator_id, tuple(support_errors))
     return _result("json_schema", validator_id, _schema_errors(value, schema))
 
 

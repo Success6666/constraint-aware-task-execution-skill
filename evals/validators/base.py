@@ -9,6 +9,7 @@ from typing import Any, Mapping
 class ValidationContext:
     workspace: Path
     allowed_paths: tuple[str, ...] = ()
+    changed_paths: tuple[str, ...] | None = None
     allowed_commands: tuple[tuple[str, ...], ...] = (
         ("python", "-m", "unittest"),
         ("python", "-m", "pytest"),

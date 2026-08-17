@@ -18,7 +18,23 @@ from constraint_policy import evaluate_constraint_policy
 
 PLAN_SCHEMA_VERSION = "1.0"
 ALLOWED_CONSTRAINT_TYPES = {"hard", "enforcement"}
-ALLOWED_ARTIFACT_KINDS = {"text", "json", "markdown", "python", "file"}
+ALLOWED_ARTIFACT_KINDS = {
+    "text", "json", "markdown", "python", "javascript", "typescript", "yaml", "file",
+}
+PLAN_FIELDS = {
+    "schema_version", "objective", "requirements", "hard_constraints", "soft_preferences",
+    "risk_points", "artifacts", "validation_profile",
+}
+CONSTRAINT_FIELDS = {
+    "id", "type", "statement", "strategy", "target", "scope", "polarity", "priority",
+    "required_gate", "failure_action",
+}
+PREFERENCE_FIELDS = {"id", "type", "preference", "tradeoff", "target", "scope", "polarity", "priority"}
+VALIDATOR_TYPES = {
+    "path_scope", "files_exist", "json_exact", "json_schema", "markdown_headings",
+    "python_compile", "forbidden_imports", "forbidden_pattern", "command",
+    "javascript_syntax", "typescript_check", "yaml_parse",
+}
 
 
 @dataclass(frozen=True)
@@ -102,7 +118,11 @@ def detect_gate_relation(text: str, targets: list[str] | None = None) -> bool:
     return False
 
 
-def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
+def validate_plan(
+    plan: Mapping[str, Any],
+    *,
+    allow_legacy_aliases: bool = True,
+) -> PlanValidation:
     issues: list[PlanIssue] = []
     if not isinstance(plan, Mapping):
         return PlanValidation(False, (_issue("PLAN_NOT_OBJECT", "$", "plan must be an object"),))
@@ -111,6 +131,34 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
         issues.append(_issue("SCHEMA_VERSION", "schema_version", f"expected {PLAN_SCHEMA_VERSION}"))
     if not _is_nonempty_string(plan.get("objective")):
         issues.append(_issue("OBJECTIVE_REQUIRED", "objective", "objective must be non-empty"))
+    if not allow_legacy_aliases:
+        for key in sorted(set(plan) - PLAN_FIELDS):
+            issues.append(_issue("PLAN_ADDITIONAL_FIELD", key, "field is not in the execution plan schema"))
+
+    requirements = plan.get("requirements")
+    if requirements is None and allow_legacy_aliases:
+        requirements = []
+    if not isinstance(requirements, list):
+        issues.append(_issue("REQUIREMENTS_TYPE", "requirements", "must be an array"))
+        requirements = []
+    for index, requirement in enumerate(requirements):
+        path = f"requirements[{index}]"
+        if not isinstance(requirement, Mapping):
+            issues.append(_issue("REQUIREMENT_NOT_OBJECT", path, "requirement must be an object"))
+            continue
+        for field_name in ("id", "statement"):
+            if not _is_nonempty_string(requirement.get(field_name)):
+                issues.append(_issue("REQUIREMENT_FIELD_REQUIRED", f"{path}.{field_name}", "must be non-empty"))
+        criteria = requirement.get("acceptance_criteria")
+        if not isinstance(criteria, list) or not criteria or not all(_is_nonempty_string(item) for item in criteria):
+            issues.append(_issue(
+                "ACCEPTANCE_CRITERIA_REQUIRED",
+                f"{path}.acceptance_criteria",
+                "must contain at least one non-empty criterion",
+            ))
+        if not allow_legacy_aliases:
+            for key in sorted(set(requirement) - {"id", "statement", "acceptance_criteria"}):
+                issues.append(_issue("REQUIREMENT_ADDITIONAL_FIELD", f"{path}.{key}", "field is not in the schema"))
 
     constraints = plan.get("hard_constraints", [])
     if not isinstance(constraints, list):
@@ -121,9 +169,32 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
         if not isinstance(constraint, Mapping):
             issues.append(_issue("CONSTRAINT_NOT_OBJECT", path, "constraint must be an object"))
             continue
-        statement = constraint.get("statement", constraint.get("constraint"))
-        strategy = constraint.get("strategy", constraint.get("implementation_strategy"))
-        required_gate = constraint.get("required_gate", constraint.get("enforcement_required", False))
+        if not allow_legacy_aliases:
+            for key in sorted(set(constraint) - CONSTRAINT_FIELDS):
+                issues.append(_issue("CONSTRAINT_ADDITIONAL_FIELD", f"{path}.{key}", "field is not in the schema"))
+            for key in ("id", "type", "statement", "strategy", "required_gate", "failure_action"):
+                if key not in constraint:
+                    issues.append(_issue("CONSTRAINT_FIELD_REQUIRED", f"{path}.{key}", "field is required"))
+        legacy_fields = {
+            "constraint": "statement",
+            "implementation_strategy": "strategy",
+            "enforcement_required": "required_gate",
+        }
+        if not allow_legacy_aliases:
+            for legacy, canonical in legacy_fields.items():
+                if legacy in constraint:
+                    issues.append(_issue(
+                        "LEGACY_PLAN_FIELD",
+                        f"{path}.{legacy}",
+                        f"use {canonical} in schema_version={PLAN_SCHEMA_VERSION}",
+                    ))
+        statement = constraint.get("statement")
+        strategy = constraint.get("strategy")
+        required_gate = constraint.get("required_gate", False)
+        if allow_legacy_aliases:
+            statement = constraint.get("statement", constraint.get("constraint"))
+            strategy = constraint.get("strategy", constraint.get("implementation_strategy"))
+            required_gate = constraint.get("required_gate", constraint.get("enforcement_required", False))
         if not _is_nonempty_string(statement):
             issues.append(_issue("CONSTRAINT_FIELD_REQUIRED", f"{path}.statement", "must be non-empty"))
         if not _is_nonempty_string(strategy):
@@ -153,6 +224,12 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
         if not isinstance(preference, Mapping):
             issues.append(_issue("PREFERENCE_NOT_OBJECT", path, "preference must be an object"))
             continue
+        if not allow_legacy_aliases:
+            for key in sorted(set(preference) - PREFERENCE_FIELDS):
+                issues.append(_issue("PREFERENCE_ADDITIONAL_FIELD", f"{path}.{key}", "field is not in the schema"))
+            for key in ("id", "type", "preference", "tradeoff"):
+                if key not in preference:
+                    issues.append(_issue("PREFERENCE_FIELD_REQUIRED", f"{path}.{key}", "field is required"))
         if not _is_nonempty_string(preference.get("preference")):
             issues.append(_issue("PREFERENCE_REQUIRED", f"{path}.preference", "must be non-empty"))
         if not _is_nonempty_string(preference.get("tradeoff")):
@@ -166,8 +243,12 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
             issues.append(_issue(policy_issue.code, policy_issue.path, policy_issue.message))
 
     for key in ("risk_points", "artifacts"):
-        if not isinstance(plan.get(key, []), list):
+        if not isinstance(plan.get(key), list):
             issues.append(_issue("FIELD_TYPE", key, "must be an array"))
+    if isinstance(plan.get("risk_points"), list):
+        for index, risk in enumerate(plan["risk_points"]):
+            if not _is_nonempty_string(risk):
+                issues.append(_issue("RISK_POINT_TYPE", f"risk_points[{index}]", "must be non-empty"))
     for index, artifact in enumerate(plan.get("artifacts", [])):
         path = f"artifacts[{index}]"
         if not isinstance(artifact, Mapping):
@@ -189,17 +270,28 @@ def validate_plan(plan: Mapping[str, Any]) -> PlanValidation:
             for index, validator in enumerate(validators):
                 if not isinstance(validator, Mapping) or not _is_nonempty_string(validator.get("type")):
                     issues.append(_issue("VALIDATOR_REQUIRED", f"validation_profile.validators[{index}]", "type is required"))
+                elif not allow_legacy_aliases and validator.get("type") not in VALIDATOR_TYPES:
+                    issues.append(_issue("VALIDATOR_TYPE", f"validation_profile.validators[{index}].type", "unsupported validator type"))
     return PlanValidation(not issues, tuple(issues))
 
 
-def parse_plan(raw: str | bytes) -> tuple[dict[str, Any] | None, PlanValidation]:
+def parse_plan(
+    raw: str | bytes,
+    *,
+    allow_legacy_aliases: bool = True,
+) -> tuple[dict[str, Any] | None, PlanValidation]:
+    """Parse a plan.
+
+    ``allow_legacy_aliases`` exists only for pre-1.0 fixtures and callers. New
+    runtime paths pass ``False`` so accepted input matches the published schema.
+    """
     try:
         parsed = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
         return None, PlanValidation(False, (_issue("INVALID_JSON", "$", str(exc)),))
     if not isinstance(parsed, dict):
         return None, PlanValidation(False, (_issue("PLAN_NOT_OBJECT", "$", "plan must be a JSON object"),))
-    result = validate_plan(parsed)
+    result = validate_plan(parsed, allow_legacy_aliases=allow_legacy_aliases)
     return parsed, result
 
 

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/release-experiment.schema.json",
+  "title": "Constraint Exec Release Experiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release_candidate", "experiment", "output_root", "limits", "verification", "deterministic", "matrices", "runtimes", "review"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0"},
+    "release_candidate": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-rc\\.[0-9]+)?$"},
+    "experiment": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
+    "output_root": {"type": "string", "minLength": 1},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_model_jobs", "max_model_invocations", "step_timeout_seconds"],
+      "properties": {
+        "max_model_jobs": {"type": "integer", "minimum": 1},
+        "max_model_invocations": {"type": "integer", "minimum": 1},
+        "step_timeout_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "verification": {"$ref": "#/$defs/enabled"},
+    "deterministic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "protocol_max_attempts"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "protocol_max_attempts": {"type": "integer", "minimum": 1}
+      }
+    },
+    "matrices": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/matrix"}},
+    "runtimes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/runtime"}},
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_variants", "required_for_final_release", "reviewers", "minimum_reviewers_per_pair", "maximum_dimension_delta_spread"],
+      "properties": {
+        "candidate_variants": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "required_for_final_release": {"const": true},
+        "reviewers": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"}},
+        "minimum_reviewers_per_pair": {"type": "integer", "minimum": 2},
+        "maximum_dimension_delta_spread": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "enabled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "commonProperties": {
+      "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
+      "executor": {"enum": ["codex", "ollama"]},
+      "model": {"type": "string", "minLength": 1},
+      "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]},
+      "repeats": {"type": "integer", "minimum": 1},
+      "jobs": {"type": "integer", "minimum": 1},
+      "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+      "transport_attempts": {"type": "integer", "minimum": 1}
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "executor", "model", "reasoning_effort", "variants", "repeats", "jobs", "timeout_seconds", "transport_attempts", "plan_attempts", "artifact_attempts"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
+        "executor": {"enum": ["codex", "ollama"]},
+        "model": {"type": "string", "minLength": 1},
+        "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]},
+        "variants": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string"}},
+        "repeats": {"type": "integer", "minimum": 1},
+        "jobs": {"type": "integer", "minimum": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "transport_attempts": {"type": "integer", "minimum": 1},
+        "plan_attempts": {"type": "integer", "minimum": 1},
+        "artifact_attempts": {"type": "integer", "minimum": 0}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "executor", "model", "reasoning_effort", "modes", "repeats", "jobs", "timeout_seconds", "transport_attempts", "plan_attempts", "repair_attempts"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
+        "executor": {"enum": ["codex", "ollama"]},
+        "model": {"type": "string", "minLength": 1},
+        "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]},
+        "modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["direct", "full-v2"]}},
+        "repeats": {"type": "integer", "minimum": 1},
+        "jobs": {"type": "integer", "minimum": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "transport_attempts": {"type": "integer", "minimum": 1},
+        "plan_attempts": {"type": "integer", "minimum": 1},
+        "repair_attempts": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

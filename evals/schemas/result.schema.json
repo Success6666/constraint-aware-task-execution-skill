@@ -1,20 +1,145 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/constraint-aware/result.schema.json",
+  "$id": "https://constraint-exec.local/schemas/result.schema.json",
+  "title": "Constraint Exec Execution Result",
   "type": "object",
-  "required": ["schema_version", "protocol", "run_id", "success", "termination_reason", "executor", "state", "attempts"],
+  "additionalProperties": false,
+  "required": ["schema_version", "protocol", "run_id", "generated_at", "success", "termination_reason", "executor", "plan_validation", "validations", "state", "attempts"],
   "properties": {
     "schema_version": {"const": "1.0"},
-    "protocol": {"const": "constraint-aware-execution"},
-    "run_id": {"type": "string"},
-    "generated_at": {"type": "string"},
+    "protocol": {"const": "constraint-exec/v1"},
+    "run_id": {"type": "string", "maxLength": 128},
+    "generated_at": {"type": "string", "format": "date-time"},
     "success": {"type": "boolean"},
     "termination_reason": {"type": ["string", "null"]},
-    "executor": {"type": "object"},
-    "plan_validation": {"type": ["object", "null"]},
-    "validations": {"type": "array"},
-    "state": {"type": "object"},
-    "attempts": {"type": "array"}
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {"type": "string"},
+        "model": {"type": "string"},
+        "capabilities": {"$ref": "#/$defs/capabilities"}
+      }
+    },
+    "plan_validation": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["valid", "issues"],
+          "properties": {
+            "valid": {"type": "boolean"},
+            "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}}
+          }
+        }
+      ]
+    },
+    "validations": {"type": "array", "items": {"$ref": "#/$defs/validation"}},
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {"type": "string"},
+        "stage": {"enum": ["plan", "execute", "validate", "repair", "replan", "complete", "failed"]},
+        "attempts": {"type": "array", "items": {"$ref": "#/$defs/stateAttempt"}},
+        "passed_validators": {"type": "object", "additionalProperties": {"$ref": "#/$defs/validation"}},
+        "termination_reason": {"type": ["string", "null"]},
+        "completed": {"type": "boolean"}
+      }
+    },
+    "attempts": {"type": "array", "items": {"$ref": "#/$defs/generationAttempt"}},
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structured_output", "workspace_access", "reasoning_effort", "usage_reporting", "local_execution"],
+      "properties": {
+        "structured_output": {"type": "boolean"},
+        "workspace_access": {"type": "boolean"},
+        "reasoning_effort": {"type": "boolean"},
+        "usage_reporting": {"type": "boolean"},
+        "local_execution": {"type": "boolean"}
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "path", "message"],
+      "properties": {
+        "code": {"type": "string"},
+        "path": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "status", "errors", "details", "required"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {"type": "string"},
+        "status": {"enum": ["pass", "fail", "unsupported", "partial"]},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "details": {"type": "object"},
+        "required": {"type": "boolean"}
+      }
+    },
+    "stateAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "index", "status", "started_at", "finished_at", "errors", "changed_paths", "evidence"],
+      "properties": {
+        "stage": {"enum": ["plan", "execute", "validate", "repair", "replan"]},
+        "index": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["pass", "fail", "unsupported", "partial"]},
+        "started_at": {"type": "string", "format": "date-time"},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "changed_paths": {"type": "array", "items": {"type": "string"}},
+        "evidence": {"type": "object"}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_tokens", "output_tokens", "cached_input_tokens", "reasoning_tokens", "total_tokens", "raw"],
+      "properties": {
+        "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "cached_input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "reasoning_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "total_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "raw": {"type": "object"}
+      }
+    },
+    "generationAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executor", "model", "success", "returncode", "duration_seconds", "usage", "failure_kind", "failure_message", "trace_path", "output_path", "metadata"],
+      "properties": {
+        "executor": {"type": "string"},
+        "model": {"type": "string"},
+        "success": {"type": "boolean"},
+        "returncode": {"type": ["integer", "null"]},
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "usage": {"$ref": "#/$defs/usage"},
+        "failure_kind": {"enum": ["none", "timeout", "rate_limit", "authentication", "network", "model_not_found", "context_limit", "executable_missing", "invalid_request", "cancelled", "process_error", "output_error", "empty_output", "unknown"]},
+        "failure_message": {"type": ["string", "null"]},
+        "trace_path": {"type": ["string", "null"]},
+        "output_path": {"type": ["string", "null"]},
+        "metadata": {"type": "object"}
+      }
+    }
   }
 }
-

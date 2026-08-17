@@ -20,6 +20,52 @@ PROXY_VARIABLES = (
     "all_proxy",
 )
 
+# Keep subprocesses functional without copying unrelated host credentials.
+INHERITED_ENVIRONMENT_ALLOWLIST = frozenset({
+    "APPDATA",
+    "COMSPEC",
+    "HOME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "LANG",
+    "LC_ALL",
+    "LOCALAPPDATA",
+    "NO_PROXY",
+    "NUMBER_OF_PROCESSORS",
+    "PATH",
+    "PATHEXT",
+    "PROCESSOR_ARCHITECTURE",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TZ",
+    "USERPROFILE",
+    "WINDIR",
+    *PROXY_VARIABLES,
+})
+
+ALLOWED_ENVIRONMENT_OVERRIDES = frozenset({
+    "ALL_PROXY",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "LANG",
+    "LC_ALL",
+    "NO_COLOR",
+    "NO_PROXY",
+    "OLLAMA_HOST",
+    "REQUESTS_CA_BUNDLE",
+    "SSL_CERT_FILE",
+    "TERM",
+    "TZ",
+    "all_proxy",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+})
+
 
 def _is_local_proxy(value: str) -> bool:
     normalized = value.lower().replace("[::1]", "localhost")
@@ -31,8 +77,15 @@ def clean_subprocess_environment(
     *,
     strip_local_proxies: bool = True,
 ) -> dict[str, str]:
-    env = dict(os.environ)
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() in INHERITED_ENVIRONMENT_ALLOWLIST
+    }
     if overrides:
+        rejected = sorted(set(overrides) - ALLOWED_ENVIRONMENT_OVERRIDES)
+        if rejected:
+            raise ValueError(f"environment overrides are not allowed: {', '.join(rejected)}")
         env.update({str(key): str(value) for key, value in overrides.items()})
     if strip_local_proxies:
         for name in PROXY_VARIABLES:

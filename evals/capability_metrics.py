@@ -8,13 +8,15 @@ coerced to zero, and broad semantic quality is never inferred from regexes.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from statistics import mean
 from typing import Any, Iterable, Mapping, Sequence
 
 
 QUALITY_COMPONENTS = (
     "objective_coverage",
-    "required_coverage",
+    "non_constraint_requirement_coverage",
+    "declared_quality_score",
     "constraint_compliance",
     "format_compliance",
     "path_compliance",
@@ -23,7 +25,8 @@ QUALITY_COMPONENTS = (
 
 NON_CONSTRAINT_COMPONENTS = (
     "objective_coverage",
-    "required_coverage",
+    "non_constraint_requirement_coverage",
+    "declared_quality_score",
     "format_compliance",
     "path_compliance",
     "artifact_contract",
@@ -71,6 +74,16 @@ def _component(record: Mapping[str, Any], name: str) -> float | None:
             "scores.required_enforcement_coverage",
             "score.required_enforcement_coverage",
             "required_enforcement_coverage",
+        ),
+        "non_constraint_requirement_coverage": (
+            "scores.non_constraint_requirement_coverage",
+            "score.non_constraint_requirement_coverage",
+            "non_constraint_requirement_coverage",
+        ),
+        "declared_quality_score": (
+            "scores.declared_quality_score",
+            "score.declared_quality_score",
+            "declared_quality_score",
         ),
         "constraint_compliance": (
             "scores.constraint_compliance",
@@ -134,10 +147,18 @@ def _token_cost(record: Mapping[str, Any]) -> float | None:
 class CapabilityPolicy:
     """Thresholds for flagging meaningful paired regressions."""
 
-    absolute_tolerance: float = 0.05
-    quality_retention_floor: float = 0.95
+    absolute_tolerance: float = 0.0
+    quality_retention_floor: float = 1.0
+    semantic_retention_floor: float = 1.0
+    minimum_semantic_reviewers: int = 2
     cost_ratio_ceiling: float = 2.0
     latency_ratio_ceiling: float = 2.0
+
+
+def _stable_key_value(value: Any) -> Any:
+    if isinstance(value, (Mapping, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return value
 
 
 def pair_key(record: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -148,8 +169,29 @@ def pair_key(record: Mapping[str, Any]) -> tuple[Any, ...]:
         record.get("model"),
         record.get("case_id", record.get("case")),
         record.get("repeat", record.get("run", 0)),
-        record.get("sampling_signature", record.get("signature_config")),
+        _stable_key_value(record.get("sampling_signature", record.get("signature_config"))),
     )
+
+
+def _semantic_evidence(
+    record: Mapping[str, Any], counterpart_variant: Any
+) -> Mapping[str, Any] | None:
+    score = record.get("score", record.get("scores", {}))
+    if isinstance(score, Mapping):
+        reviews = score.get("semantic_reviews")
+        if isinstance(reviews, Mapping):
+            review = reviews.get(str(counterpart_variant))
+            if isinstance(review, Mapping):
+                return review
+    value = _first_number(
+        record,
+        "scores.valid_information_retention",
+        "score.valid_information_retention",
+        "valid_information_retention",
+    )
+    if value is None:
+        return None
+    return {"status": "legacy", "overall": value, "reviewer_count": 0}
 
 
 def pair_results(
@@ -157,19 +199,19 @@ def pair_results(
 ) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
     """Pair successful baseline/variant rows; incomplete rows are not fabricated."""
 
-    baselines: dict[tuple[Any, ...], Mapping[str, Any]] = {}
+    baseline_groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = {}
     variants: list[Mapping[str, Any]] = []
     for record in records:
         if record.get("success") is False:
             continue
         if record.get("variant") == baseline_variant:
-            baselines[pair_key(record)] = record
+            baseline_groups.setdefault(pair_key(record), []).append(record)
         else:
             variants.append(record)
     return [
-        (baselines[pair_key(variant)], variant)
+        (baseline_groups[pair_key(variant)][0], variant)
         for variant in variants
-        if pair_key(variant) in baselines
+        if len(baseline_groups.get(pair_key(variant), [])) == 1
     ]
 
 
@@ -191,15 +233,21 @@ def score_capability_pair(
             if baseline_value is not None and variant_value is not None
             else None
         )
-        regression = delta is not None and delta < -policy.absolute_tolerance
+        missing_variant_evidence = baseline_value is not None and variant_value is None
+        regression = missing_variant_evidence or (
+            delta is not None and delta < -policy.absolute_tolerance
+        )
         if regression:
-            regressions.append(name)
+            regressions.append(
+                f"{name}:missing_variant_evidence" if missing_variant_evidence else name
+            )
         component_rows[name] = {
             "baseline": baseline_value,
             "variant": variant_value,
             "delta": delta,
             "retention_ratio": _ratio(variant_value, baseline_value),
             "supported": baseline_value is not None and variant_value is not None,
+            "missing_variant_evidence": missing_variant_evidence,
             "regression": regression,
         }
 
@@ -299,18 +347,45 @@ def score_capability_pair(
     ):
         regressions.append("quality")
 
-    baseline_information = _first_number(
-        baseline,
-        "scores.valid_information_retention",
-        "score.valid_information_retention",
-        "valid_information_retention",
+    baseline_evidence = _semantic_evidence(baseline, variant.get("variant"))
+    variant_evidence = _semantic_evidence(variant, baseline.get("variant"))
+    baseline_information = (
+        _number(baseline_evidence.get("overall"))
+        if isinstance(baseline_evidence, Mapping)
+        else None
     )
-    variant_information = _first_number(
-        variant,
-        "scores.valid_information_retention",
-        "score.valid_information_retention",
-        "valid_information_retention",
+    variant_information = (
+        _number(variant_evidence.get("overall"))
+        if isinstance(variant_evidence, Mapping)
+        else None
     )
+    accepted_statuses = {"accepted", "adjudicated"}
+    baseline_reviewed = bool(
+        isinstance(baseline_evidence, Mapping)
+        and baseline_evidence.get("status") in accepted_statuses
+        and int(baseline_evidence.get("reviewer_count", 0) or 0)
+        >= policy.minimum_semantic_reviewers
+    )
+    variant_reviewed = bool(
+        isinstance(variant_evidence, Mapping)
+        and variant_evidence.get("status") in accepted_statuses
+        and int(variant_evidence.get("reviewer_count", 0) or 0)
+        >= policy.minimum_semantic_reviewers
+    )
+    information_ratio = _ratio(variant_information, baseline_information)
+    semantic_status = (
+        "supported"
+        if baseline_reviewed and variant_reviewed
+        else "partial"
+        if baseline_evidence is not None or variant_evidence is not None
+        else "unsupported"
+    )
+    semantic_regression = (
+        information_ratio is not None
+        and information_ratio < policy.semantic_retention_floor
+    )
+    if semantic_regression:
+        regressions.append("semantic_quality")
 
     return {
         "pair": {
@@ -327,12 +402,9 @@ def score_capability_pair(
         "component_retention": component_rows,
         "behavioral_regressions": behavioral_regressions,
         "valid_information_retention": {
-            "status": (
-                "partial"
-                if baseline_information is not None and variant_information is not None
-                else "unsupported"
-            ),
-            "value": _ratio(variant_information, baseline_information),
+            "status": semantic_status,
+            "value": information_ratio,
+            "regression": semantic_regression,
             "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation.",
         },
         "cost_ratio": cost_ratio,
@@ -359,26 +431,39 @@ def aggregate_capability_metrics(
     expected_variants = [
         record for record in records if record.get("variant") != baseline_variant
     ]
+    row_counts: dict[tuple[tuple[Any, ...], Any], int] = {}
+    for record in records:
+        identity = (pair_key(record), record.get("variant"))
+        row_counts[identity] = row_counts.get(identity, 0) + 1
+    duplicate_rows = sum(count - 1 for count in row_counts.values() if count > 1)
+    ambiguous_baseline_keys = {
+        identity[0]
+        for identity, count in row_counts.items()
+        if identity[1] == baseline_variant and count > 1
+    }
 
     def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
         hits = sum(item["capability_regression_hit"] for item in items)
         efficiency_hits = sum(item["efficiency_regression_hit"] for item in items)
         components: dict[str, dict[str, Any]] = {}
         for name in QUALITY_COMPONENTS:
-            observed = [
+            component_rows = [
                 item["component_retention"][name]
                 for item in items
-                if item["component_retention"][name]["supported"]
             ]
-            regression_hits = sum(row["regression"] for row in observed)
+            observed = [row for row in component_rows if row["supported"]]
+            regression_hits = sum(row["regression"] for row in component_rows)
             components[name] = {
                 "observed_pairs": len(observed),
+                "missing_variant_evidence_hits": sum(
+                    row["missing_variant_evidence"] for row in component_rows
+                ),
                 "retention_ratio": _mean_observed(
                     row["retention_ratio"] for row in observed
                 ),
                 "regression_hits": regression_hits,
                 "regression_rate": (
-                    regression_hits / len(observed) if observed else None
+                    regression_hits / len(component_rows) if component_rows else None
                 ),
             }
         behavior: dict[str, dict[str, Any]] = {}
@@ -398,8 +483,15 @@ def aggregate_capability_metrics(
                 "regression_rate": sum(observed) / len(observed) if observed else None,
             }
         information_values = [
-            item["valid_information_retention"]["value"] for item in items
+            item["valid_information_retention"]["value"]
+            for item in items
+            if item["valid_information_retention"]["status"] == "supported"
         ]
+        semantic_observed = len(information_values)
+        semantic_regression_hits = sum(
+            bool(item["valid_information_retention"]["regression"])
+            for item in items
+        )
         return {
             "paired_rows": len(items),
             "quality_retention_ratio": _mean_observed(
@@ -419,6 +511,23 @@ def aggregate_capability_metrics(
             ),
             "behavioral_regressions": behavior,
             "valid_information_retention": _mean_observed(information_values),
+            "semantic_reviewed_pairs": semantic_observed,
+            "semantic_review_coverage": (
+                semantic_observed / len(items) if items else None
+            ),
+            "semantic_regression_hits": semantic_regression_hits,
+            "semantic_regression_rate": (
+                semantic_regression_hits / semantic_observed
+                if semantic_observed
+                else None
+            ),
+            "semantic_capability_status": (
+                "supported"
+                if items and semantic_observed == len(items)
+                else "partial"
+                if items
+                else "unsupported"
+            ),
             "cost_ratio": _mean_observed(item["cost_ratio"] for item in items),
             "latency_ratio": _mean_observed(item["latency_ratio"] for item in items),
         }
@@ -438,6 +547,19 @@ def aggregate_capability_metrics(
         metrics["pair_coverage"] = (
             metrics["paired_rows"] / eligible_rows if eligible_rows else None
         )
+        variant_row_counts = {
+            key: count
+            for key, count in row_counts.items()
+            if key[1] == variant
+        }
+        metrics["duplicate_rows"] = sum(
+            count - 1 for count in variant_row_counts.values() if count > 1
+        )
+        metrics["ambiguous_baseline_pairs"] = sum(
+            pair_key(record) in ambiguous_baseline_keys
+            for record in expected_variants
+            if record.get("variant") == variant
+        )
         by_variant[variant] = metrics
     return {
         "baseline_variant": baseline_variant,
@@ -445,7 +567,18 @@ def aggregate_capability_metrics(
         **aggregate,
         "missing_pair_rows": len(expected_variants) - len(scored),
         "pair_coverage": len(scored) / len(expected_variants) if expected_variants else None,
-        "semantic_capability_status": "partial" if scored else "unsupported",
+        "duplicate_rows": duplicate_rows,
+        "ambiguous_baseline_keys": len(ambiguous_baseline_keys),
+        "semantic_capability_status": (
+            "supported"
+            if scored and all(
+                item["valid_information_retention"]["status"] == "supported"
+                for item in scored
+            )
+            else "partial"
+            if scored
+            else "unsupported"
+        ),
         "by_variant": by_variant,
         "pairs": scored,
     }
@@ -454,34 +587,63 @@ def aggregate_capability_metrics(
 def evaluate_capability_acceptance(
     summary: Mapping[str, Any],
     candidate_variants: Sequence[str],
-    quality_retention_floor: float = 0.95,
+    quality_retention_floor: float = 1.0,
+    semantic_retention_floor: float = 1.0,
+    require_semantic_review: bool = False,
 ) -> dict[str, Any]:
     """Evaluate final candidates without making ablations release gates."""
 
     by_variant = summary.get("by_variant", {})
-    evaluated = [variant for variant in candidate_variants if variant in by_variant]
     failures: list[dict[str, Any]] = []
-    for variant in evaluated:
+    evaluated: list[str] = []
+    for variant in candidate_variants:
+        if variant not in by_variant:
+            failures.append({"variant": variant, "reasons": ["missing_candidate"]})
+            continue
+        evaluated.append(variant)
         metrics = by_variant[variant]
         quality = metrics.get("quality_retention_ratio")
         non_constraint = metrics.get("non_constraint_requirement_retention")
         reasons: list[str] = []
         if not metrics.get("paired_rows"):
             reasons.append("missing_pairs")
-        if metrics.get("pair_coverage") != 1.0:
+        if metrics.get("missing_pair_rows") or not metrics.get("eligible_rows"):
             reasons.append("incomplete_pair_coverage")
+        if metrics.get("duplicate_rows"):
+            reasons.append("duplicate_pair_rows")
+        if metrics.get("ambiguous_baseline_pairs"):
+            reasons.append("ambiguous_baseline_pairs")
         if quality is None or quality < quality_retention_floor:
             reasons.append("quality_retention")
         if non_constraint is None or non_constraint < quality_retention_floor:
             reasons.append("non_constraint_requirement_retention")
         if metrics.get("capability_regression_hit"):
             reasons.append("paired_regression")
+        if require_semantic_review:
+            if metrics.get("semantic_review_coverage") != 1.0:
+                reasons.append("incomplete_semantic_review_coverage")
+            semantic_retention = metrics.get("valid_information_retention")
+            if (
+                semantic_retention is None
+                or semantic_retention < semantic_retention_floor
+            ):
+                reasons.append("semantic_quality_retention")
+            if metrics.get("semantic_regression_hits"):
+                reasons.append("semantic_regression")
         if reasons:
             failures.append({"variant": variant, "reasons": reasons})
-    status = "unsupported" if not evaluated else ("fail" if failures else "pass")
+    status = (
+        "unsupported"
+        if not candidate_variants
+        else "fail"
+        if failures
+        else "pass"
+    )
     return {
         "status": status,
         "candidate_variants": evaluated,
         "quality_retention_floor": quality_retention_floor,
+        "semantic_retention_floor": semantic_retention_floor,
+        "semantic_review_required": require_semantic_review,
         "failures": failures,
     }

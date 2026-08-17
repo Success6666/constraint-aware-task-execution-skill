@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/generation-request.schema.json",
+  "title": "Constraint Exec Generation Request",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operation": {"enum": ["generate", "capabilities"]},
+    "executor": {"enum": ["codex", "ollama"]},
+    "prompt": {"type": "string", "minLength": 1, "maxLength": 1000000},
+    "model": {"type": "string", "minLength": 1, "maxLength": 256},
+    "cwd": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "workspace_root": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "artifact_root": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
+    "system_prompt": {"type": "string", "maxLength": 1000000},
+    "reasoning_effort": {"enum": ["low", "medium", "high", "xhigh"]},
+    "sandbox": {"enum": ["read-only", "workspace-write"]},
+    "trace_path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "output_path": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "output_schema": {"oneOf": [{"type": "object"}, {"type": "string", "minLength": 1, "maxLength": 4096}]},
+    "environment": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "enum": [
+          "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "LANG", "LC_ALL", "NO_COLOR", "NO_PROXY",
+          "OLLAMA_HOST", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "TERM", "TZ", "all_proxy", "http_proxy",
+          "https_proxy", "no_proxy"
+        ]
+      },
+      "additionalProperties": {"type": "string", "maxLength": 32768}
+    },
+    "metadata": {"type": "object"}
+  },
+  "oneOf": [
+    {
+      "properties": {"operation": {"const": "capabilities"}},
+      "required": ["operation"]
+    },
+    {
+      "properties": {"operation": {"enum": ["generate"]}},
+      "required": ["prompt"],
+      "allOf": [
+        {
+          "if": {"properties": {"executor": {"enum": ["codex"]}}},
+          "then": {"required": ["model"]}
+        }
+      ]
+    }
+  ]
+}

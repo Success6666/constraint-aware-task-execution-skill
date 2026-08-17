@@ -143,6 +143,11 @@ class OllamaCliExecutor(GenerationExecutor):
             else:
                 stdout, stderr = "", ""
         except OSError as error:
+            message = redact_text(str(error))
+            if request.trace_path:
+                atomic_write_text(request.trace_path, message + "\n")
+            if request.output_path:
+                atomic_write_text(request.output_path, "")
             return GenerationResult(
                 executor=self.name,
                 model=model,
@@ -151,8 +156,10 @@ class OllamaCliExecutor(GenerationExecutor):
                 failure_kind=classify_failure(
                     str(error), executable_missing=isinstance(error, FileNotFoundError)
                 ),
-                failure_message=redact_text(str(error)),
+                failure_message=message,
                 capabilities=self.capabilities,
+                trace_path=request.trace_path,
+                output_path=request.output_path,
                 metadata=request.metadata,
             )
 

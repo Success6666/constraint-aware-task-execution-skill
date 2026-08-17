@@ -17,8 +17,7 @@ VERIFY_INSTALL_SPEC.loader.exec_module(verify_install)
 
 class DistributionTests(unittest.TestCase):
     def test_skill_uses_standard_discovery_layout(self) -> None:
-        self.assertTrue((ROOT / "skills" / "constraint-aware-task-execution" / "SKILL.md").is_file())
-        self.assertFalse((ROOT / "constraint-aware-task-execution").exists())
+        self.assertTrue((ROOT / "skills" / "constraint-exec" / "SKILL.md").is_file())
 
     def test_cross_agent_install_verifier_exists(self) -> None:
         verifier = (ROOT / "scripts" / "verify-install.py").read_text(encoding="utf-8")

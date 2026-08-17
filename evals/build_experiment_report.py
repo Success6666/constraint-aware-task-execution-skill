@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from statistics import mean
-from typing import Any
+from typing import Any, Mapping
 
 try:
-    from .capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+    from .capability_metrics import CapabilityPolicy, aggregate_capability_metrics, evaluate_capability_acceptance
 except ImportError:  # Direct script execution.
-    from capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+    from capability_metrics import CapabilityPolicy, aggregate_capability_metrics, evaluate_capability_acceptance
 
 
 SCORE_METRICS = (
@@ -24,6 +24,9 @@ SCORE_METRICS = (
     "under_enforcement_hits",
     "overoptimization_score",
 )
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MANIFEST = ROOT / "evals" / "benchmark-manifest.json"
 
 
 def _average(rows: list[dict[str, Any]], metric: str) -> float | None:
@@ -59,14 +62,74 @@ def _normalize_matrix_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
+def _release_candidates(
+    payload: Mapping[str, Any], manifest: Mapping[str, Any] | None
+) -> list[str]:
+    explicit = payload.get("release_candidates")
+    if isinstance(explicit, list):
+        return [str(value) for value in explicit]
+    configured = (manifest or {}).get("release_candidates_by_experiment", {})
+    if isinstance(configured, Mapping):
+        experiment = str(payload.get("experiment", "unknown"))
+        selected = configured.get(experiment, configured.get("default", []))
+        if isinstance(selected, list):
+            return [str(value) for value in selected]
+    semantic_review = (manifest or {}).get("semantic_review", {})
+    if isinstance(semantic_review, Mapping):
+        selected = semantic_review.get("candidate_variants")
+        if isinstance(selected, list):
+            return [str(value) for value in selected]
+    return [
+        variant for variant in ("full-v2", "skill", "v1-full")
+        if variant in payload.get("variants", [])
+    ][:1]
+
+
+def _capability_acceptance(
+    capability: Mapping[str, Any], candidates: list[str], manifest: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    gates = (manifest or {}).get("release_gates", {})
+    if not isinstance(gates, Mapping):
+        gates = {}
+    semantic_review = (manifest or {}).get("semantic_review", {})
+    if not isinstance(semantic_review, Mapping):
+        semantic_review = {}
+    return evaluate_capability_acceptance(
+        capability,
+        candidates,
+        quality_retention_floor=float(gates.get("quality_retention_ratio_min", 1.0)),
+        semantic_retention_floor=float(
+            semantic_review.get(
+                "minimum_retention_ratio",
+                gates.get("semantic_quality_retention_min", 1.0),
+            )
+        ),
+        require_semantic_review=bool(
+            semantic_review.get(
+                "required_for_final_release",
+                gates.get("semantic_review_required", False),
+            )
+        ),
+    )
+
+
+def summarize_matrix(
+    payload: dict[str, Any], manifest: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     payload = _normalize_matrix_payload(payload)
     expected = _expected_keys(payload, "variants")
+    raw_rows = payload.get("results", [])
+    observed_keys = [
+        (row.get("model"), row.get("repeat"), row.get("variant"), row.get("case_id"))
+        for row in raw_rows
+    ]
     indexed = {
         (row.get("model"), row.get("repeat"), row.get("variant"), row.get("case_id")): row
-        for row in payload.get("results", [])
+        for row in raw_rows
     }
     missing = sorted(expected - set(indexed))
+    unexpected = sorted(set(indexed) - expected)
+    duplicate_rows = len(observed_keys) - len(set(observed_keys))
     failed = [row for row in indexed.values() if not row.get("success")]
     completed = [
         row for row in indexed.values()
@@ -96,13 +159,19 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
     plan_retry_rows = [row for row in indexed.values() if int(row.get("plan_retry_count", 0) or 0) > 0]
     artifact_retry_rows = [row for row in indexed.values() if int(row.get("artifact_retry_count", 0) or 0) > 0]
     observed = len(indexed)
-    capability = aggregate_capability_metrics(list(indexed.values()))
-    final_candidates = [
-        variant for variant in ("full-v2", "skill", "v1-full")
-        if variant in payload.get("variants", [])
-    ][:1]
-    capability["acceptance"] = evaluate_capability_acceptance(
-        capability, final_candidates
+    semantic_review = (manifest or {}).get("semantic_review", {})
+    minimum_reviewers = (
+        int(semantic_review.get("minimum_reviewers_per_pair", 2))
+        if isinstance(semantic_review, Mapping)
+        else 2
+    )
+    capability = aggregate_capability_metrics(
+        raw_rows,
+        policy=CapabilityPolicy(minimum_semantic_reviewers=minimum_reviewers),
+    )
+    final_candidates = _release_candidates(payload, manifest)
+    capability["acceptance"] = _capability_acceptance(
+        capability, final_candidates, manifest
     )
     capability_accepted = capability["acceptance"]["status"] == "pass"
     return {
@@ -113,8 +182,17 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
         "failed": len(failed),
         "unsupported": len(unsupported),
         "missing": len(missing),
-        "complete": len(completed) == len(expected) and not failed and not unsupported and not missing,
+        "complete": (
+            len(completed) == len(expected)
+            and not failed
+            and not unsupported
+            and not missing
+            and not unexpected
+            and not duplicate_rows
+        ),
         "missing_keys": [list(key) for key in missing],
+        "unexpected_keys": [list(key) for key in unexpected],
+        "duplicate_rows": duplicate_rows,
         "failures": [
             {
                 "model": row.get("model"),
@@ -138,6 +216,7 @@ def summarize_matrix(payload: dict[str, Any]) -> dict[str, Any]:
         "usage": usage,
         "capability_retention": capability,
         "capability_accepted": capability_accepted,
+        "pairwise_review": payload.get("pairwise_review"),
     }
 
 
@@ -189,8 +268,10 @@ def build_summary(
     runtimes: list[dict[str, Any]],
     validator: dict[str, Any] | None,
     protocols: list[dict[str, Any]] | None = None,
+    manifest: Mapping[str, Any] | None = None,
+    preflight: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    matrix_summaries = [summarize_matrix(payload) for payload in matrices]
+    matrix_summaries = [summarize_matrix(payload, manifest) for payload in matrices]
     runtime_summaries = [summarize_runtime(payload) for payload in runtimes]
     protocol_summaries = [summarize_protocol(payload) for payload in (protocols or [])]
     validator_complete = bool(
@@ -198,6 +279,7 @@ def build_summary(
         and validator.get("accuracy") == 1.0
         and not validator.get("failures")
     )
+    preflight_complete = bool(preflight and preflight.get("status") == "pass")
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "complete" if (
@@ -209,12 +291,15 @@ def build_summary(
             and all(item["complete"] for item in runtime_summaries)
             and all(item["complete"] for item in protocol_summaries)
             and validator_complete
+            and preflight_complete
         ) else "incomplete",
         "matrices": matrix_summaries,
         "runtimes": runtime_summaries,
         "protocols": protocol_summaries,
         "validator": validator,
         "validator_complete": validator_complete,
+        "preflight": dict(preflight) if preflight is not None else None,
+        "preflight_complete": preflight_complete,
     }
 
 
@@ -224,6 +309,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         f"- Status: `{summary['status']}`",
         f"- Generated: `{summary['generated_at']}`",
+        f"- Release preflight: `{'pass' if summary.get('preflight_complete') else 'fail'}`",
         "",
         "## Matrix Experiments",
         "",
@@ -266,19 +352,24 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 )
         if item["missing_keys"]:
             lines.extend(["", f"Missing rows: `{len(item['missing_keys'])}`."])
+        if item["unexpected_keys"]:
+            lines.extend(["", f"Unexpected rows: `{len(item['unexpected_keys'])}`."])
+        if item["duplicate_rows"]:
+            lines.extend(["", f"Duplicate rows: `{item['duplicate_rows']}`."])
         lines.append("")
         capability = item.get("capability_retention", {})
         lines.extend([
             "Capability retention (paired against `baseline`):",
             "",
-            "| Variant | Pairs | Quality Retention | Non-Constraint Retention | Valid Information | Regression Rate | Efficiency Regression | Cost Ratio | Latency Ratio |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| Variant | Pairs | Quality Retention | Non-Constraint Retention | Semantic Coverage | Valid Information | Regression Rate | Efficiency Regression | Cost Ratio | Latency Ratio |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ])
         for variant, metrics in capability.get("by_variant", {}).items():
             lines.append(
                 f"| `{variant}` | {metrics['paired_rows']}/{metrics['eligible_rows']} | "
                 f"{show_capability(metrics['quality_retention_ratio'])} | "
                 f"{show_capability(metrics['non_constraint_requirement_retention'])} | "
+                f"{show_capability(metrics['semantic_review_coverage'])} | "
                 f"{show_capability(metrics['valid_information_retention'])} | "
                 f"{show_capability(metrics['capability_regression_rate'])} | "
                 f"{show_capability(metrics['efficiency_regression_rate'])} | "
@@ -292,23 +383,56 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"General semantic capability status: `{capability.get('semantic_capability_status', 'unsupported')}`. "
             "Broad semantic preservation requires explicit evaluator observations; deterministic regex metrics provide only partial evidence.",
             f"Final-candidate capability acceptance: `{capability.get('acceptance', {}).get('status', 'unsupported')}`.",
+            f"Semantic review coverage required: `{capability.get('acceptance', {}).get('semantic_review_required', False)}`.",
             "",
         ])
+        acceptance_failures = capability.get("acceptance", {}).get("failures", [])
+        if acceptance_failures:
+            lines.append("Capability gate failures:")
+            lines.append("")
+            for failure in acceptance_failures:
+                reasons = ", ".join(failure.get("reasons", [])) or "unknown"
+                lines.append(f"- `{failure.get('variant', 'unknown')}`: `{reasons}`")
+            lines.append("")
+        pairwise = item.get("pairwise_review") or {}
+        if pairwise:
+            lines.extend([
+                "Pairwise review state:",
+                "",
+                f"- Reviewers: `{len(pairwise.get('reviewers', []))}`",
+                f"- Accepted pairs: `{pairwise.get('accepted_pairs', 0)}/{pairwise.get('available_pairs', 0)}`",
+                f"- Status counts: `{json.dumps(pairwise.get('status_counts', {}), sort_keys=True)}`",
+                "",
+            ])
+            unresolved = [
+                pair for pair in pairwise.get("pairs", [])
+                if pair.get("status") not in {"accepted", "adjudicated"}
+            ]
+            for pair in unresolved:
+                lines.append(
+                    f"- `{pair.get('review_id')}` / `{pair.get('case_id')}` / "
+                    f"`{pair.get('variant')}`: `{pair.get('status')}` "
+                    f"({', '.join(pair.get('disputed_dimensions', [])) or 'no completed dispute signal'})"
+                )
+            if unresolved:
+                lines.append("")
         for variant, metrics in capability.get("by_variant", {}).items():
             lines.extend([
                 f"Component and behavior retention for `{variant}`:",
                 "",
-                "| Signal | Observed Pairs | Retention / Regression Rate |",
-                "| --- | ---: | ---: |",
+                "| Signal | Observed Pairs | Missing Candidate Evidence | Retention / Regression Rate |",
+                "| --- | ---: | ---: | ---: |",
             ])
             for component, component_metrics in metrics.get("component_retention", {}).items():
                 lines.append(
                     f"| `{component}` retention | {component_metrics['observed_pairs']} | "
+                    f"{component_metrics['missing_variant_evidence_hits']} | "
                     f"{show_capability(component_metrics['retention_ratio'])} |"
                 )
             for behavior, behavior_metrics in metrics.get("behavioral_regressions", {}).items():
                 lines.append(
                     f"| `{behavior}` regression | {behavior_metrics['observed_pairs']} | "
+                    "0 | "
                     f"{show_capability(behavior_metrics['regression_rate'])} |"
                 )
             lines.append("")
@@ -364,6 +488,8 @@ def main() -> int:
     parser.add_argument("--runtime", type=Path, action="append", default=[])
     parser.add_argument("--protocol", type=Path, action="append", default=[])
     parser.add_argument("--validator", type=Path)
+    parser.add_argument("--preflight", type=Path)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
@@ -372,6 +498,8 @@ def main() -> int:
         [_load(path) for path in args.runtime],
         _load(args.validator) if args.validator else None,
         [_load(path) for path in args.protocol],
+        _load(args.manifest) if args.manifest else None,
+        _load(args.preflight) if args.preflight else None,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_markdown(summary), encoding="utf-8")

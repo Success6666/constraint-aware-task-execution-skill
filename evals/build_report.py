@@ -6,14 +6,15 @@ from pathlib import Path
 from statistics import mean
 
 try:
-    from .capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+    from .capability_metrics import CapabilityPolicy, aggregate_capability_metrics, evaluate_capability_acceptance
 except ImportError:  # Direct script execution.
-    from capability_metrics import aggregate_capability_metrics, evaluate_capability_acceptance
+    from capability_metrics import CapabilityPolicy, aggregate_capability_metrics, evaluate_capability_acceptance
 
 
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS_PATH = ROOT / "evals" / "results"
 CASES_PATH = ROOT / "evals" / "cases.json"
+MANIFEST_PATH = ROOT / "evals" / "benchmark-manifest.json"
 
 
 def average(rows: list[dict], key: str) -> float:
@@ -26,6 +27,9 @@ def reduction(before: float, after: float) -> float | None:
 
 def main() -> None:
     cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    gates = manifest.get("release_gates", {})
+    semantic_review = manifest.get("semantic_review", {})
     language_counts = Counter(case["language"] for case in cases)
     category_counts = Counter(case["category"] for case in cases)
     payload = json.loads((RESULTS_PATH / "scores.json").read_text(encoding="utf-8"))
@@ -75,8 +79,34 @@ def main() -> None:
         "languages": dict(sorted(language_counts.items())),
         "categories": dict(sorted(category_counts.items())),
     }
-    capability = aggregate_capability_metrics(payload["results"])
-    capability["acceptance"] = evaluate_capability_acceptance(capability, ["skill"])
+    capability = aggregate_capability_metrics(
+        payload["results"],
+        policy=CapabilityPolicy(
+            minimum_semantic_reviewers=int(
+                semantic_review.get("minimum_reviewers_per_pair", 2)
+            )
+        ),
+    )
+    candidates = manifest.get("release_candidates_by_experiment", {}).get(
+        "published-ab", ["skill"]
+    )
+    capability["acceptance"] = evaluate_capability_acceptance(
+        capability,
+        candidates,
+        quality_retention_floor=float(gates.get("quality_retention_ratio_min", 1.0)),
+        semantic_retention_floor=float(
+            semantic_review.get(
+                "minimum_retention_ratio",
+                gates.get("semantic_quality_retention_min", 1.0),
+            )
+        ),
+        require_semantic_review=bool(
+            semantic_review.get(
+                "required_for_final_release",
+                gates.get("semantic_review_required", False),
+            )
+        ),
+    )
     summary["capability_retention"] = capability
     (RESULTS_PATH / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
@@ -147,7 +177,13 @@ def main() -> None:
     adherence_after = skill.get("constraint_adherence", 0.0)
     pass_rate_not_lower = skill.get("evaluation_pass", 0.0) >= baseline.get("evaluation_pass", 0.0)
     adherence_not_lower = adherence_after >= adherence_before
-    if overoptimization_reduction is not None and pass_rate_not_lower and adherence_not_lower:
+    capability_accepted = capability.get("acceptance", {}).get("status") == "pass"
+    if (
+        overoptimization_reduction is not None
+        and pass_rate_not_lower
+        and adherence_not_lower
+        and capability_accepted
+    ):
         coverage_note = (
             "without reducing aggregate objective coverage"
             if coverage_after >= coverage_before
@@ -160,7 +196,7 @@ def main() -> None:
     else:
         lines.append(
             "No overall improvement claim is made because the qualified baseline score was zero, "
-            "or task/constraint pass rates decreased."
+            "task/constraint pass rates decreased, or the capability-retention gate did not pass."
         )
     lines.extend([
         "",
@@ -185,21 +221,24 @@ def main() -> None:
         f"- Capability regression rate: `{show_capability(capability_variant.get('capability_regression_rate'))}`",
         f"- Efficiency regression rate: `{show_capability(capability_variant.get('efficiency_regression_rate'))}`",
         f"- Valid information retention: `{show_capability(capability_variant.get('valid_information_retention'))}`",
+        f"- Semantic review coverage: `{show_capability(capability_variant.get('semantic_review_coverage'))}`",
         f"- Cost ratio: `{show_capability(capability_variant.get('cost_ratio'))}`",
         f"- Latency ratio: `{show_capability(capability_variant.get('latency_ratio'))}`",
         f"- General semantic capability: `{capability.get('semantic_capability_status', 'unsupported')}`",
         f"- Capability acceptance: `{capability.get('acceptance', {}).get('status', 'unsupported')}`",
+        f"- Semantic review required: `{capability.get('acceptance', {}).get('semantic_review_required', False)}`",
         "",
         "Only successful baseline/skill pairs enter retention denominators. Missing pairs are reported as coverage gaps, not zero scores. General semantic preservation remains partial unless an explicit semantic evaluator supplies observations.",
         "",
     ])
     lines.extend([
-        "| Component | Observed Pairs | Retention | Regression Rate |",
-        "| --- | ---: | ---: | ---: |",
+        "| Component | Observed Pairs | Missing Candidate Evidence | Retention | Regression Rate |",
+        "| --- | ---: | ---: | ---: | ---: |",
     ])
     for component, metrics in capability_variant.get("component_retention", {}).items():
         lines.append(
             f"| `{component}` | {metrics['observed_pairs']} | "
+            f"{metrics['missing_variant_evidence_hits']} | "
             f"{show_capability(metrics['retention_ratio'])} | "
             f"{show_capability(metrics['regression_rate'])} |"
         )
@@ -209,6 +248,12 @@ def main() -> None:
             f"- `{behavior}`: `{metrics['regression_hits']}/{metrics['observed_pairs']}` "
             f"(rate `{show_capability(metrics['regression_rate'])}`)"
         )
+    failures = capability.get("acceptance", {}).get("failures", [])
+    if failures:
+        lines.extend(["", "Capability gate failures:", ""])
+        for failure in failures:
+            reasons = ", ".join(failure.get("reasons", [])) or "unknown"
+            lines.append(f"- `{failure.get('variant', 'unknown')}`: `{reasons}`")
     lines.append("")
     (RESULTS_PATH / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
 

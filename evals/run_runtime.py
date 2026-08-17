@@ -78,18 +78,36 @@ def project_paths(workspace: Path) -> set[str]:
 
 
 def project_fingerprints(workspace: Path) -> dict[str, str]:
-    return {
-        relative: hashlib.sha256((workspace / relative).read_bytes()).hexdigest()
-        for relative in project_paths(workspace)
-    }
+    fingerprints: dict[str, str] = {}
+    for relative in project_paths(workspace):
+        path = workspace / relative
+        if path.is_symlink():
+            target = str(path.readlink())
+            fingerprints[relative] = hashlib.sha256(f"symlink:{target}".encode("utf-8")).hexdigest()
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        fingerprints[relative] = digest.hexdigest()
+    return fingerprints
 
 
 def changed_project_paths(before: dict[str, str], after: dict[str, str]) -> list[str]:
     return sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
 
 
-def validate_runtime(case: dict, workspace: Path) -> list[dict[str, Any]]:
-    return validate_workspace_contract(workspace, case["allowed_paths"], case["validators"])
+def validate_runtime(
+    case: dict,
+    workspace: Path,
+    changed_paths: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    return validate_workspace_contract(
+        workspace,
+        case["allowed_paths"],
+        case["validators"],
+        changed_paths=changed_paths,
+    )
 
 
 def runtime_prompt(case: dict, mode: str, plan_text: str | None = None, errors: list[str] | None = None) -> str:
@@ -103,7 +121,7 @@ def runtime_prompt(case: dict, mode: str, plan_text: str | None = None, errors: 
             + (f"\nVALIDATED_PLAN={plan_text}" if plan_text else "")
         )
     return (
-        ("Use $constraint-aware-task-execution. " if mode == "full-v2" else "")
+        ("Use $constraint-exec. " if mode == "full-v2" else "")
         + "Implement the user request in the current workspace. Create or modify only the allowed paths, run the "
         "relevant tests, and leave the working implementation in place. Do not discuss the experiment."
         f"\nALLOWED_PATHS={json.dumps(case['allowed_paths'])}"
@@ -154,7 +172,7 @@ def run_runtime_job(
                 issues = [{"code": "PLAN_CALL_FAILED", "path": "$"}]
                 continue
             previous = plan_path.read_text(encoding="utf-8")
-            _parsed, validation = parse_plan(previous)
+            _parsed, validation = parse_plan(previous, allow_legacy_aliases=False)
             attempt["validation"] = validation.to_dict()
             state.add_attempt(
                 Stage.PLAN,
@@ -197,7 +215,7 @@ def run_runtime_job(
         changed_paths=execute_changed,
         evidence={"call": call},
     )
-    validations = validate_runtime(case, workspace) if call["success"] else []
+    validations = validate_runtime(case, workspace, execute_changed) if call["success"] else []
     state.update_validations(validations)
     errors = [error for result in validations if result["status"] == "fail" for error in result["errors"]]
     unsupported = [result for result in validations if result["status"] == "unsupported"]
@@ -230,19 +248,27 @@ def run_runtime_job(
                 evidence={"call": repair},
             )
             if repair["success"]:
-                validations = validate_runtime(case, workspace)
+                validations = validate_runtime(
+                    case,
+                    workspace,
+                    changed_project_paths(before_execute, project_fingerprints(workspace)),
+                )
                 state.update_validations(validations)
                 errors = [error for result in validations if result["status"] == "fail" for error in result["errors"]]
                 unsupported = [result for result in validations if result["status"] == "unsupported"]
                 validation_status = "fail" if errors else ("unsupported" if unsupported else "pass")
                 state.add_attempt(Stage.VALIDATE, validation_status, errors=errors, evidence={"validations": validations})
-                if not errors:
+                if not errors and not unsupported:
                     repair_success = True
                     break
-    snapshot = {
-        path: (workspace / path).read_text(encoding="utf-8", errors="replace")
-        for path in sorted(project_paths(workspace))
-    }
+    snapshot: dict[str, str] = {}
+    for path in sorted(project_paths(workspace)):
+        artifact = workspace / path
+        snapshot[path] = (
+            f"<symlink:{artifact.readlink()}>"
+            if artifact.is_symlink()
+            else artifact.read_text(encoding="utf-8", errors="replace")
+        )
     snapshot_path = root / "artifacts" / base.with_suffix(".json")
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

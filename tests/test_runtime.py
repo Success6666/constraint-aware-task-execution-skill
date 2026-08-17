@@ -19,13 +19,17 @@ def plan(schema_version: str = "1.0") -> dict:
     return {
         "schema_version": schema_version,
         "objective": "Create config.json",
+        "requirements": [{
+            "id": "deliverable", "statement": "Create config.json",
+            "acceptance_criteria": ["config.json contains the requested data"],
+        }],
         "hard_constraints": [{
             "id": "path", "type": "hard", "statement": "Only config.json",
             "strategy": "Write config.json", "required_gate": False, "failure_action": "",
         }],
         "soft_preferences": [], "risk_points": [],
         "artifacts": [{"path": "config.json", "kind": "json"}],
-        "validation_profile": {"validators": [{"type": "json"}]},
+        "validation_profile": {"validators": [{"type": "json_schema"}]},
     }
 
 

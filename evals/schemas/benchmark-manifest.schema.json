@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/benchmark-manifest.schema.json",
+  "title": "Constraint Exec Benchmark Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "benchmark_id", "benchmark_version", "repository_version", "protocols", "pairing_key", "missing_sample_policy", "integrity_algorithm", "schemas", "datasets", "variants", "required_matrices", "required_checks", "semantic_review", "release_gates"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": "1.0"},
+    "benchmark_id": {"const": "constraint-exec"},
+    "benchmark_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "repository_version": {"type": "string", "minLength": 1},
+    "protocols": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution", "generation"],
+      "properties": {
+        "execution": {"const": "constraint-exec/v1"},
+        "generation": {"const": "constraint-exec-generation/v1"}
+      }
+    },
+    "pairing_key": {"const": ["executor", "model", "case_id", "repeat", "sampling_signature"]},
+    "missing_sample_policy": {"const": "exclude_and_report"},
+    "integrity_algorithm": {"const": "sha256"},
+    "schemas": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1},
+      "required": ["execution_plan", "generation_request", "generation_response", "runtime_request", "result", "score", "pairwise_review", "pairwise_review_key", "pairwise_adjudication", "release_experiment"]
+    },
+    "datasets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/dataset"}},
+    "variants": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "required_matrices": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/matrix"},
+      "required": ["primary", "secondary", "runtime"]
+    },
+    "required_checks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "semantic_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_for_final_release", "candidate_variants", "dimensions", "minimum_pair_coverage", "minimum_retention_ratio", "minimum_reviewers_per_pair", "maximum_dimension_delta_spread", "adjudication_required_on_disagreement", "mapping_key_must_be_separate"],
+      "properties": {
+        "required_for_final_release": {"const": true},
+        "candidate_variants": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "dimensions": {"const": ["correctness", "completeness", "usefulness", "requirement_retention"]},
+        "minimum_pair_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_retention_ratio": {"type": "number", "minimum": 0},
+        "minimum_reviewers_per_pair": {"type": "integer", "minimum": 2},
+        "maximum_dimension_delta_spread": {"type": "number", "minimum": 0},
+        "adjudication_required_on_disagreement": {"const": true},
+        "mapping_key_must_be_separate": {"const": true}
+      }
+    },
+    "release_gates": {
+      "type": "object",
+      "additionalProperties": {"type": ["boolean", "number", "integer"]},
+      "required": ["complete_required_matrices", "dataset_integrity_required", "schema_validation_required", "capability_regression_rate_max", "objective_coverage_not_below_baseline", "constraint_adherence_not_below_baseline", "required_enforcement_not_below_baseline", "functional_contract_not_below_baseline", "non_constraint_requirement_retention_not_below_baseline", "declared_quality_not_below_baseline", "gate_classifier_accuracy_min", "required_unsupported_count_max", "unredacted_secret_count_max"]
+    }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "kind", "declared_cases", "sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["answer", "artifact", "classification"]},
+        "declared_cases": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datasets", "minimum_models", "minimum_repeats"],
+      "properties": {
+        "datasets": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "variants": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "minimum_models": {"type": "integer", "minimum": 1},
+        "minimum_repeats": {"type": "integer", "minimum": 1}
+      },
+      "oneOf": [
+        {"required": ["variants"], "not": {"required": ["modes"]}},
+        {"required": ["modes"], "not": {"required": ["variants"]}}
+      ]
+    }
+  }
+}

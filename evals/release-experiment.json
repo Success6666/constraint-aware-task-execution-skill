@@ -1,0 +1,104 @@
+{
+  "$schema": "schemas/release-experiment.schema.json",
+  "schema_version": "1.0",
+  "release_candidate": "0.4.0-rc.2",
+  "experiment": "release-0.4.0-rc.2",
+  "output_root": "evals/experiments/releases",
+  "limits": {
+    "max_model_jobs": 600,
+    "max_model_invocations": 2400,
+    "step_timeout_seconds": 172800
+  },
+  "verification": {
+    "enabled": true
+  },
+  "deterministic": {
+    "enabled": true,
+    "protocol_max_attempts": 2
+  },
+  "matrices": [
+    {
+      "id": "primary",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "variants": [
+        "baseline",
+        "v1-full",
+        "remove-anti-overoptimization",
+        "remove-constraint-echo",
+        "positive-framing-only",
+        "structured-plan-only",
+        "plan-validation",
+        "full-v2"
+      ],
+      "repeats": 1,
+      "jobs": 3,
+      "timeout_seconds": 600,
+      "transport_attempts": 2,
+      "plan_attempts": 2,
+      "artifact_attempts": 2
+    },
+    {
+      "id": "secondary-terra",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "medium",
+      "variants": ["baseline", "v1-full", "full-v2"],
+      "repeats": 1,
+      "jobs": 3,
+      "timeout_seconds": 600,
+      "transport_attempts": 2,
+      "plan_attempts": 2,
+      "artifact_attempts": 2
+    },
+    {
+      "id": "secondary-55",
+      "executor": "codex",
+      "model": "gpt-5.5",
+      "reasoning_effort": "medium",
+      "variants": ["baseline", "v1-full", "full-v2"],
+      "repeats": 1,
+      "jobs": 3,
+      "timeout_seconds": 600,
+      "transport_attempts": 2,
+      "plan_attempts": 2,
+      "artifact_attempts": 2
+    },
+    {
+      "id": "local-qwen",
+      "executor": "ollama",
+      "model": "qwen3.5:9b",
+      "reasoning_effort": "medium",
+      "variants": ["baseline", "v1-full", "full-v2"],
+      "repeats": 1,
+      "jobs": 1,
+      "timeout_seconds": 900,
+      "transport_attempts": 2,
+      "plan_attempts": 2,
+      "artifact_attempts": 2
+    }
+  ],
+  "runtimes": [
+    {
+      "id": "primary-runtime",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "modes": ["direct", "full-v2"],
+      "repeats": 1,
+      "jobs": 2,
+      "timeout_seconds": 900,
+      "transport_attempts": 2,
+      "plan_attempts": 2,
+      "repair_attempts": 2
+    }
+  ],
+  "review": {
+    "candidate_variants": ["full-v2"],
+    "required_for_final_release": true,
+    "reviewers": ["reviewer-1", "reviewer-2"],
+    "minimum_reviewers_per_pair": 2,
+    "maximum_dimension_delta_spread": 0.2
+  }
+}

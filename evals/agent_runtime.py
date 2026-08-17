@@ -12,12 +12,14 @@ from typing import Any
 try:
     from .executors import GenerationRequest, create_executor
     from .redaction import atomic_write_json, redact_value
+    from .runtime_env import ALLOWED_ENVIRONMENT_OVERRIDES
 except ImportError:  # Supports `python evals/agent_runtime.py`.
     from executors import GenerationRequest, create_executor
     from redaction import atomic_write_json, redact_value
+    from runtime_env import ALLOWED_ENVIRONMENT_OVERRIDES
 
 
-PROTOCOL_VERSION = "constraint-aware-generation/v1"
+PROTOCOL_VERSION = "constraint-exec-generation/v1"
 SUPPORTED_EXECUTORS = ("codex", "ollama")
 SUPPORTED_SANDBOXES = ("read-only", "workspace-write")
 
@@ -112,8 +114,11 @@ def build_request(payload: Mapping[str, Any]) -> tuple[str, GenerationRequest]:
         raise RequestError(f"executor must be one of: {', '.join(SUPPORTED_EXECUTORS)}")
 
     base = Path.cwd().resolve()
+    workspace_root = _path(payload.get("workspace_root", str(base)), base=base, key="workspace_root")
     cwd_value = payload.get("cwd", str(base))
     cwd = _path(cwd_value, base=base, key="cwd")
+    if cwd != workspace_root and workspace_root not in cwd.parents:
+        raise RequestError("cwd must stay within workspace_root")
     if not cwd.is_dir():
         raise RequestError(f"cwd does not exist or is not a directory: {cwd}")
 
@@ -141,6 +146,11 @@ def build_request(payload: Mapping[str, Any]) -> tuple[str, GenerationRequest]:
         isinstance(key, str) and isinstance(value, str) for key, value in environment.items()
     ):
         raise RequestError("environment must be an object containing string values")
+    rejected_environment = sorted(set(environment) - ALLOWED_ENVIRONMENT_OVERRIDES)
+    if rejected_environment:
+        raise RequestError(
+            "environment contains unsupported overrides: " + ", ".join(rejected_environment)
+        )
     if not isinstance(metadata, dict):
         raise RequestError("metadata must be an object")
 

@@ -15,5 +15,4 @@ Constraint handling succeeds only when the useful task remains complete. Compare
 
 A candidate has a capability regression when it loses a required function, independent requirement, format/path contract, executable artifact contract, or declared quality floor that the paired baseline satisfied. An over-optimization improvement never offsets such a regression.
 
-Do not use output length, section count, or keyword count alone as a quality proxy. Missing, failed, or unmatched pairs are coverage gaps and must not be converted to zero-valued observations. For semantics without deterministic evidence, retain an optional blinded pairwise review field and report `partial` or `unsupported`.
-
+Do not use output length, section count, or keyword count alone as a quality proxy. Missing, failed, or unmatched pairs are coverage gaps and must not be converted to zero-valued observations. For semantics without deterministic evidence, use blinded pairwise review. Require two independent reviewers for final release evidence, adjudicate material disagreement, and report incomplete review coverage as `partial` or `unsupported`.

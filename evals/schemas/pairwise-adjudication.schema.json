@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://constraint-exec.local/schemas/pairwise-adjudication.schema.json",
+  "title": "Pairwise Capability Review Adjudications",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "adjudications"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "adjudications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["review_id", "adjudicator_id", "baseline_scores", "candidate_scores", "notes"],
+        "properties": {
+          "review_id": {"type": "string", "pattern": "^[0-9a-f]{20}$"},
+          "adjudicator_id": {"type": "string", "minLength": 1},
+          "baseline_scores": {"$ref": "#/$defs/sideScore"},
+          "candidate_scores": {"$ref": "#/$defs/sideScore"},
+          "notes": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sideScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctness", "completeness", "usefulness", "requirement_retention"],
+      "properties": {
+        "correctness": {"type": "number", "minimum": 1, "maximum": 5},
+        "completeness": {"type": "number", "minimum": 1, "maximum": 5},
+        "usefulness": {"type": "number", "minimum": 1, "maximum": 5},
+        "requirement_retention": {"type": "number", "minimum": 1, "maximum": 5}
+      }
+    }
+  }
+}

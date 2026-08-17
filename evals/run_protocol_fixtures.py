@@ -20,6 +20,11 @@ def valid_plan() -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "objective": "Produce a validated artifact",
+        "requirements": [{
+            "id": "deliverable",
+            "statement": "Produce one JSON artifact",
+            "acceptance_criteria": ["response.json parses as JSON"],
+        }],
         "hard_constraints": [{
             "id": "format",
             "type": "hard",
@@ -31,7 +36,7 @@ def valid_plan() -> dict[str, Any]:
         "soft_preferences": [],
         "risk_points": [],
         "artifacts": [{"path": "response.json", "kind": "json"}],
-        "validation_profile": {"validators": [{"type": "json"}]},
+        "validation_profile": {"validators": [{"type": "json_schema"}]},
     }
 
 

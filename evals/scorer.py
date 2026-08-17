@@ -92,6 +92,8 @@ class Score:
     evaluation_pass: bool
     required_pass: bool
     objective_coverage: float
+    non_constraint_requirement_coverage: float | None
+    declared_quality_score: float | None
     required_coverage: float
     missing_objective_markers: int
     constraint_adherence: float
@@ -315,6 +317,18 @@ def path_scope_compliance(case: dict, response: str) -> tuple[float, int]:
 def score_response(case: dict, response: str) -> Score:
     normalized = response.casefold()
     coverage, missing = marker_coverage(response, case["objective_markers"])
+    non_constraint_markers = case.get("non_constraint_requirement_markers")
+    non_constraint_coverage = (
+        marker_coverage(response, non_constraint_markers)[0]
+        if isinstance(non_constraint_markers, list)
+        else None
+    )
+    declared_quality_patterns = case.get("declared_quality_patterns")
+    declared_quality_score = (
+        regex_group_coverage(response, declared_quality_patterns)
+        if isinstance(declared_quality_patterns, list)
+        else None
+    )
     forbidden_terms = case.get("forbidden_adoption_terms", [])
     violation_hits = adoption_hits(
         response, forbidden_terms, case.get("constraint_violation_patterns", []),
@@ -373,6 +387,16 @@ def score_response(case: dict, response: str) -> Score:
         evaluation_pass=evaluation_pass,
         required_pass=required_pass,
         objective_coverage=round(coverage, 4),
+        non_constraint_requirement_coverage=(
+            round(non_constraint_coverage, 4)
+            if non_constraint_coverage is not None
+            else None
+        ),
+        declared_quality_score=(
+            round(declared_quality_score, 4)
+            if declared_quality_score is not None
+            else None
+        ),
         required_coverage=round(enforcement_coverage, 4),
         missing_objective_markers=missing,
         constraint_adherence=round(adherence, 4),
@@ -385,7 +409,7 @@ def score_response(case: dict, response: str) -> Score:
         artifact_contract=None,
         valid_information_retention=None,
         observations=capability_observations(case, response),
-        semantic_capability_status="partial",
+        semantic_capability_status="unsupported",
         failure_gate_hits=gate_hits,
         constraint_component_hits=component_hits,
         constraint_echo=echo_mentions,
