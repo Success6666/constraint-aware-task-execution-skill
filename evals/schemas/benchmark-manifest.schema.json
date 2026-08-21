@@ -60,7 +60,12 @@
     "release_gates": {
       "type": "object",
       "additionalProperties": {"type": ["boolean", "number", "integer"]},
-      "required": ["complete_required_matrices", "dataset_integrity_required", "schema_validation_required", "capability_regression_rate_max", "objective_coverage_not_below_baseline", "constraint_adherence_not_below_baseline", "required_enforcement_not_below_baseline", "functional_contract_not_below_baseline", "non_constraint_requirement_retention_not_below_baseline", "declared_quality_not_below_baseline", "gate_classifier_accuracy_min", "required_unsupported_count_max", "unredacted_secret_count_max"]
+      "required": ["complete_required_matrices", "dataset_integrity_required", "schema_validation_required", "capability_regression_rate_max", "token_cost_ratio_max", "latency_ratio_max", "efficiency_evidence_required", "objective_coverage_not_below_baseline", "constraint_adherence_not_below_baseline", "required_enforcement_not_below_baseline", "functional_contract_not_below_baseline", "non_constraint_requirement_retention_not_below_baseline", "declared_quality_not_below_baseline", "gate_classifier_accuracy_min", "required_unsupported_count_max", "unredacted_secret_count_max"],
+      "properties": {
+        "token_cost_ratio_max": {"type": "number", "minimum": 0},
+        "latency_ratio_max": {"type": "number", "minimum": 0},
+        "efficiency_evidence_required": {"type": "boolean"}
+      }
     }
   },
   "$defs": {

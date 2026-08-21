@@ -84,7 +84,9 @@ def main() -> None:
         policy=CapabilityPolicy(
             minimum_semantic_reviewers=int(
                 semantic_review.get("minimum_reviewers_per_pair", 2)
-            )
+            ),
+            cost_ratio_ceiling=float(gates.get("token_cost_ratio_max", 1.0)),
+            latency_ratio_ceiling=float(gates.get("latency_ratio_max", 2.0)),
         ),
     )
     candidates = manifest.get("release_candidates_by_experiment", {}).get(
@@ -107,6 +109,11 @@ def main() -> None:
                 gates.get("semantic_review_required", False),
             )
         ) and any(candidate in semantic_candidates for candidate in candidates),
+        cost_ratio_ceiling=float(gates.get("token_cost_ratio_max", 1.0)),
+        latency_ratio_ceiling=float(gates.get("latency_ratio_max", 2.0)),
+        require_efficiency_evidence=bool(
+            gates.get("efficiency_evidence_required", True)
+        ),
     )
     summary["capability_retention"] = capability
     (RESULTS_PATH / "summary.json").write_text(

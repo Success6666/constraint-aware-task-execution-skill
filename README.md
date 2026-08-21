@@ -2,7 +2,7 @@
 
 An Agent Skill that keeps the user's primary objective ahead of negative constraints and soft preferences. It reduces the tendency to replace useful work with extra guards, scanners, policy layers, rejection paths, or repeated compliance commentary.
 
-Current repository version: `0.4.0-rc.8`. This prerelease adds grounded minimal plan fallback telemetry, strict capability-retention detection, bounded parallel release execution, and conservative multilingual adoption detection; final promotion remains gated by the full model matrix and blinded semantic review.
+Current repository version: `0.4.0-rc.9`. This prerelease makes the compact, single-call `v1-full` Skill the release candidate, keeps structured planning as an explicit Runtime mode, and blocks release on capability, token-cost, latency, or evidence regressions. Final promotion remains gated by the complete model matrix and blinded semantic review.
 
 ## Measured Result
 

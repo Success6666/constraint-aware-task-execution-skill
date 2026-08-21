@@ -110,6 +110,11 @@ def _capability_acceptance(
                 gates.get("semantic_review_required", False),
             )
         ),
+        cost_ratio_ceiling=float(gates.get("token_cost_ratio_max", 1.0)),
+        latency_ratio_ceiling=float(gates.get("latency_ratio_max", 2.0)),
+        require_efficiency_evidence=bool(
+            gates.get("efficiency_evidence_required", True)
+        ),
     )
 
 
@@ -168,9 +173,16 @@ def summarize_matrix(
         if isinstance(semantic_review, Mapping)
         else 2
     )
+    gates = (manifest or {}).get("release_gates", {})
+    if not isinstance(gates, Mapping):
+        gates = {}
     capability = aggregate_capability_metrics(
         raw_rows,
-        policy=CapabilityPolicy(minimum_semantic_reviewers=minimum_reviewers),
+        policy=CapabilityPolicy(
+            minimum_semantic_reviewers=minimum_reviewers,
+            cost_ratio_ceiling=float(gates.get("token_cost_ratio_max", 1.0)),
+            latency_ratio_ceiling=float(gates.get("latency_ratio_max", 2.0)),
+        ),
     )
     final_candidates = _release_candidates(payload, manifest)
     capability["acceptance"] = _capability_acceptance(

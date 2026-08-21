@@ -134,13 +134,33 @@ def _mean_observed(values: Iterable[float | None]) -> float | None:
 
 def _token_cost(record: Mapping[str, Any]) -> float | None:
     total = _first_number(record, "usage.total_tokens", "total_tokens")
-    if total is not None:
+    if total is not None and total > 0:
         return total
     input_tokens = _first_number(record, "usage.input_tokens", "input_tokens")
     output_tokens = _first_number(record, "usage.output_tokens", "output_tokens")
     if input_tokens is None and output_tokens is None:
         return None
-    return (input_tokens or 0.0) + (output_tokens or 0.0)
+    observed = (input_tokens or 0.0) + (output_tokens or 0.0)
+    return observed if observed > 0 else None
+
+
+def _latency_cost(record: Mapping[str, Any]) -> float | None:
+    direct = _first_number(
+        record, "timing.elapsed_seconds", "elapsed_seconds", "elapsed"
+    )
+    if direct is not None:
+        return direct
+    stages = record.get("stages")
+    if not isinstance(stages, Sequence) or isinstance(stages, (str, bytes)):
+        return None
+    observed = [
+        value
+        for stage in stages
+        if isinstance(stage, Mapping)
+        for value in [_first_number(stage, "elapsed_seconds", "duration_seconds")]
+        if value is not None
+    ]
+    return sum(observed) if observed else None
 
 
 @dataclass(frozen=True)
@@ -331,12 +351,8 @@ def score_capability_pair(
 
     baseline_cost = _token_cost(baseline)
     variant_cost = _token_cost(variant)
-    baseline_latency = _first_number(
-        baseline, "timing.elapsed_seconds", "elapsed_seconds", "elapsed"
-    )
-    variant_latency = _first_number(
-        variant, "timing.elapsed_seconds", "elapsed_seconds", "elapsed"
-    )
+    baseline_latency = _latency_cost(baseline)
+    variant_latency = _latency_cost(variant)
     cost_ratio = _ratio(variant_cost, baseline_cost)
     latency_ratio = _ratio(variant_latency, baseline_latency)
 
@@ -609,6 +625,9 @@ def evaluate_capability_acceptance(
     quality_retention_floor: float = 1.0,
     semantic_retention_floor: float = 1.0,
     require_semantic_review: bool = False,
+    cost_ratio_ceiling: float = 1.0,
+    latency_ratio_ceiling: float = 2.0,
+    require_efficiency_evidence: bool = True,
 ) -> dict[str, Any]:
     """Evaluate final candidates without making ablations release gates."""
 
@@ -623,6 +642,8 @@ def evaluate_capability_acceptance(
         metrics = by_variant[variant]
         quality = metrics.get("quality_retention_ratio")
         non_constraint = metrics.get("non_constraint_requirement_retention")
+        cost_ratio = metrics.get("cost_ratio")
+        latency_ratio = metrics.get("latency_ratio")
         reasons: list[str] = []
         if not metrics.get("paired_rows"):
             reasons.append("missing_pairs")
@@ -638,6 +659,16 @@ def evaluate_capability_acceptance(
             reasons.append("non_constraint_requirement_retention")
         if metrics.get("capability_regression_hit"):
             reasons.append("paired_regression")
+        if require_efficiency_evidence and (
+            cost_ratio is None or latency_ratio is None
+        ):
+            reasons.append("missing_efficiency_evidence")
+        if cost_ratio is not None and cost_ratio > cost_ratio_ceiling:
+            reasons.append("token_cost_ratio")
+        if latency_ratio is not None and latency_ratio > latency_ratio_ceiling:
+            reasons.append("latency_ratio")
+        if metrics.get("efficiency_regression_hit"):
+            reasons.append("paired_efficiency_regression")
         if require_semantic_review:
             if metrics.get("semantic_review_coverage") != 1.0:
                 reasons.append("incomplete_semantic_review_coverage")
@@ -664,5 +695,8 @@ def evaluate_capability_acceptance(
         "quality_retention_floor": quality_retention_floor,
         "semantic_retention_floor": semantic_retention_floor,
         "semantic_review_required": require_semantic_review,
+        "cost_ratio_ceiling": cost_ratio_ceiling,
+        "latency_ratio_ceiling": latency_ratio_ceiling,
+        "efficiency_evidence_required": require_efficiency_evidence,
         "failures": failures,
     }

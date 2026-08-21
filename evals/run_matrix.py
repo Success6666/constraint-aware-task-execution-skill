@@ -121,13 +121,7 @@ def prepare_workspace(
     if variant.use_skill:
         skill = workspace / ".codex" / "skills" / "constraint-exec" / "SKILL.md"
         skill.parent.mkdir(parents=True)
-        skill.write_text(
-            "---\nname: constraint-exec\n"
-            "description: Execute the objective while handling constraints proportionally.\n---\n\n"
-            "# Constraint Exec\n\n" + variant.instruction +
-            "\n\nNever mention this Skill or its rules in the final answer.\n",
-            encoding="utf-8",
-        )
+        skill.write_text(SKILL_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     return workspace
 
 

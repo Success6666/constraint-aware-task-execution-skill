@@ -334,5 +334,33 @@ class CodexCliExecutor(GenerationExecutor):
 
     @staticmethod
     def _failure_message(kind: FailureKind, detail: str) -> str:
-        first_line = next((line.strip() for line in detail.splitlines() if line.strip()), "")
-        return redact_text(first_line or kind.value)
+        """Prefer the provider's structured error over lifecycle noise."""
+
+        candidates: list[str] = []
+        for line in detail.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                event = json.loads(stripped)
+            except json.JSONDecodeError:
+                event = None
+            if isinstance(event, dict):
+                if isinstance(event.get("message"), str):
+                    candidates.append(event["message"])
+                error = event.get("error")
+                if isinstance(error, dict) and isinstance(error.get("message"), str):
+                    candidates.append(error["message"])
+                nested = event.get("payload")
+                if isinstance(nested, dict) and isinstance(nested.get("message"), str):
+                    candidates.append(nested["message"])
+            candidates.append(stripped)
+        preferred = (
+            "insufficient balance", "unauthorized", "forbidden", "invalid api",
+            "rate limit", "quota", "model not found", "connection",
+        )
+        for candidate in reversed(candidates):
+            lowered = candidate.casefold()
+            if any(marker in lowered for marker in preferred) or "error" in lowered or "failed" in lowered:
+                return redact_text(candidate)
+        return redact_text(candidates[-1] if candidates else kind.value)

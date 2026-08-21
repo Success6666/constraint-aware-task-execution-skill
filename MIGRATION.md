@@ -2,7 +2,7 @@
 
 ## Version status
 
-`0.4.0-rc.8` is the stabilized cross-model planning candidate. Keep `v0.3.0` and earlier release results immutable and write new experiments under a distinct `--experiment` directory. Promote to `0.4.0` only after the complete model matrices and blinded semantic review satisfy the task acceptance gates.
+`0.4.0-rc.9` separates the compact single-call Skill from the optional structured Runtime. `v1-full` is the ordinary-use release candidate; `full-v2` remains an explicit plan/validate/repair mode whose additional token and latency costs are reported separately. Keep prior release results immutable and promote to `0.4.0` only after the complete model matrices and blinded semantic review satisfy all capability and efficiency gates.
 
 ## Skill rename
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0-rc.9 - 2026-08-21
+
+- Reduced the ordinary Skill entrypoint to the decision rules that materially affect constraint handling.
+- Made `v1-full` the single-call release candidate and retained structured planning as an explicit Runtime mode.
+- Added strict token-cost, latency, and efficiency-evidence release gates alongside zero capability regression.
+- Made matrix workspaces install the real published Skill instead of an evaluation-only substitute.
+- Improved Codex provider failure extraction so authentication, balance, and routing failures are not misreported as model behavior.
+- Added regression coverage for efficiency gates, staged latency accounting, compact Skill structure, and provider diagnostics.
+
 ## 0.4.0-rc.8 - 2026-08-17
 
 - Fixed multilingual adoption false positives for negated, quoted, documented, and replacement mentions of forbidden technologies.

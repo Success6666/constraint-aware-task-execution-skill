@@ -1,8 +1,8 @@
 {
   "$schema": "schemas/release-experiment.schema.json",
   "schema_version": "1.0",
-  "release_candidate": "0.4.0-rc.8",
-  "experiment": "release-0.4.0-rc.8",
+  "release_candidate": "0.4.0-rc.9",
+  "experiment": "release-0.4.0-rc.9",
   "output_root": "evals/experiments/releases",
   "limits": {
     "max_model_jobs": 600,
@@ -110,7 +110,7 @@
     }
   ],
   "review": {
-    "candidate_variants": ["full-v2"],
+    "candidate_variants": ["v1-full"],
     "required_for_final_release": true,
     "reviewers": ["reviewer-1", "reviewer-2"],
     "minimum_reviewers_per_pair": 2,

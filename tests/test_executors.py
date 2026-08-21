@@ -112,6 +112,23 @@ class OllamaExecutorTests(unittest.TestCase):
 
 
 class CodexExecutorTests(unittest.TestCase):
+    def test_failure_message_prefers_provider_error_over_lifecycle_events(self) -> None:
+        detail = "\n".join((
+            json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
+            json.dumps({"type": "error", "message": "403 Forbidden: insufficient balance"}),
+            json.dumps({
+                "type": "turn.failed",
+                "error": {"message": "403 Forbidden: insufficient balance"},
+            }),
+        ))
+
+        message = codex_cli.CodexCliExecutor._failure_message(
+            FailureKind.AUTHENTICATION, detail
+        )
+
+        self.assertIn("insufficient balance", message)
+        self.assertNotIn("thread.started", message)
+
     def test_command_binds_workspace_write_sandbox_to_request_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             cwd = Path(directory)

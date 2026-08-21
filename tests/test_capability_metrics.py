@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from evals.capability_metrics import aggregate_capability_metrics, pair_results
+from evals.capability_metrics import (
+    CapabilityPolicy,
+    aggregate_capability_metrics,
+    evaluate_capability_acceptance,
+    pair_results,
+)
 
 
 def row(variant: str, *, success: bool, objective: float, compliance: float) -> dict:
@@ -48,6 +53,54 @@ class CapabilityMetricTests(unittest.TestCase):
         }
 
         self.assertEqual(pair_results([baseline, candidate]), [])
+
+    def test_token_growth_fails_release_acceptance(self) -> None:
+        baseline = row("baseline", success=True, objective=1.0, compliance=1.0)
+        candidate = row("full-v2", success=True, objective=1.0, compliance=1.0)
+        baseline.update({"usage": {"input_tokens": 60, "output_tokens": 40}, "elapsed_seconds": 1.0})
+        candidate.update({"usage": {"input_tokens": 70, "output_tokens": 40}, "elapsed_seconds": 1.0})
+
+        summary = aggregate_capability_metrics(
+            [baseline, candidate],
+            policy=CapabilityPolicy(cost_ratio_ceiling=1.0),
+        )
+        acceptance = evaluate_capability_acceptance(
+            summary,
+            ["full-v2"],
+            cost_ratio_ceiling=1.0,
+        )
+
+        self.assertEqual(acceptance["status"], "fail")
+        self.assertIn("token_cost_ratio", acceptance["failures"][0]["reasons"])
+        self.assertIn("paired_efficiency_regression", acceptance["failures"][0]["reasons"])
+
+    def test_missing_efficiency_evidence_does_not_pass(self) -> None:
+        baseline = row("baseline", success=True, objective=1.0, compliance=1.0)
+        candidate = row("full-v2", success=True, objective=1.0, compliance=1.0)
+
+        summary = aggregate_capability_metrics([baseline, candidate])
+        acceptance = evaluate_capability_acceptance(summary, ["full-v2"])
+
+        self.assertEqual(acceptance["status"], "fail")
+        self.assertIn(
+            "missing_efficiency_evidence", acceptance["failures"][0]["reasons"]
+        )
+
+    def test_stage_latencies_are_summed_for_ratio(self) -> None:
+        baseline = row("baseline", success=True, objective=1.0, compliance=1.0)
+        candidate = row("full-v2", success=True, objective=1.0, compliance=1.0)
+        baseline.update({
+            "usage": {"input_tokens": 60, "output_tokens": 40},
+            "stages": [{"elapsed_seconds": 0.4}, {"elapsed_seconds": 0.6}],
+        })
+        candidate.update({
+            "usage": {"input_tokens": 60, "output_tokens": 40},
+            "stages": [{"elapsed_seconds": 0.5}, {"elapsed_seconds": 1.0}],
+        })
+
+        summary = aggregate_capability_metrics([baseline, candidate])
+
+        self.assertEqual(summary["by_variant"]["full-v2"]["latency_ratio"], 1.5)
 
 
 if __name__ == "__main__":
