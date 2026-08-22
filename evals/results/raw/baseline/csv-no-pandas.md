@@ -1,108 +1,97 @@
-Build a small Python CLI using only the standard library.
+Design a small Python CLI using only the standard library.
 
 **Command**
 
 ```bash
-python sales_summary.py \
-  --input sales.csv \
-  --output monthly_summary.csv \
+python sales_summary.py input.csv summary.csv \
   --date-column date \
   --product-column product \
-  --quantity-column quantity \
   --amount-column amount
 ```
 
-**Input assumptions**
+Optional flags:
 
-The CSV contains one sale per row, for example:
-
-```csv
-date,product,quantity,amount
-2026-01-03,Widget A,2,19.98
-2026-01-18,Widget B,1,12.50
-2026-02-02,Widget A,3,29.97
+```text
+--delimiter ","          CSV delimiter
+--encoding utf-8         Input encoding
+--month-format "%Y-%m"   Grouping format
+--strict                 Fail on malformed rows
 ```
-
-Define whether `amount` means the row’s total sale value or unit price. Prefer treating it as the row total unless a separate `unit_price` column is provided.
 
 **Processing flow**
 
-1. Parse command-line arguments with `argparse`.
-2. Open the input with `newline=""` and an explicit encoding such as UTF-8.
-3. Read rows with `csv.DictReader`.
-4. Validate required columns and reject malformed rows with clear line-numbered errors:
-   - missing date, product, quantity, or amount
-   - invalid date format
-   - non-numeric or negative quantity
-   - non-numeric amount
-5. Convert each date to a month key such as `2026-01` using `datetime.strptime`.
-6. Group records by `(product, month)`.
-7. Accumulate:
-   - `total_quantity`
-   - `total_sales`
-   - `transaction_count`
-8. Sort output by month, then product.
-9. Write the summary with `csv.DictWriter`.
-
-A `defaultdict` is sufficient for grouping:
+1. Open the input with `newline=""` and the selected encoding.
+2. Parse rows with `csv.DictReader`.
+3. Validate that the required columns exist.
+4. For each row:
+   - Parse the date with `datetime.date.fromisoformat()` or a documented accepted format.
+   - Normalize it to `YYYY-MM`.
+   - Parse the sales amount as `Decimal`, avoiding floating-point rounding errors.
+   - Reject or report missing, invalid, or negative values according to `--strict`.
+5. Aggregate by `(product, month)` using a dictionary:
 
 ```python
-groups[(product, month)]["total_quantity"] += quantity
-groups[(product, month)]["total_sales"] += amount
-groups[(product, month)]["transaction_count"] += 1
+totals[(product, month)] += amount
 ```
+
+6. Export sorted results to the output CSV.
 
 **Output format**
 
 ```csv
-month,product,total_quantity,total_sales,transaction_count
-2026-01,Widget A,2,19.98,1
-2026-01,Widget B,1,12.50,1
-2026-02,Widget A,3,29.97,1
+product,month,total_sales
+Widget A,2026-01,1250.50
+Widget A,2026-02,980.00
+Widget B,2026-01,430.25
 ```
 
-Use `Decimal` for monetary values rather than `float`, and format totals to two decimal places when exporting.
+Use a fixed two-decimal representation when writing totals.
 
-**Recommended structure**
+**Suggested module structure**
 
 ```text
-sales_summary.py
+sales_summary/
+  __init__.py
+  cli.py          # argparse setup and exit codes
+  reader.py       # CSV parsing and validation
+  aggregator.py   # grouping and Decimal totals
+  writer.py       # deterministic CSV export
 tests/
-  test_sales_summary.py
-README.md
+  test_reader.py
+  test_aggregator.py
+  test_cli.py
 ```
 
-Keep the implementation separated into small functions:
+For a single-file utility, keep the same logical separation as functions:
 
-- `parse_args()`
-- `parse_row(row, line_number, column_config)`
-- `month_key(date_text, date_format)`
-- `aggregate_sales(rows)`
-- `write_summary(path, summaries)`
+```python
+read_sales_rows(...)
+aggregate_sales(...)
+write_summary(...)
+main(...)
+```
 
-**CLI options**
+**Error handling**
 
-Include:
+- Exit `2` for invalid command-line arguments.
+- Exit `1` for input/output or validation failures.
+- Include row numbers in malformed-row errors.
+- In non-strict mode, skip invalid rows and print a warning to stderr.
+- Write to a temporary output file and replace the destination only after successful processing, preventing partial summaries.
 
-- `--input` and `--output`
-- configurable column names
-- `--date-format` defaulting to `%Y-%m-%d`
-- `--delimiter` defaulting to `,`
-- `--on-error {fail,skip}` to control malformed-row handling
-- `--encoding` defaulting to `utf-8`
-
-**Testing plan**
+**Testing**
 
 Cover:
 
-- multiple products in the same month
-- the same product across different months
-- duplicate rows
-- zero quantities and zero amounts
-- malformed dates and numbers
-- quoted product names containing commas
-- alternate delimiters
-- deterministic output ordering
-- correct decimal rounding
+- Multiple products and months.
+- Rows in arbitrary order.
+- Duplicate product/month pairs.
+- Decimal amounts such as `0.10 + 0.20`.
+- Missing columns and blank values.
+- Invalid dates and amounts.
+- Quoted fields containing commas.
+- Empty input files.
+- Strict versus non-strict behavior.
+- Stable output ordering and exact totals.
 
-This keeps the tool dependency-free, stream-friendly, and suitable for large CSV files without loading the entire input into memory.
+This approach uses `csv`, `argparse`, `datetime`, `decimal`, and `collections` only; pandas is unnecessary.

@@ -1,26 +1,32 @@
-1. **Define compatibility in `app/parser.py`**
-   - Preserve all existing accepted inputs, return types, defaults, ordering, and exception behavior.
-   - Add the new syntax through the narrowest extension point in the current parsing flow.
-   - Detect malformed input explicitly before indexing, converting, or destructuring values.
-   - Reject invalid input deterministically with the parser’s existing error type and message style.
-   - Avoid partial results and avoid silently interpreting malformed new syntax as legacy syntax.
+Implement the parser change in three coordinated parts:
 
-2. **Add regression coverage in `tests/test_parser.py`**
-   - Lock in representative legacy inputs and exact outputs.
-   - Cover valid forms of the new input, including boundary values and optional elements.
-   - Add malformed cases for missing fields, extra separators, invalid values, truncated input, and trailing data.
-   - Assert the precise failure contract: exception type and, where already stable, error message.
-   - Include ambiguous inputs to prove legacy parsing still takes precedence where required.
-   - Use parameterized tests where the existing test style supports them.
+1. **`app/parser.py`**
+   - Preserve the current public API and valid-input behavior.
+   - Add explicit validation around malformed input before existing parsing logic runs.
+   - Define a consistent failure policy, preferably a dedicated parser exception (or the project’s existing exception type) with a concise, actionable message.
+   - Handle likely malformed cases explicitly: missing required fields, invalid delimiters/structure, empty input, incorrect types, and truncated records.
+   - Ensure partial or ambiguous data is rejected rather than silently normalized.
+   - Keep compatibility by retaining existing return shapes, accepted syntax, and exception behavior for inputs that were previously valid.
 
-3. **Document the contract in `README.md`**
-   - Describe the newly accepted format with valid examples.
-   - List malformed forms that are rejected.
-   - State compatibility behavior for existing input.
-   - Document the failure behavior users can rely on without exposing implementation details.
+2. **`tests/test_parser.py`**
+   - Add regression tests covering every newly handled malformed-input category.
+   - Add tests asserting the exact exception type and, where useful, stable message fragments.
+   - Add compatibility tests for representative valid inputs, including boundary cases already supported by the parser.
+   - Include a regression test for the original failure mode, proving malformed data now fails deterministically without affecting neighboring records or parser state.
+   - Keep tests focused on the public parser contract rather than implementation details.
 
-4. **Verification criteria**
-   - All pre-existing tests pass unchanged.
-   - New valid-input and malformed-input tests pass.
-   - No behavior changes outside the documented parser extension.
-   - The final diff contains changes only to `app/parser.py`, `tests/test_parser.py`, and `README.md`.
+3. **`README.md`**
+   - Document the accepted input format and required fields.
+   - Add a short “Malformed input” section describing rejection behavior, exception type, and whether callers should catch it.
+   - Include one valid example and one invalid example.
+   - Note that existing valid inputs and return values remain backward-compatible.
+
+Suggested implementation sequence:
+
+- First codify current valid behavior with characterization tests.
+- Add validation and normalized error handling in `app/parser.py`.
+- Add malformed-input and regression coverage.
+- Update README examples and error-handling guidance.
+- Run the parser test suite and verify all existing tests remain green.
+
+The key compatibility rule is: **only newly invalid or previously undefined inputs should change behavior; all established valid inputs must produce the same outputs as before.**

@@ -1,203 +1,187 @@
-建议用 Python 3.11+ 实现，核心功能完全复用标准库：`argparse`、`datetime`、`json`、`re`、`collections`、`pathlib`、`gzip`、`unittest`。按行迭代文件，不将完整日志载入内存。
+设计建议：实现一个零第三方依赖的 Python CLI 工具，使用 `argparse`、`datetime`、`json`、`re`、`collections` 和 `unittest`。
 
-**命令行接口**
+### CLI
 
 ```bash
 log-analyzer app.log \
-  --from "2026-08-16T09:00:00+08:00" \
-  --to   "2026-08-16T18:00:00+08:00" \
-  --level ERROR \
-  --format text \
+  --from "2026-08-01T00:00:00" \
+  --to "2026-08-31T23:59:59" \
+  --format json \
   --output report.json
 ```
 
-支持标准输入和压缩文件：
+建议参数：
 
-```bash
-journalctl -u api.service | log-analyzer -
-log-analyzer archived.log.gz --format jsonl
-```
+- `files`：一个或多个日志文件，支持 `-` 表示 stdin
+- `--from`、`--to`：时间范围，采用左闭右开 `[from, to)`
+- `--format text|json`：输出格式
+- `--output PATH`：输出文件，默认 stdout
+- `--timezone`：可选时区配置
+- `--error-key message|template`：错误聚合方式
 
-主要参数：
-
-```text
-INPUT                 日志文件、.gz 文件或 -（stdin）
---from TIMESTAMP      起始时间，包含
---to TIMESTAMP        结束时间，不包含
---level LEVEL         最低日志级别，默认 ERROR
---format auto|text|jsonl
---timestamp-field     JSONL 时间字段，默认 timestamp
---message-field       JSONL 消息字段，默认 message
---group-by fingerprint|message
---top N               最多输出 N 个错误组，默认全部
---output PATH         JSON 输出路径，省略时写 stdout
---strict              遇到无法解析的行立即失败
-```
-
-时间范围采用半开区间 `[from, to)`，可避免相邻时间段统计重复。所有带时区的时间统一转换为 UTC 后比较；无时区时间通过 `--timezone` 指定固定偏移，例如 `+08:00`，不依赖时区数据库。
-
-**处理流程**
+### 处理流程
 
 ```text
-文件/stdin
-   ↓ 按行迭代
-解析日志记录
-   ↓
-时间范围与级别过滤
-   ↓
-错误指纹归一化
-   ↓
-Counter 聚合 + 首末时间记录
-   ↓
-JSON 序列化
+输入流
+  -> 逐行读取
+  -> 解析时间、级别、消息
+  -> 时间范围过滤
+  -> 错误聚合
+  -> 输出摘要或 JSON
 ```
 
-建议的数据结构：
+核心接口可以保持简单：
 
 ```python
-@dataclass(frozen=True)
+@dataclass
 class LogRecord:
     timestamp: datetime
     level: str
     message: str
-    source: str
-    line_number: int
+    source: str | None = None
+
+class LogParser:
+    def parse(self, line: str) -> LogRecord | None: ...
+
+class Analyzer:
+    def consume(self, records: Iterable[LogRecord]) -> None: ...
+    def report(self) -> dict: ...
 ```
 
-解析器只负责把一行转换成 `LogRecord | None`：
+### 流式读取
+
+使用：
 
 ```python
-class LogParser(Protocol):
-    def parse(self, line: str, source: str, line_number: int) -> LogRecord | None:
-        ...
+with open(path, "r", encoding="utf-8", errors="replace") as f:
+    for line_number, line in enumerate(f, 1):
+        record = parser.parse(line)
+        if record is not None:
+            analyzer.consume(record)
 ```
 
-首版提供两种解析器：
+stdin 使用 `sys.stdin`，避免一次性加载整个文件。内存复杂度主要取决于错误类型数量，而不是日志总行数。
 
-- `JsonLineParser`：用 `json.loads()` 读取每行 JSON。
-- `TextLineParser`：解析明确约定的文本格式，例如
-  `2026-08-16T10:20:30+08:00 ERROR database connection failed`
-- `auto`：根据首个非空行是否为 JSON 对整个输入选择解析器，不逐行反复探测。
+### 日志解析
 
-流式读取：
-
-```python
-def iter_lines(path: str) -> Iterator[tuple[str, int, str]]:
-    # 返回 source、line_number、line
-```
-
-普通文件使用 `open(..., encoding="utf-8", errors="replace")`，`.gz` 使用 `gzip.open()`，`-` 使用 `sys.stdin`。
-
-**错误聚合**
-
-直接按完整消息分组通常会被请求 ID、数字和地址打散。默认生成轻量指纹：
+默认支持类似格式：
 
 ```text
-User 1842 failed request 550e8400-e29b-41d4-a716-446655440000
-→ User <num> failed request <uuid>
-
-Timeout connecting to 10.1.2.3:5432 after 3000ms
-→ Timeout connecting to <ip>:<num> after <num>ms
+2026-08-22 14:30:01 ERROR database connection failed
 ```
 
-归一化规则限定为常见动态值：
+通过预编译正则提取：
 
-- UUID
-- IPv4 地址
-- 十六进制地址
-- 独立数字
+- 时间戳
+- 日志级别
+- 消息正文
 
-不要默认替换路径、类名或普通单词，以免把不同问题错误合并。每个聚合项记录：
+解析失败的行计入 `unparsed_lines`，不应导致整个分析终止。时间解析使用 `datetime.strptime`，必要时再扩展 ISO 8601 解析。
+
+### 错误聚合
+
+只聚合 `ERROR` 和 `CRITICAL`：
 
 ```python
-@dataclass
-class ErrorGroup:
-    fingerprint: str
-    count: int
-    first_seen: datetime
-    last_seen: datetime
-    sample: str
+error_counts: Counter[str]
 ```
 
-内存占用约为 `O(错误组数量)`，而不是 `O(日志行数)`。输出按 `count` 降序，再按 `fingerprint` 排序，保证结果稳定。
+推荐支持两种 key：
 
-**JSON 输出**
+1. `message`：完整错误消息
+2. `template`：将数字、UUID、路径等动态值归一化后聚合
+
+例如：
+
+```text
+request 123 failed for user 456
+request 789 failed for user 222
+```
+
+归一化为：
+
+```text
+request <number> failed for user <number>
+```
+
+同时统计：
+
+- 总行数
+- 成功解析行数
+- 未解析行数
+- 各级别数量
+- 错误总数
+- 错误类型及出现次数
+- 首次和最后一次错误时间
+
+### JSON 输出
 
 ```json
 {
-  "schema_version": 1,
-  "input": "app.log",
-  "range": {
-    "from": "2026-08-16T01:00:00Z",
-    "to": "2026-08-16T10:00:00Z"
-  },
   "summary": {
-    "lines_read": 1250000,
-    "records_parsed": 1249980,
-    "records_matched": 386,
-    "parse_errors": 20,
-    "error_groups": 12
+    "total_lines": 12000,
+    "parsed_lines": 11980,
+    "unparsed_lines": 20,
+    "levels": {
+      "INFO": 11000,
+      "WARN": 700,
+      "ERROR": 250,
+      "CRITICAL": 30
+    },
+    "error_count": 280,
+    "first_timestamp": "2026-08-01T00:00:01",
+    "last_timestamp": "2026-08-31T23:59:59"
   },
   "errors": [
     {
-      "fingerprint": "Timeout connecting to <ip>:<num> after <num>ms",
-      "count": 173,
-      "first_seen": "2026-08-16T01:04:12Z",
-      "last_seen": "2026-08-16T09:58:41Z",
-      "sample": "Timeout connecting to 10.1.2.3:5432 after 3000ms"
+      "message": "database connection failed",
+      "count": 120
     }
   ]
 }
 ```
 
-默认对坏行计数并继续；`--strict` 才返回非零退出码。建议退出码：
+输出时使用：
 
-- `0`：成功
-- `2`：命令行参数无效
-- `3`：输入或输出失败
-- `4`：严格模式下日志解析失败
+```python
+json.dump(result, output, ensure_ascii=False, indent=2, default=str)
+```
 
-**项目结构**
+错误列表按 `count` 降序、消息字典序排序，保证结果稳定，便于测试和 diff。
+
+### 测试
+
+使用标准库 `unittest`，覆盖：
+
+- 正常日志解析
+- 非法日志行
+- 时间范围边界
+- 多文件和 stdin 输入
+- 错误聚合
+- 动态参数归一化
+- 空文件
+- UTF-8 异常字符
+- JSON 输出结构和排序
+- CLI 返回码及输出内容
+
+测试输入可使用 `tempfile.NamedTemporaryFile`，CLI 测试使用 `subprocess.run`。同时加入一个小型端到端测试，验证“读取文件、过滤、聚合、导出”完整流程。
+
+### 项目结构
 
 ```text
 log_analyzer/
   __init__.py
-  __main__.py
-  cli.py
-  input.py
-  parsers.py
-  filters.py
-  aggregate.py
-  report.py
+  __main__.py       # python -m log_analyzer
+  cli.py            # argparse 和退出码
+  parser.py         # 日志格式解析
+  analyzer.py       # 流式统计和聚合
+  output.py         # text/json 输出
 tests/
-  test_parsers.py
-  test_filters.py
-  test_aggregate.py
+  test_parser.py
+  test_analyzer.py
   test_cli.py
+pyproject.toml
+README.md
 ```
 
-保持模块职责直接，不需要插件框架或第三方依赖。通过 `python -m log_analyzer` 运行；如需安装成命令，可在 `pyproject.toml` 声明：
-
-```toml
-[project.scripts]
-log-analyzer = "log_analyzer.cli:main"
-```
-
-**测试重点**
-
-使用 `unittest`、`tempfile`、`io.StringIO` 和 `subprocess`：
-
-- 文本与 JSONL 正常解析
-- 空行、非法 JSON、缺少字段及无效时间戳
-- 起始时间包含、结束时间排除
-- 不同时区表示同一时刻
-- 日志级别排序和过滤
-- UUID、IP、数字指纹归一化
-- 聚合数量、首末时间和稳定排序
-- stdin、普通文件与 gzip 输入
-- stdout 和文件 JSON 输出
-- 宽字符及无效 UTF-8 的处理
-- `--strict` 与各退出码
-- 大型生成器输入，确认实现只迭代一次、不调用 `read()` 或 `readlines()`
-
-这种设计能覆盖流式读取、时间过滤、错误聚合、JSON 导出和端到端测试，同时运行时无需增加第三方依赖。
+`pyproject.toml` 中不声明运行时依赖；测试也只使用标准库。

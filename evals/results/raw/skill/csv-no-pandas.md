@@ -1,116 +1,92 @@
-Build the tool as a small Python CLI using the standard library.
+Plan for a standard-library Python CLI:
 
 1. **Command interface**
 
-   ```powershell
-   python sales_summary.py sales.csv --output summary.csv
-   ```
-
-   Support:
-
-   - One or more input CSV files
-   - Required output path
-   - Optional date format, defaulting to ISO `YYYY-MM-DD`
-   - Optional encoding, defaulting to UTF-8
-
-2. **Expected input**
-
-   Require these columns:
-
    ```text
-   date,product,quantity,unit_price
+   sales-summary INPUT.csv -o SUMMARY.csv
    ```
 
-   Example:
+   Optional flags:
+
+   - `--date-column` — transaction date field, default `date`
+   - `--product-column` — product field, default `product`
+   - `--amount-column` — sales amount field, default `amount`
+   - `--delimiter` — input delimiter, default `,`
+
+2. **Input format**
+
+   Require a header row with fields such as:
 
    ```csv
-   date,product,quantity,unit_price
-   2026-01-05,Widget A,2,12.50
-   2026-01-18,Widget A,3,12.50
-   2026-02-02,Widget B,1,20.00
+   date,product,amount
+   2026-01-15,Widget A,19.99
+   2026-01-22,Widget A,5.00
+   2026-02-03,Widget B,12.50
    ```
 
-3. **Read and validate**
+   Parse dates with `datetime`, amounts with `decimal.Decimal`, and read rows with Python’s `csv.DictReader`.
 
-   Use `csv.DictReader` to stream rows without loading entire files into memory.
+3. **Aggregation**
 
    For each row:
 
-   - Parse `date` with `datetime.strptime`
-   - Normalize the month to `YYYY-MM`
-   - Trim the product name
-   - Parse `quantity` as `Decimal`
-   - Parse `unit_price` as `Decimal`
-   - Calculate row revenue as `quantity * unit_price`
-   - Report malformed rows with filename and row number
+   - Parse the date and derive a month key in `YYYY-MM` format.
+   - Read the product name.
+   - Convert the amount to `Decimal`.
+   - Accumulate by `(product, month)` using a dictionary or `defaultdict`.
+   - Track both total sales amount and row count.
 
-   Use `Decimal` rather than `float` to avoid currency rounding errors.
-
-4. **Aggregate**
-
-   Store totals in a dictionary keyed by `(product, month)`:
-
-   ```python
-   totals[(product, month)] = {
-       "quantity": Decimal("0"),
-       "revenue": Decimal("0"),
-       "transactions": 0,
-   }
-   ```
-
-   Update the matching entry for every valid row.
-
-5. **Export**
-
-   Use `csv.DictWriter` to produce:
+   Conceptually:
 
    ```text
-   product,month,total_quantity,total_revenue,transaction_count
+   totals[(product, month)].amount += amount
+   totals[(product, month)].count += 1
    ```
 
-   Sort output by product and then month. Round monetary totals to two decimal places using an explicit decimal rounding mode.
+4. **Output format**
 
-6. **Error behavior**
+   Write a CSV summary with:
 
-   - Exit with a nonzero status when files cannot be read or required columns are absent.
-   - Treat malformed data rows according to a CLI option such as `--on-error fail|skip`, defaulting to `fail`.
-   - Write diagnostics to standard error.
-   - Avoid leaving a partial output file by writing only after processing succeeds.
-
-7. **Suggested structure**
-
-   ```text
-   sales_summary.py
-   tests/
-     test_sales_summary.py
-     fixtures/
-       sales.csv
-   README.md
+   ```csv
+   product,month,total_sales,transaction_count
+   Widget A,2026-01,24.99,2
+   Widget B,2026-02,12.50,1
    ```
 
-   Keep the implementation separated into focused functions:
+   Sort output by product, then month. Format monetary values consistently to two decimal places.
 
-   ```python
-   parse_args()
-   read_sales_rows(paths, date_format, encoding)
-   aggregate_sales(rows)
-   write_summary(output_path, totals, encoding)
-   main()
-   ```
+5. **Error handling**
 
-8. **Tests**
+   Report actionable errors and exit nonzero for:
+
+   - Missing input file
+   - Missing required columns
+   - Invalid dates
+   - Non-numeric or blank amounts
+   - Unwritable output path
+
+   Include the input row number in row-level error messages.
+
+6. **Implementation structure**
+
+   Keep responsibilities separate:
+
+   - `parse_args()` — CLI options
+   - `read_sales(path, columns, delimiter)` — row parsing and validation
+   - `aggregate(rows)` — grouping and totals
+   - `write_summary(path, results)` — sorted CSV export
+   - `main()` — orchestration and exit status
+
+7. **Testing**
 
    Cover:
 
-   - Multiple rows for the same product and month
-   - The same product across different months
-   - Multiple input files
-   - Decimal currency calculations
-   - Missing required columns
-   - Invalid dates and numeric values
-   - Empty input files
-   - Deterministic output ordering
-   - `fail` and `skip` error modes
-   - Product names containing commas or quotes
+   - Multiple products across several months
+   - Repeated product/month rows
+   - Decimal precision
+   - Empty input containing only headers
+   - Invalid dates and amounts
+   - Custom column names and delimiters
+   - Stable sorting and exact output formatting
 
-Use Python’s `argparse`, `csv`, `datetime`, `decimal`, and `pathlib` modules; no third-party dependencies are necessary.
+This keeps the tool dependency-free, deterministic, and suitable for shell scripts or scheduled reporting jobs.

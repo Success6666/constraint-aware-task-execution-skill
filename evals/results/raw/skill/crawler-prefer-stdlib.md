@@ -1,210 +1,214 @@
-## Proposed Design
+Plan a Python CLI crawler around a small, testable core, using only the standard library.
 
-Build a Python CLI using the standard library. Keep the crawler engine independent from the specific metadata source so URL construction and response parsing can be adapted without changing scheduling, caching, or persistence.
-
-### CLI
+## CLI
 
 ```text
-metadata-crawl crawl INPUT
-  --output PATH
-  --state PATH
-  --cache-dir PATH
-  --concurrency 8
-  --rate 5
-  --burst 5
-  --timeout 30
-  --retries 4
-  --resume
-  --refresh
-  --max-age 86400
+crawler crawl URL [URL ...]
+  --output PATH              SQLite database path
+  --workers N                Maximum concurrent requests
+  --rate RATE                Requests/second globally
+  --per-host-rate RATE       Requests/second per host
+  --timeout SECONDS
+  --max-pages N
+  --resume RUN_ID
+  --no-cache
+  --user-agent STRING
+
+crawler status --output PATH [RUN_ID]
+crawler export --output PATH --format json|csv PATH
+crawler cache clear --output PATH
 ```
 
-`INPUT` is a newline-delimited list of identifiers or URLs. Results use JSON Lines so each completed item can be written atomically without retaining the full run in memory.
+Exit nonzero only for invalid configuration or unrecoverable storage errors; individual URL failures should be recorded and reported at the end.
 
-Useful commands:
+## Architecture
 
 ```text
-metadata-crawl crawl ...
-metadata-crawl status --state crawl.db
-metadata-crawl retry-failed --state crawl.db
-metadata-crawl clear-cache --cache-dir .cache
+CLI
+ └── CrawlRunner
+      ├── URL frontier and deduplication
+      ├── Scheduler
+      │    ├── global concurrency limit
+      │    ├── global rate limiter
+      │    └── per-host rate limiters
+      ├── Fetcher
+      │    └── urllib.request
+      ├── CacheStore
+      │    └── sqlite3
+      ├── MetadataParser
+      │    └── html.parser
+      └── RunStore
+           └── sqlite3 checkpoints and results
 ```
 
-### Standard-Library Components
+Keep each component independently usable in tests. Avoid a framework or dependency-injection layer unless the implementation needs it.
 
-- `argparse`: CLI parsing
-- `urllib.request`: HTTP requests
-- `concurrent.futures.ThreadPoolExecutor`: bounded I/O concurrency
-- `threading.Condition`: shared rate limiter
-- `sqlite3`: run state and resumability
-- `hashlib`: stable cache keys
-- `json`: metadata, cache records, and JSONL output
-- `pathlib`: paths
-- `logging`: structured operational messages
-- `email.utils`: HTTP date parsing and `Retry-After`
-- `tempfile` plus `os.replace`: atomic cache writes
+## Fetching and concurrency
 
-A pluggable HTTP client interface can leave room for a third-party client later if requirements grow to HTTP/2, asynchronous I/O, or complex connection management.
+Use `ThreadPoolExecutor` with a fixed worker count. This is practical for blocking `urllib` I/O and keeps the implementation compatible with standard Python installations.
 
-## Execution Flow
+For each URL:
 
-1. Parse and normalize input into stable work-item keys.
-2. Insert new items into SQLite with `INSERT OR IGNORE`.
-3. Reset stale `running` items to `pending` when resuming.
-4. Submit at most `concurrency` items to the thread pool.
-5. Before each network request:
-   - Check the cache.
-   - Acquire a rate-limit token.
-6. Fetch and parse metadata.
-7. Write the cache entry atomically.
-8. Append the result to JSONL.
-9. Mark the item complete in SQLite only after the output write succeeds.
-10. Retry transient failures with bounded exponential backoff and jitter.
-11. Record permanent or exhausted failures for later retry.
+1. Normalize and validate the URL.
+2. Check the cache and completed-run records.
+3. Acquire the global request-rate permit.
+4. Acquire the host-specific permit.
+5. Fetch with `urllib.request.urlopen`.
+6. Enforce response size and timeout limits.
+7. Parse metadata and links.
+8. Persist the result and checkpoint before scheduling discovered links.
 
-The coordinator should keep only a small bounded number of futures in flight, rather than submitting the entire input at once.
+Bound concurrency in two places:
 
-## Rate Limiting
+- `ThreadPoolExecutor(max_workers=N)` limits active fetches.
+- A `threading.BoundedSemaphore(N)` can guard the actual request section if future scheduling changes could otherwise exceed the limit.
 
-Use a thread-safe token bucket based on `time.monotonic()`:
+Use a lock-protected token-bucket or next-allowed-time limiter. A simple monotonic-clock implementation is sufficient:
 
-- `rate`: tokens replenished per second
-- `burst`: maximum accumulated tokens
-- Every request consumes one token
-- Waiting threads sleep through a shared `Condition`
-- A response with `429` or `503` honors `Retry-After`
-- Optionally maintain one limiter per host if input can target multiple services
+- Store the next permitted timestamp.
+- Under a lock, reserve the next slot.
+- Sleep outside the lock until that time.
+- Maintain one limiter globally and one per hostname.
 
-Concurrency and request rate remain separate controls. Eight workers may be allowed while the crawler still sends only two requests per second.
+Honor `Retry-After` for 429 and selected 5xx responses, with exponential backoff and jitter. Cap retries and persist the final error.
 
-## Caching
+## URL and metadata handling
 
-Key each entry with:
+Normalize URLs before deduplication:
 
-```text
-sha256(normalized_method + normalized_url + relevant_headers)
-```
+- Lowercase scheme and hostname.
+- Remove fragments.
+- Normalize default ports.
+- Resolve relative links with `urllib.parse.urljoin`.
+- Optionally restrict crawling to allowed hosts.
 
-Store a small JSON envelope containing:
+Parse common metadata with `html.parser.HTMLParser`:
 
-```json
-{
-  "url": "...",
-  "fetched_at": 1786800000,
-  "status": 200,
-  "etag": "...",
-  "last_modified": "...",
-  "headers": {},
-  "body_file": "..."
-}
-```
+- `<title>`
+- `<meta name="description">`
+- Open Graph fields (`og:title`, `og:description`, `og:image`, `og:url`)
+- Twitter card fields
+- Canonical URL
+- Language
+- HTTP status, content type, fetched timestamp, and final URL
 
-Behavior:
+Store parser output as a JSON object so new fields can be added without schema churn.
 
-- Return fresh entries immediately.
-- For stale entries, send `If-None-Match` or `If-Modified-Since`.
-- On `304`, refresh the timestamp and reuse the body.
-- Cache successful responses by default.
-- Cache `404` for a shorter configurable period.
-- Do not cache transient server or transport failures.
-- Use temporary files followed by `os.replace()` to prevent partial entries.
+## SQLite schema
 
-## Resumable State
-
-Use SQLite rather than deriving state solely from output files.
-
-Suggested schema:
+Use one SQLite file for cache, runs, and results. Enable WAL mode and reasonable busy timeouts.
 
 ```sql
-CREATE TABLE items (
-    item_key       TEXT PRIMARY KEY,
-    source         TEXT NOT NULL,
-    status         TEXT NOT NULL,
-    attempts       INTEGER NOT NULL DEFAULT 0,
-    started_at     TEXT,
-    completed_at   TEXT,
-    next_attempt_at TEXT,
-    output_offset  INTEGER,
-    error_type     TEXT,
-    error_message  TEXT
+CREATE TABLE runs (
+  run_id TEXT PRIMARY KEY,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL,
+  config_json TEXT NOT NULL
+);
+
+CREATE TABLE urls (
+  run_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  state TEXT NOT NULL, -- queued, running, done, failed, skipped
+  attempts INTEGER NOT NULL DEFAULT 0,
+  discovered_from TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (run_id, normalized_url)
+);
+
+CREATE TABLE results (
+  run_id TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  status_code INTEGER,
+  final_url TEXT,
+  headers_json TEXT,
+  metadata_json TEXT,
+  error_type TEXT,
+  error_message TEXT,
+  PRIMARY KEY (run_id, normalized_url)
+);
+
+CREATE TABLE cache (
+  cache_key TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  expires_at TEXT,
+  status_code INTEGER,
+  headers_json TEXT,
+  body BLOB,
+  body_hash TEXT
 );
 ```
 
-Statuses: `pending`, `running`, `complete`, and `failed`.
+Use a cache key based on normalized URL plus relevant request options, such as user agent. Support TTL and conditional requests using `ETag` and `Last-Modified` when cached headers exist.
 
-Commit state transitions individually or in small batches. On startup, consider `running` rows abandoned if their lease timestamp is older than a configured threshold. Stable item keys make repeated inputs idempotent.
+Do not keep large bodies in memory longer than necessary. Enforce a maximum body size and either store the body in SQLite or store only metadata if body retention is not required.
 
-For stronger output recovery, include `item_key` in every JSONL record. A startup reconciliation pass can mark a state row complete when its output record exists but the final database update was interrupted.
+## Resumable runs
 
-## Retry Policy
+Every state transition should be transactional:
 
-Retry only failures likely to be temporary:
+- Insert seed URLs as `queued`.
+- Mark a URL `running` before fetching.
+- Persist result and mark `done` or `failed` in one transaction.
+- On startup with `--resume`, convert stale `running` rows back to `queued`.
+- Skip `done` URLs unless `--refresh` or cache expiry requires refetching.
+- Preserve discovered URLs and their provenance.
 
-- Connection resets and timeouts
-- HTTP `408`, `425`, `429`
-- HTTP `500`, `502`, `503`, `504`
+A run should be restartable after interruption without duplicating results. Commit frequently enough that losing the process does not lose substantial progress.
 
-Do not normally retry parsing failures or most other `4xx` responses.
+## Configuration and observability
 
-Use capped exponential backoff with jitter:
+Support CLI flags plus an optional JSON/TOML configuration file (`tomllib` where available). Validate worker counts, rates, timeouts, and limits at startup.
 
-```text
-delay = min(max_delay, base_delay * 2**attempt) * random.uniform(0.5, 1.5)
-```
+Log structured events with the standard `logging` module:
 
-Persist `attempts` and `next_attempt_at` so stopping the process does not reset retry behavior.
+- run start/finish
+- fetch attempt
+- cache hit/miss
+- retry and backoff
+- parse failure
+- checkpoint progress
 
-## Internal Modules
+Print a final summary: queued, completed, cached, failed, skipped, requests, and elapsed time.
 
-```text
-metadata_crawler/
-  __main__.py       CLI entry point
-  crawler.py        coordinator and bounded work scheduling
-  client.py         HTTP transport and retry classification
-  rate_limit.py     token bucket
-  cache.py          filesystem cache and revalidation
-  state.py          SQLite repository
-  sources.py        URL construction and metadata parsing
-  output.py         synchronized JSONL writer
-```
+## Testing strategy
 
-Keep interfaces small. For example, inject a callable transport into the crawler so tests can avoid real network access.
+Use `unittest`, `unittest.mock`, `tempfile`, and a local `http.server.ThreadingHTTPServer`.
 
-## Tests
+Unit tests:
 
-Use `unittest`, `unittest.mock`, and a local `http.server.ThreadingHTTPServer`.
-
-Core unit tests:
-
-- Token bucket never exceeds the configured rate or burst.
-- Cache keys are stable and distinguish relevant request variants.
-- Fresh cache hits avoid HTTP calls.
-- Stale entries perform conditional requests.
-- Atomic cache writes do not expose partial records.
-- Retry classification distinguishes transient and permanent failures.
-- Backoff respects its cap and `Retry-After`.
-- State transitions and attempt counts persist correctly.
-- Resume resets abandoned work but skips completed items.
-- Duplicate inputs produce one work item.
-- Output is valid under concurrent completion.
+- URL normalization and scope filtering.
+- Metadata parsing, malformed HTML, duplicate meta tags, and relative links.
+- Cache TTL, cache key generation, conditional headers, and cache bypass.
+- Token-bucket timing and per-host separation.
+- Retry handling for 429/5xx and `Retry-After`.
+- SQLite transactions and stale-running recovery.
+- Idempotent result writes and duplicate URL suppression.
 
 Integration tests:
 
-- Local server records request timestamps to verify rate limiting.
-- Server returns `429`, then success, to verify delayed retry.
-- Server returns `304` to verify cache revalidation.
-- Terminate a run midway, restart it, and verify exactly one final record per item.
-- Simulate malformed responses and exhausted retries.
-- Run with more inputs than the work queue bound to verify memory remains bounded.
+- Crawl a local server with several linked pages.
+- Assert maximum simultaneous requests using server-side counters.
+- Assert global and per-host rate limits with timestamps.
+- Kill or simulate interruption, resume, and verify no completed page is refetched.
+- Verify cache hits avoid network requests.
+- Verify one failing URL does not abort the run.
+- Test CLI exit codes, status output, and JSON/CSV export.
 
-Inject the clock, sleep function, random jitter source, and HTTP transport where practical. This keeps rate-limit and retry tests deterministic and fast.
+For timing-sensitive tests, inject a clock/sleep function into the rate limiter instead of relying solely on wall-clock delays. Keep one small real-delay integration test for end-to-end confidence.
 
-## Delivery Sequence
+## Suggested implementation order
 
-1. Implement CLI, SQLite state, and sequential fetching.
-2. Add atomic JSONL output and resume reconciliation.
-3. Add filesystem caching and conditional requests.
-4. Add retry classification and persisted backoff.
-5. Add bounded thread-pool scheduling and the token bucket.
-6. Add local-server integration tests.
-7. Add graceful shutdown: stop accepting work, finish or abandon in-flight leases cleanly, flush output, and close SQLite.
+1. URL normalization and metadata parser.
+2. SQLite schema, cache, and run-state persistence.
+3. Fetcher with retries and size/timeout limits.
+4. Rate limiters and worker scheduler.
+5. Crawl orchestration and resumability.
+6. CLI commands and exports.
+7. Unit tests, then local-server integration tests.
+8. Documentation with operational limits and example commands.

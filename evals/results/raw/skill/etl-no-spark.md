@@ -1,182 +1,183 @@
-Use a bounded hourly batch implemented in Python with PyArrow for Parquet, DuckDB for disk-backed transformations, and a small transactional metadata database for checkpoints and deduplication.
+Design the pipeline as a small, restartable Python service with three durable layers:
 
-**Event Contract**
+- **Input:** hourly JSONL objects/files
+- **State:** SQLite checkpoint and deduplication database
+- **Output:** partitioned Parquet written with PyArrow
 
-Require an envelope such as:
+Use `pydantic` for schema validation, `pyarrow` for Parquet, and a scheduler such as cron, Airflow, or a container job.
 
-```json
-{
-  "event_id": "01J...",
-  "event_type": "order.created",
-  "event_time": "2026-08-16T10:42:31.123Z",
-  "producer": "checkout",
-  "schema_version": 2,
-  "payload": {}
-}
+## Layout
+
+```text
+landing/events/
+  date=2026-08-22/hour=13/*.jsonl
+
+curated/events/
+  event_date=2026-08-22/event_hour=13/part-<run-id>.parquet
+
+quarantine/events/
+  date=2026-08-22/hour=13/invalid-<run-id>.jsonl
+
+state/etl.sqlite
 ```
 
-Define schemas by `(event_type, schema_version)`. Validate:
+## Event contract
+
+```python
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+
+class Event(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: str = Field(min_length=1)
+    event_type: str = Field(min_length=1)
+    event_time: datetime
+    source: str = Field(min_length=1)
+    payload: dict
+```
+
+Validation rules should include:
 
 - Required fields and types
-- UTC timestamp parsing
-- Known event type and schema version
-- Event-specific payload
-- Maximum record size
-- Optional business constraints
+- UTC timestamps
+- Non-empty `event_id`
+- Allowed event types, if applicable
+- Maximum payload size
+- Reject unknown fields unless explicitly supported
 
-Invalid JSON and schema failures go to quarantine JSONL with the source file, line number, error code, and original record.
+Invalid records go to quarantine with the original line, source file, line number, and validation error.
 
-**Hourly Flow**
+## Hourly workflow
 
-```text
-Discover input snapshot
-        |
-Parse and validate JSONL
-        |
-Write valid rows into DuckDB staging
-        |
-Deterministically deduplicate
-        |
-Reserve unseen event IDs transactionally
-        |
-Write immutable Parquet files
-        |
-Publish commit manifest
-        |
-Mark checkpoint complete
+1. Determine the target hour, for example `2026-08-22T13:00Z`.
+2. Discover all input files for that hour.
+3. Create or load a checkpoint row.
+4. Read JSONL incrementally, tracking file and line offsets.
+5. Parse and validate each record.
+6. Deduplicate by `event_id`.
+7. Add partition columns derived from `event_time`.
+8. Write valid records to a temporary Parquet file.
+9. Atomically rename the temporary file into the target partition.
+10. Commit the checkpoint and deduplication records in one transaction.
+11. Emit metrics and mark the hour complete.
+
+A simplified processing loop:
+
+```python
+def process_hour(hour, files, db, output_root):
+    run_id = uuid.uuid4().hex
+    valid = []
+    invalid = []
+
+    for path in files:
+        for line_no, raw in enumerate(path.open(), start=1):
+            try:
+                event = Event.model_validate_json(raw)
+            except Exception as exc:
+                invalid.append({
+                    "source_file": str(path),
+                    "line_number": line_no,
+                    "raw": raw.rstrip("\n"),
+                    "error": str(exc),
+                })
+                continue
+
+            inserted = db.execute(
+                "INSERT OR IGNORE INTO seen_events(event_id, first_seen_hour) "
+                "VALUES (?, ?)",
+                (event.event_id, hour.isoformat()),
+            ).rowcount
+
+            if inserted:
+                valid.append({
+                    **event.model_dump(),
+                    "event_date": event.event_time.date().isoformat(),
+                    "event_hour": event.event_time.hour,
+                })
+
+    write_quarantine(invalid, hour, run_id)
+
+    if not valid:
+        db.mark_complete(hour, row_count=0)
+        return
+
+    table = pyarrow.Table.from_pylist(valid)
+    partition = output_root / (
+        f"event_date={hour.date()}/event_hour={hour.hour:02d}"
+    )
+    temp = partition / f".part-{run_id}.parquet.tmp"
+    final = partition / f"part-{run_id}.parquet"
+
+    partition.mkdir(parents=True, exist_ok=True)
+    pyarrow.parquet.write_table(table, temp, compression="zstd")
+    fsync_file(temp)
+    atomic_rename(temp, final)
+
+    db.mark_complete(
+        hour,
+        row_count=len(valid),
+        output_file=str(final),
+        output_checksum=sha256(final),
+    )
 ```
 
-1. Snapshot all input objects belonging to the closed hour. Record URI, size, modification time, and preferably an object-store version or checksum.
-2. Derive a stable `run_id` from the input hour and sorted input fingerprints.
-3. Stream JSONL rather than loading the hour into memory. Convert valid records into Arrow batches and append them to a DuckDB staging table.
-4. Deduplicate within the batch using `event_id`. Choose the winner deterministically by source URI and line number.
-5. Compare candidates with a durable `seen_events` table. Reserve new IDs for this `run_id` in one transaction.
-6. Write only reserved events as compressed Parquet, sorted by `event_time` and `event_id`.
-7. Publish a small commit manifest listing every output file, row count, checksum, schema version, and partition.
-8. Mark the run complete. Consumers read only files referenced by committed manifests.
+For production, insert deduplication keys into a staging table first, then move them to `seen_events` only when the output commit succeeds. This prevents a crash from losing records that were marked seen but never written.
 
-For the same `event_id` with different content, keep the deterministic winner but quarantine the collision and emit a high-severity metric. Silently discarding conflicting events hides producer defects.
-
-**Output Layout**
-
-Partition by event time, not processing time:
-
-```text
-events/
-  event_type=order.created/
-    event_date=2026-08-16/
-      event_hour=10/
-        run_id=<id>/
-          part-00000.parquet
-
-commits/
-  input_date=2026-08-16/
-    input_hour=11/
-      <run_id>.json
-
-quarantine/
-  input_date=2026-08-16/
-    input_hour=11/
-      <run_id>.jsonl
-```
-
-Use Zstandard compression and target files around 128–512 MB. Avoid producing one file per source object.
-
-Late events naturally land in their event-time partition. Retain `ingested_at`, `source_uri`, and `source_line` as lineage columns.
-
-**Checkpoint State**
-
-A transactional metadata database can use these tables:
+## Checkpoint schema
 
 ```sql
-CREATE TABLE runs (
-    run_id          VARCHAR PRIMARY KEY,
-    input_hour      TIMESTAMP NOT NULL,
-    input_snapshot  JSON NOT NULL,
-    status          VARCHAR NOT NULL,
-    manifest_uri    VARCHAR,
-    valid_count     BIGINT DEFAULT 0,
-    invalid_count   BIGINT DEFAULT 0,
-    duplicate_count BIGINT DEFAULT 0,
-    created_at      TIMESTAMP NOT NULL,
-    updated_at      TIMESTAMP NOT NULL
+CREATE TABLE checkpoints (
+  hour TEXT PRIMARY KEY,
+  status TEXT NOT NULL,               -- STARTED, WRITTEN, COMMITTED, FAILED
+  input_manifest TEXT NOT NULL,       -- JSON list of files and sizes
+  output_file TEXT,
+  output_checksum TEXT,
+  row_count INTEGER DEFAULT 0,
+  invalid_count INTEGER DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  error TEXT
 );
 
 CREATE TABLE seen_events (
-    event_id     VARCHAR PRIMARY KEY,
-    payload_hash VARCHAR NOT NULL,
-    run_id       VARCHAR NOT NULL,
-    event_time   TIMESTAMP NOT NULL
+  event_id TEXT PRIMARY KEY,
+  first_seen_hour TEXT NOT NULL
 );
 ```
 
-Recommended states:
+Store the input manifest, including file path, size, modification time, and checksum. If the same hour is rerun with an identical manifest and status `COMMITTED`, return immediately.
 
-```text
-DISCOVERED -> VALIDATED -> IDS_RESERVED -> FILES_WRITTEN -> COMMITTED
-```
+## Recovery behavior
 
-Recovery resumes from the last state rather than starting a different run:
+- `STARTED`: safely restart processing.
+- `WRITTEN`: verify the output checksum; finalize the checkpoint if valid, otherwise remove the incomplete output and rerun.
+- `COMMITTED`: no-op.
+- Missing or changed input manifest: fail loudly and require an explicit reprocess decision.
+- Write output to a temporary filename and rename atomically so readers never observe partial Parquet files.
+- Keep failed inputs and validation errors for replay.
 
-- Before `IDS_RESERVED`: repeat validation safely.
-- After reservation: the same `run_id` owns those IDs.
-- After files are written: verify checksums and publish the manifest.
-- After manifest publication: marking the checkpoint complete is repeatable.
-- An existing valid commit manifest means the run succeeded, even if the final metadata update was interrupted.
+For late-arriving events, process a configurable lookback window, such as the previous 24 hours, and write a new Parquet part into the original event-time partition. Periodic compaction can merge small files.
 
-On object storage, do not depend on directory rename being atomic. Immutable files plus an atomically created commit manifest provide the publication boundary.
-
-DuckDB is suitable for a single pipeline writer. If multiple workers may process hours concurrently, put `runs` and `seen_events` in PostgreSQL or another database supporting unique constraints and transactions.
-
-**Core Dedup Query**
-
-```sql
-WITH ranked AS (
-    SELECT *,
-           row_number() OVER (
-               PARTITION BY event_id
-               ORDER BY source_uri, source_line
-           ) AS duplicate_rank,
-           count(*) OVER (
-               PARTITION BY event_id
-           ) AS duplicate_count
-    FROM staged_events
-)
-SELECT *
-FROM ranked
-WHERE duplicate_rank = 1;
-```
-
-Store a canonical payload hash so duplicates and conflicting reuse of an ID can be distinguished.
-
-**Test Strategy**
+## Tests
 
 Unit tests:
 
-- Valid and invalid JSON
-- Each schema version
-- Missing, extra, and incorrectly typed fields
-- Timestamp normalization
-- Canonical payload hashing
-- Deterministic duplicate selection
-- Partition derivation around UTC hour/day boundaries
+- Valid event parses successfully.
+- Missing, malformed, extra, or oversized fields are quarantined.
+- Duplicate `event_id` values produce one output record.
+- Partition columns are derived correctly from UTC timestamps.
+- Empty hourly input completes successfully.
+- Checksum and manifest values are recorded.
 
 Integration tests:
 
-- Multiple input files with duplicates across files
-- Duplicate IDs from earlier hours
-- Conflicting payloads for one ID
-- Late events written to older event-time partitions
-- Expected Parquet schema, compression, partitions, and row counts
-- Quarantine contents and reason codes
-- Empty input hour
+- End-to-end JSONL to Parquet conversion.
+- Rerunning a committed hour is idempotent.
+- Simulated crash after Parquet rename resumes without duplication.
+- Simulated crash before rename leaves no committed checkpoint.
+- Late events land in the correct historical partition.
+- Corrupt input files are reported without losing valid files.
 
-Recovery tests should inject failure after every state transition, restart the pipeline, and assert:
+Property-based tests can generate arbitrary JSON records to verify that validation never crashes the worker and that deduplication remains deterministic.
 
-- Exactly one committed manifest
-- No duplicate committed event IDs
-- No loss of reserved events
-- Stable output checksums on retries
-- Correct checkpoint and metric totals
-
-Finally, run property-based tests generating randomized JSON records and duplicates, then assert that committed IDs are unique and every input record is accounted for as committed, duplicate, or quarantined.
+Operational metrics should include input files, lines read, valid rows, invalid rows, duplicates dropped, output bytes, processing duration, and checkpoint status.

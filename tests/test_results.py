@@ -48,11 +48,12 @@ class ResultArtifactTests(unittest.TestCase):
             (ROOT / "evals" / "results" / "summary.json").read_text(encoding="utf-8")
         )
         report = (ROOT / "evals" / "results" / "REPORT.md").read_text(encoding="utf-8")
-        self.assertEqual(summary["comparison"], {"completed_pairs": 30, "qualified_pairs": 30})
-        self.assertEqual(summary["baseline"]["evaluation_pass"], 1.0)
-        self.assertEqual(summary["skill"]["evaluation_pass"], 1.0)
-        self.assertIn("decreased by `80.0%`", report)
-        self.assertIn("`7` improved, `0` worsened, and `23` tied", report)
+        self.assertEqual(summary["comparison"], {"completed_pairs": 30, "qualified_pairs": 28})
+        self.assertEqual(summary["baseline"]["evaluation_pass"], 0.9667)
+        self.assertEqual(summary["skill"]["evaluation_pass"], 0.9667)
+        self.assertIn("| `overoptimization_score` | 0.7500 | 0.2500 | -0.5000 |", report)
+        self.assertIn("`9` improved, `2` worsened, and `19` tied", report)
+        self.assertIn("Capability acceptance: `fail`", report)
 
 
 if __name__ == "__main__":

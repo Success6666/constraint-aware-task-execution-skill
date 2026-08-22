@@ -6,20 +6,20 @@ Current repository version: `0.4.0-rc.9`. This prerelease makes the compact, sin
 
 ## Measured Result
 
-The committed A/B run used `gpt-5.6-sol` with medium reasoning effort on 30 matched prompts: 15 English and 15 Chinese. The suite contains 12 hard-constraint cases, 6 soft-preference cases, 6 safety or explicit-enforcement cases, and 6 output or architecture-constraint cases.
+The latest A/B run was executed on August 22, 2026 with `gpt-5.6-sol`, medium reasoning effort, and the OpenAI-compatible endpoint `https://gpt.eacase.de5.net/v1`. It covers 30 matched prompts: 15 English and 15 Chinese. The suite contains 12 hard-constraint cases, 6 soft-preference cases, 6 safety or explicit-enforcement cases, and 6 output or architecture-constraint cases. The API key was supplied only through a temporary local authentication file and is not part of the repository or evidence.
 
 | Metric | Baseline | Skill | Change |
 | --- | ---: | ---: | ---: |
-| Evaluation pass rate | 100% | 100% | unchanged |
-| Objective coverage | 1.0000 | 1.0000 | unchanged |
-| Constraint adherence | 1.0000 | 1.0000 | unchanged |
-| Over-optimization score | 0.8333 | 0.1667 | **80.0% lower** |
-| Unnecessary constraint echo | 0.4333 | 0.1667 | **61.5% lower** |
-| Constraint-only components | 0.1000 | 0.0000 | **100% lower** |
+| Evaluation pass rate | 96.67% | 96.67% | unchanged |
+| Objective coverage | 1.0000 | 0.9933 | -0.0067 |
+| Constraint adherence | 0.9667 | 1.0000 | +0.0333 |
+| Over-optimization score | 0.7500 | 0.2500 | **66.7% lower** |
+| Unnecessary constraint echo | 0.6000 | 0.2333 | **61.1% lower** |
+| Constraint-only components | 0.0333 | 0.0000 | **100% lower** |
 
-Per case, 7 improved, 0 worsened, and 23 tied. The scorer compares only responses that pass objective and constraint gates. Required safety enforcement is measured for compliance but is not counted as unnecessary constraint repetition.
+Per case, 9 improved, 2 worsened, and 19 tied. The scorer compares only the 28 pairs that pass both objective and constraint gates. Required safety enforcement is measured for compliance but is not counted as unnecessary constraint repetition. The capability-retention gate **fails** this run: `config-no-yaml-zh` loses objective coverage, producing a 3.33% machine-detected capability regression. Semantic review coverage is 0%, and token/latency ratios are unavailable, so this run is evidence for regression analysis rather than a release-promotion claim.
 
-See [`evals/results/REPORT.md`](evals/results/REPORT.md), [`evals/results/summary.json`](evals/results/summary.json), and the committed raw responses for the full evidence. This is a deterministic, single-model regression experiment, not a universal performance claim or a statistical significance test.
+See [`evals/results/REPORT.md`](evals/results/REPORT.md), [`evals/results/summary.json`](evals/results/summary.json), [`evals/results/scores.json`](evals/results/scores.json), [`evals/results/metadata.json`](evals/results/metadata.json), and the 60 committed raw responses for the full evidence. The previous `0.4.0-rc.9` A/B evidence remains in [`evals/results/archive/0.4.0-rc.9/`](evals/results/archive/0.4.0-rc.9/). This is a deterministic, single-model regression experiment, not a universal performance claim or a statistical significance test.
 
 ## V1.5/V2 execution protocol
 

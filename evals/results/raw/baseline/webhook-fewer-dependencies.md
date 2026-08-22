@@ -1,195 +1,96 @@
-## Implementation Plan
+**Implementation Plan**
 
-Assume an existing HTTP service and relational database. Use the project’s HTTP framework, standard cryptography library, and database driver. Avoid adding queues, caches, or signature packages unless existing infrastructure requires them.
+1. **Define the webhook contract**
+   - Document endpoint, accepted methods/content types, maximum payload size, timeout, and response codes.
+   - Standardize headers such as:
+     - `X-Webhook-Id` or provider event ID
+     - `X-Webhook-Timestamp`
+     - `X-Webhook-Signature`
+   - Require a unique event ID and a bounded timestamp tolerance, such as five minutes.
 
-### 1. Define the Webhook Contract
+2. **Build the request pipeline**
 
-Create a provider-specific configuration containing:
+   Process requests in this order:
 
-- Endpoint path and event source
-- Signing secret reference
-- Signature and timestamp header names
-- Signature algorithm, preferably HMAC-SHA256
-- Allowed timestamp skew, such as five minutes
-- Provider event ID field
-- Maximum request-body size
+   1. Enforce method, content type, body-size, and rate limits.
+   2. Read the raw request body without parsing or reserializing it.
+   3. Validate timestamp freshness.
+   4. Verify the signature using a constant-time comparison.
+   5. Parse and schema-validate the payload.
+   6. Perform an atomic idempotency claim.
+   7. Record an audit event.
+   8. Enqueue or dispatch the business operation.
+   9. Return the provider-appropriate success response.
 
-Keep secrets in the existing secret manager or environment configuration. Never store or log them.
+   Keep signature verification before JSON parsing because formatting changes can invalidate signatures.
 
-### 2. Receive and Authenticate
+3. **Signature verification**
+   - Store secrets in the existing secret manager or environment configuration; do not add a new secrets dependency.
+   - Compute the expected HMAC over the provider-defined signing string, typically including timestamp, event ID, and raw body.
+   - Support key rotation by accepting a current and previous secret during a transition period.
+   - Reject missing, malformed, stale, or invalid signatures with a generic `401`/`403` response.
+   - Never log secrets, signatures, or full sensitive payloads.
 
-Implement a thin HTTP handler:
+4. **Idempotency**
+   - Use the existing database or key-value store rather than introducing a dedicated package.
+   - Create a table/key with:
+     - provider/event ID as a unique key
+     - status: `processing`, `succeeded`, `failed`, or `retryable`
+     - payload hash
+     - first-seen and completion timestamps
+     - attempt count
+     - response/result metadata
+   - Claim the event with an atomic insert or compare-and-set operation.
+   - For an already completed event, return the previously recorded success result.
+   - For an event stuck in `processing`, use a lease/timeout so it can be recovered safely.
+   - Treat the same ID with a different payload hash as a security/integrity error and alert on it.
 
-1. Accept only the required method, normally `POST`.
-2. Read the raw request bytes with a strict size limit.
-3. Extract the timestamp and signature headers.
-4. Reject missing or malformed authentication data.
-5. Reject timestamps outside the configured skew window.
-6. Compute the expected signature over the provider’s exact signed payload, commonly:
-   ```text
-   timestamp + "." + raw_body
-   ```
-7. Decode signatures into bytes and compare them using a constant-time function.
-8. Parse JSON only after signature verification.
-9. Validate the minimum event envelope: provider event ID, type, and payload.
+5. **Retry and delivery handling**
+   - Acknowledge only after durable acceptance. If work is queued, return success once the queue write is committed.
+   - Return retryable status codes for transient infrastructure failures, such as `500`, `502`, `503`, or `429`, according to the provider contract.
+   - Return non-retryable `4xx` responses for invalid signatures, malformed payloads, unsupported event types, or policy violations.
+   - Implement bounded internal retries for downstream calls with exponential backoff and jitter.
+   - Add a dead-letter path after the retry limit, preserving the event ID and failure reason.
+   - Ensure downstream side effects use the same idempotency key or an outbox pattern.
 
-Do not reconstruct or reserialize JSON before verification. Signature checks must use the original request bytes.
+6. **Audit logging**
+   - Emit structured audit records for:
+     - received request
+     - verification result
+     - idempotency decision
+     - processing attempts
+     - downstream result
+     - final outcome or dead-letter transition
+   - Include event ID, provider, event type, correlation/request ID, timestamps, attempt count, latency, and outcome.
+   - Redact or hash sensitive fields; keep full payloads only if explicitly required and protected.
+   - Make audit records append-only where possible and define retention/cleanup rules.
 
-Return:
+7. **Dependency strategy**
+   - Use the platform’s standard HTTP handling, cryptography/HMAC library, JSON parser, database client, queue client, logging, and metrics facilities.
+   - Avoid adding webhook-specific frameworks, retry libraries, or idempotency packages unless the existing stack lacks the required primitive.
+   - Encapsulate provider-specific signature parsing behind a small adapter so another provider does not affect core processing.
 
-- `401` for missing or invalid signatures
-- `400` for malformed authenticated payloads
-- `413` for oversized requests
-- `2xx` once the event has been durably accepted
-- `5xx` only when acceptance failed and the provider should retry
+8. **Testing**
+   - Unit tests for valid signatures, malformed signatures, timestamp expiry, key rotation, raw-body handling, and constant-time comparison behavior.
+   - Idempotency concurrency tests with duplicate requests arriving simultaneously.
+   - Retry tests covering transient failures, permanent failures, backoff limits, and dead-lettering.
+   - Contract tests for every supported event type and provider response expectation.
+   - Security tests for replay attempts, payload tampering, oversized bodies, and event-ID/payload mismatches.
+   - End-to-end tests proving that retries cannot duplicate business side effects.
 
-### 3. Add Durable Idempotency
+9. **Operational rollout**
+   - Add metrics for verification failures, duplicate rate, processing latency, retry counts, dead letters, queue depth, and downstream errors.
+   - Add alerts for signature-failure spikes, stuck `processing` records, and dead-letter growth.
+   - Roll out behind a feature flag or shadow mode if the provider permits it.
+   - Document secret rotation, replay investigation, manual reprocessing, and dead-letter recovery procedures.
 
-Create a `webhook_events` table with fields such as:
+**Suggested module boundaries**
 
-```text
-id
-source
-external_event_id
-event_type
-payload
-payload_hash
-status
-attempt_count
-next_attempt_at
-last_error
-received_at
-processing_started_at
-processed_at
-created_at
-updated_at
-```
+- `WebhookController`: HTTP validation and response mapping
+- `SignatureVerifier`: provider-specific verification
+- `IdempotencyStore`: atomic claim, completion, lease recovery
+- `WebhookDispatcher`: queueing and retry policy
+- `AuditLogger`: structured, redacted audit events
+- `EventHandlers`: business logic per event type
 
-Add a unique constraint on:
-
-```text
-(source, external_event_id)
-```
-
-Acceptance flow:
-
-1. Begin a transaction.
-2. Insert the verified event with status `pending`.
-3. On unique-key conflict, load the existing record.
-4. If its payload hash differs, record a security or integrity warning.
-5. Commit before returning success.
-
-Duplicate delivery should return the same successful acknowledgment without repeating business effects.
-
-If the provider lacks a stable event ID, derive a documented fallback key from immutable signed fields. This is weaker than a provider-issued identifier and should be monitored for collisions.
-
-### 4. Separate Acceptance From Processing
-
-Process accepted events outside the request handler using the project’s existing background-job mechanism.
-
-If none exists, start with a database-backed worker:
-
-- Claim eligible `pending` or `retry` rows using a short transaction.
-- Use row locking such as `FOR UPDATE SKIP LOCKED`, where supported.
-- Transition the row to `processing`.
-- Commit the claim before executing business logic.
-- Record completion or schedule another attempt afterward.
-
-This avoids introducing a message broker while still supporting multiple workers.
-
-Each downstream business operation must also be idempotent. Use the webhook event record ID or external event ID as an idempotency key when writing side effects.
-
-### 5. Implement Retry Handling
-
-Classify processing failures:
-
-- **Retryable:** timeouts, connection failures, rate limits, temporary dependency failures.
-- **Permanent:** unsupported event type, invalid domain state, nonrecoverable validation failure.
-
-For retryable failures:
-
-```text
-delay = min(base_delay * 2^attempt_count, maximum_delay) + random_jitter
-```
-
-Use bounded exponential backoff, for example:
-
-- Base delay: 5 seconds
-- Maximum delay: 1 hour
-- Maximum attempts: 10
-
-After the maximum attempt count, mark the event `dead_letter`. Provide an operator action to replay it after the underlying issue is corrected.
-
-Recover events left in `processing` beyond a lease timeout. This handles worker crashes without requiring distributed lock infrastructure.
-
-### 6. Add Append-Only Audit Logs
-
-Create a separate `webhook_audit_log` table:
-
-```text
-id
-webhook_event_id
-action
-from_status
-to_status
-attempt_number
-http_status
-error_code
-error_summary
-metadata
-created_at
-```
-
-Record important transitions:
-
-- Request received
-- Signature rejected
-- Event accepted
-- Duplicate detected
-- Processing started
-- Processing succeeded
-- Retry scheduled
-- Permanent failure
-- Dead-lettered
-- Manually replayed
-
-Redact authorization headers, signing secrets, personal data, and sensitive payload fields. Prefer structured error codes over full exception dumps.
-
-Invalid requests may not have a `webhook_event_id`; retain a request correlation ID, source, timestamp, and rejection reason instead.
-
-### 7. Observability and Operations
-
-Add structured logs and metrics for:
-
-- Requests received, accepted, rejected, and duplicated
-- Signature failures
-- Processing latency and age of oldest pending event
-- Retry counts
-- Dead-letter count
-- Payload mismatch on duplicate IDs
-
-Add alerts for sustained signature failures, growing backlog, and dead-letter events. Provide a small administrative command or protected endpoint to inspect and replay failed events.
-
-### 8. Testing
-
-Implement focused tests at four levels:
-
-- **Signature tests:** valid signature, altered body, wrong secret, malformed encoding, expired timestamp, and constant-time comparison path.
-- **HTTP tests:** oversized body, malformed JSON, missing event ID, duplicate delivery, and database failure.
-- **Worker tests:** successful processing, retryable failure, permanent failure, backoff calculation, maximum attempts, and abandoned-claim recovery.
-- **Concurrency tests:** simultaneous delivery of the same event and multiple workers claiming pending rows.
-
-Use captured provider fixtures with secrets replaced by test values. Add an end-to-end test proving that repeated identical deliveries produce exactly one business side effect.
-
-### 9. Delivery Sequence
-
-1. Add schema migrations and repository methods.
-2. Implement raw-body capture and signature verification.
-3. Implement transactional event acceptance and duplicate handling.
-4. Add the database-backed worker and business-event dispatcher.
-5. Add retry scheduling and dead-letter behavior.
-6. Add audit records, metrics, and redaction.
-7. Add replay tooling and operational documentation.
-8. Run concurrency, failure-recovery, and end-to-end tests.
-
-The feature is complete when authenticated events are durably acknowledged, duplicate deliveries cannot repeat business effects, temporary failures retry automatically, terminal failures are recoverable, and every state transition is auditable without exposing secrets.
+This keeps the receiver small, testable, and dependency-light while making duplicate delivery, replay, and operational recovery explicit.

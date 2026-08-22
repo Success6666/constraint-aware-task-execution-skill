@@ -1,192 +1,391 @@
-建议采用“隔离上传、内容验证、像素级重编码、只发布派生文件”的架构。客户端声明的扩展名和 `Content-Type` 仅用于记录，绝不作为图片判定依据。
+下面给出一个可落地的头像上传服务设计，核心原则是：**文件名和客户端声明的 MIME 类型一律不可信，必须验证真实内容，并只输出经过安全处理的图片。**
 
-## 架构
+## 1. 服务边界
+
+上传服务负责：
+
+- 接收头像文件
+- 验证真实文件类型和内容
+- 病毒/恶意内容检测
+- 写入对象存储
+- 生成缩略图
+- 保存元数据
+- 记录完整审计日志
+- 提供查询、替换、删除和访问接口
+
+建议采用异步处理模型：
 
 ```text
 客户端
-  │ 1. 创建上传会话
+  │
   ▼
-上传 API ── 元数据数据库
-  │ 2. 预签名 URL
+上传 API
+  │ 生成 upload_id，写入隔离区
   ▼
-隔离对象存储 quarantine/
-  │ 3. 对象创建事件
-  ▼
-验证与转码 Worker
-  ├─ 文件签名、结构、解码和安全检查
-  ├─ 完整解码到像素
-  ├─ 删除元数据并重新编码
-  ├─ 生成头像与缩略图
-  └─ 写入审计事件
-          │
-          ▼
-公开/受控对象存储 avatars/
-          │
-          ▼
-        CDN
+内容验证 Worker
+  │
+  ├─ 拒绝：记录原因 + 审计
+  └─ 通过
+       │
+       ├─ 解码并重新编码为标准格式
+       ├─ 生成缩略图
+       ├─ 写入正式对象存储
+       └─ 更新元数据为 READY
 ```
 
-隔离桶禁止公开访问、禁止 CDN 回源，并设置较短生命周期。正式桶只接收 Worker 生成的文件，永远不直接发布用户上传的原文件。
+上传完成后只返回 `upload_id`，客户端通过状态接口查询处理结果。
 
-## 上传流程
+## 2. 上传接口
 
-1. `POST /v1/avatar-uploads`
+### `POST /v1/avatars`
 
-   创建一次性上传会话，返回随机 `upload_id` 和隔离桶预签名 URL。限制对象大小，例如 10 MB。
+使用 `multipart/form-data`，字段：
 
-2. 客户端上传后调用 `POST /v1/avatar-uploads/{id}/complete`
+- `file`：文件内容
+- `user_id`：由认证上下文确定，不接受客户端覆盖
+- `idempotency_key`：防止重复提交
 
-   服务端通过对象存储接口重新读取对象，不信任客户端提供的哈希、文件名、MIME 或尺寸。
+响应：
 
-3. Worker 执行安全验证：
-
-   - 允许格式仅为 JPEG、PNG、WebP。
-   - 根据真实文件签名和容器结构识别格式。
-   - 使用成熟图片解码库完整解码全部帧和像素。
-   - 文件必须能被严格解析到合法结束位置，不允许尾随载荷或截断数据。
-   - 文件签名、解析结果和解码格式必须一致。
-   - 拒绝 SVG、HTML、XML、PDF、脚本、压缩包及其他主动或复合内容。
-   - 拒绝 PE、ELF、Mach-O、脚本 shebang 等可执行文件特征。
-   - 使用恶意软件扫描作为纵深防御，但不把它当作图片真实性校验的替代品。
-   - 限制宽高、总像素数、帧数、解压比例、解码内存和处理时间，防止图片炸弹。
-   - 对动画 WebP 可直接拒绝，或只取首帧后重编码；头像服务通常建议拒绝动画。
-
-4. 验证成功后只保留解码得到的像素：
-
-   - 应用 EXIF 方向后删除 EXIF、ICC、XMP、注释和未知块。
-   - 转换为固定色彩空间，例如 sRGB。
-   - 重新编码为新的 JPEG 或 WebP。
-   - 不复制原文件的容器块或元数据。
-   - 生成 `64x64`、`128x128`、`256x256`、`512x512` 等缩略图。
-   - 设置固定响应头：`Content-Type`、`Content-Length`、`X-Content-Type-Options: nosniff`。
-   - 下载响应使用服务端保存的安全文件名，不回显原文件名。
-
-5. 数据库事务更新版本并切换当前头像。旧头像延迟删除，以避免 CDN 缓存和数据库更新之间出现短暂失效。
-
-6. 无论成功或失败，都删除隔离对象；失败记录稳定的错误码，不向客户端暴露解析器内部异常。
-
-完整解码后重新编码是关键边界：即使输入文件在元数据中藏有脚本或二进制载荷，正式桶中也只会出现服务端根据像素重新生成的文件。
-
-## 元数据模型
-
-`avatar_uploads`：
-
-```sql
-id                 uuid primary key
-user_id            uuid not null
-status             varchar not null -- pending/uploaded/processing/ready/rejected/failed
-quarantine_key     varchar not null
-original_name      varchar
-declared_mime      varchar
-detected_format    varchar
-source_size        bigint
-source_sha256      char(64)
-width              integer
-height             integer
-frame_count        integer
-rejection_code     varchar
-created_at         timestamp
-completed_at       timestamp
+```json
+{
+  "upload_id": "up_01J...",
+  "status": "PROCESSING"
+}
 ```
 
-`avatars`：
+### `GET /v1/avatars/{upload_id}`
 
-```sql
-id                 uuid primary key
-user_id            uuid not null
-version             integer not null
-source_upload_id    uuid not null
-canonical_key       varchar not null
-canonical_sha256    char(64) not null
-width               integer not null
-height              integer not null
-format              varchar not null
-created_at          timestamp
-deleted_at          timestamp
-unique (user_id, version)
+```json
+{
+  "upload_id": "up_01J...",
+  "status": "READY",
+  "avatar_id": "av_01J...",
+  "original": {
+    "width": 512,
+    "height": 512,
+    "format": "jpeg",
+    "bytes": 38214
+  },
+  "variants": {
+    "small": "https://cdn.example.com/avatar/.../small.webp",
+    "medium": "https://cdn.example.com/avatar/.../medium.webp"
+  }
+}
 ```
 
-`avatar_variants`：
+状态建议：
 
-```sql
-avatar_id           uuid not null
-variant             varchar not null -- 64, 128, 256, 512
-object_key          varchar not null
-sha256              char(64) not null
-width               integer not null
-height              integer not null
-byte_size           bigint not null
-primary key (avatar_id, variant)
-```
+- `PROCESSING`
+- `READY`
+- `REJECTED`
+- `FAILED`
+- `DELETED`
 
-对象键使用不可猜测且不可覆盖的版本化路径：
+## 3. 真实文件内容校验
+
+校验顺序应尽量在隔离环境内完成。
+
+### 基础限制
+
+- 文件大小上限，例如 10 MB
+- 请求体大小上限，防止无限流上传
+- 读取超时和处理超时
+- 最大像素数，例如 25 MP
+- 最大宽高，例如 10,000 × 10,000
+- 限制压缩比，防止图片解压炸弹
+- 禁止多文件、嵌套压缩包和容器格式
+
+### 类型识别
+
+不要依赖：
+
+- 文件扩展名
+- `Content-Type`
+- 用户提交的文件名
+
+服务端应：
+
+1. 读取文件头和魔数。
+2. 使用成熟的文件类型识别库判断容器格式。
+3. 仅允许明确支持的格式，例如 JPEG、PNG、WebP。
+4. 要求魔数、解析器识别结果和最终解码结果一致。
+
+建议明确拒绝：
+
+- SVG、HTML、XML
+- PDF、Flash、Office 文档
+- ZIP、RAR、7z、GZIP
+- ELF、PE、Mach-O 等可执行格式
+- 脚本、宏、媒体容器及未知格式
+
+### 完整解码验证
+
+对通过魔数检查的文件，使用安全配置的图片解码器：
+
+- 完整解码像素数据，而不是只解析头部
+- 拒绝 CRC 错误、截断数据、损坏 chunk、异常颜色空间
+- 禁用外部资源加载、网络访问和脚本执行
+- 禁止 ImageMagick 等工具的危险 delegate
+- 解码后检查实际尺寸、像素数量和内存占用
+
+### 重新编码
+
+不要直接分发用户上传的原始文件：
+
+1. 解码为像素数据。
+2. 丢弃元数据、注释、ICC 配置和未知扩展块。
+3. 重新编码为内部统一格式，例如 WebP 或 JPEG。
+4. 仅把重新编码后的结果写入可访问存储。
+
+这样可消除大量 polyglot、恶意 metadata 和内容注入风险。
+
+### 主动内容和恶意文件
+
+除格式拒绝外，建议接入：
+
+- 恶意软件扫描引擎
+- YARA 规则或企业文件安全网关
+- 图片解析器 CVE 黑名单和版本更新机制
+
+扫描失败、超时或服务不可用时，文件保持隔离状态，不得发布到 CDN。
+
+## 4. 对象存储设计
+
+使用两个存储区域：
+
+### 隔离区
+
+- 私有 bucket
+- 无 CDN、无公开 URL
+- 仅验证 Worker 的服务账号可读
+- 生命周期自动删除，例如 24 小时
+- 服务端加密
+- 开启版本控制和访问日志
+
+对象键示例：
 
 ```text
-avatars/{user_id}/{avatar_id}/v1/128.webp
+quarantine/{tenant_id}/{upload_id}/source
 ```
 
-不要使用原文件名作为对象键，也不要覆盖同一个 CDN URL。
+### 正式区
 
-## 审计
-
-审计记录采用追加写入，至少包含：
-
-- `upload_id`、`user_id`、请求 ID、操作者和来源 IP
-- 隔离对象版本 ID及 SHA-256
-- 声明 MIME、检测格式、尺寸和帧数
-- 验证器及转码器版本
-- 状态变化、拒绝原因和处理耗时
-- 生成文件的对象键、哈希和尺寸
-- 头像启用、替换、删除事件
-
-拒绝原因使用稳定枚举，例如：
+只保存服务端重新编码后的对象：
 
 ```text
-UNSUPPORTED_FORMAT
-CONTENT_TYPE_MISMATCH
-EXECUTABLE_CONTENT
-ACTIVE_CONTENT
-POLYGLOT_OR_TRAILING_DATA
-INVALID_IMAGE_STRUCTURE
-PIXEL_LIMIT_EXCEEDED
-ANIMATION_NOT_ALLOWED
-MALWARE_DETECTED
-DECODE_TIMEOUT
+avatars/{tenant_id}/{avatar_id}/original.webp
+avatars/{tenant_id}/{avatar_id}/small.webp
+avatars/{tenant_id}/{avatar_id}/medium.webp
+avatars/{tenant_id}/{avatar_id}/large.webp
 ```
 
-审计日志不能保存图片原始字节、预签名 URL或访问凭证。对高频失败、同一哈希重复上传和恶意文件命中设置监控告警。
+权限建议：
 
-## 并发与可靠性
+- 上传服务：可写
+- 读取服务/CDN：只读
+- 删除服务：最小必要权限
+- 禁止客户端直接获得 bucket 写权限
+- 通过短期签名 URL 或 CDN 访问
 
-- Worker 以 `upload_id + object_version` 作为幂等键。
-- 数据库状态更新使用条件更新，例如仅允许 `uploaded -> processing`。
-- 发布顺序为：写完所有派生对象、校验对象哈希、提交数据库、最后切换当前头像。
-- 存储失败时不修改现有头像。
-- 对象存储启用服务端加密、版本控制和最小权限。
-- Worker 运行在无网络出口、非特权、只读根文件系统和受限 CPU/内存环境中。
-- 上传接口按用户和 IP 限流，并限制同时处理的任务数。
+## 5. 缩略图策略
 
-## 测试方案
+头像通常生成固定变体：
 
-核心测试矩阵：
+| 变体 | 尺寸 | 用途 |
+|---|---:|---|
+| `small` | 64 × 64 | 列表、评论 |
+| `medium` | 256 × 256 | 个人资料 |
+| `large` | 512 × 512 | 详情页 |
 
-| 场景 | 预期结果 |
-|---|---|
-| 合法 JPEG、PNG、WebP | 接受并生成全部尺寸 |
-| `.jpg` 文件实际为 PE/ELF | `EXECUTABLE_CONTENT` |
-| MIME 为 `image/png`，内容为 HTML/脚本 | `ACTIVE_CONTENT` |
-| SVG 更名为 PNG | 拒绝 |
-| JPEG 后附 ZIP、EXE 或脚本载荷 | `POLYGLOT_OR_TRAILING_DATA` |
-| 图片元数据包含 HTML或脚本 | 输出文件中元数据被移除 |
-| 异常 ICC、EXIF、PNG chunk | 拒绝或安全重编码，不得崩溃 |
-| 超大尺寸、小文件高解压比 | `PIXEL_LIMIT_EXCEEDED` |
-| 动画或超多帧文件 | `ANIMATION_NOT_ALLOWED` |
-| 截断、校验和错误、畸形容器 | `INVALID_IMAGE_STRUCTURE` |
-| 解码超时或内存超限 | 安全终止，原头像不变 |
-| 同一完成请求重复提交 | 只生成一个头像版本 |
-| 转码中途失败 | 不发布任何不完整版本 |
-| 数据库提交失败 | 新对象不可见并由清理任务回收 |
-| 未授权读取隔离对象 | 拒绝 |
-| CDN 请求伪造扩展名 | 仍返回固定 MIME 和 `nosniff` |
+处理规则：
 
-此外应对解码入口做基于真实样本语料的模糊测试，并固定保存每次发现的崩溃样本作为回归用例。验收条件应包括：正式存储中不存在任何用户原始文件，所有可访问头像都能再次被允许列表中的解码器成功解码，并且其哈希与数据库记录一致。
+- 先按 EXIF 方向旋转，再裁剪为正方形
+- 使用中心裁剪或预设人像裁剪策略
+- 使用高质量缩放
+- 生成 WebP，必要时额外生成 JPEG
+- 不能从原始对象直接动态执行不受控转换
+- 每个变体记录宽高、字节数、哈希和格式
+
+## 6. 元数据模型
+
+### `avatar_uploads`
+
+```sql
+CREATE TABLE avatar_uploads (
+  upload_id           VARCHAR(32) PRIMARY KEY,
+  tenant_id           VARCHAR(64) NOT NULL,
+  user_id             VARCHAR(64) NOT NULL,
+  status              VARCHAR(16) NOT NULL,
+  quarantine_key      TEXT NOT NULL,
+  reject_code         VARCHAR(64),
+  reject_message      TEXT,
+  source_sha256       CHAR(64),
+  detected_format     VARCHAR(16),
+  source_bytes        BIGINT,
+  source_width        INT,
+  source_height       INT,
+  created_at          TIMESTAMP NOT NULL,
+  processed_at        TIMESTAMP,
+  expires_at          TIMESTAMP NOT NULL
+);
+```
+
+### `avatar_variants`
+
+```sql
+CREATE TABLE avatar_variants (
+  avatar_id       VARCHAR(32) NOT NULL,
+  variant         VARCHAR(16) NOT NULL,
+  object_key      TEXT NOT NULL,
+  format          VARCHAR(16) NOT NULL,
+  width           INT NOT NULL,
+  height          INT NOT NULL,
+  bytes           BIGINT NOT NULL,
+  sha256          CHAR(64) NOT NULL,
+  created_at      TIMESTAMP NOT NULL,
+  PRIMARY KEY (avatar_id, variant)
+);
+```
+
+### 约束
+
+- `status = READY` 时必须存在所有必需变体
+- `REJECTED` 时不得存在正式区对象
+- 同一用户只能有一个当前头像时，用单独的 `user_current_avatars` 表并使用事务更新
+- 删除采用软删除 + 对象存储异步清理
+
+## 7. 审计日志
+
+审计记录应不可变，并与业务数据分离。
+
+### `avatar_audit_events`
+
+```sql
+CREATE TABLE avatar_audit_events (
+  event_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  upload_id      VARCHAR(32) NOT NULL,
+  tenant_id      VARCHAR(64) NOT NULL,
+  user_id        VARCHAR(64),
+  actor_id        VARCHAR(64),
+  action         VARCHAR(32) NOT NULL,
+  result         VARCHAR(16) NOT NULL,
+  reason_code    VARCHAR(64),
+  detected_type  VARCHAR(32),
+  source_sha256  CHAR(64),
+  request_id     VARCHAR(64),
+  ip_hash        CHAR(64),
+  user_agent     TEXT,
+  created_at     TIMESTAMP NOT NULL
+);
+```
+
+必须记录：
+
+- 上传开始、验证通过、验证拒绝、处理失败
+- 替换、删除、恢复
+- 操作者、请求 ID、租户和用户
+- 拒绝原因，例如 `EXECUTABLE_CONTENT`、`SVG_ACTIVE_CONTENT`、`DECODE_FAILED`
+- 哈希、检测格式和扫描结果
+
+审计日志应：
+
+- 追加写入，不允许业务接口修改
+- 限制读取权限
+- 对敏感字段脱敏
+- 支持保留期限和合规导出
+
+## 8. 错误码
+
+对客户端返回稳定、不过度泄露内部细节的错误码：
+
+- `FILE_TOO_LARGE`
+- `UNSUPPORTED_FORMAT`
+- `INVALID_IMAGE_CONTENT`
+- `ACTIVE_CONTENT_NOT_ALLOWED`
+- `EXECUTABLE_CONTENT_NOT_ALLOWED`
+- `IMAGE_DIMENSIONS_EXCEEDED`
+- `MALWARE_DETECTED`
+- `PROCESSING_TIMEOUT`
+
+详细解析器错误只写内部日志和审计事件。
+
+## 9. 一致性与可靠性
+
+- 使用 `upload_id` 作为幂等键
+- Worker 使用消息队列，支持重试
+- 重试必须幂等，避免重复生成对象
+- 正式对象写入完成后，再以事务更新数据库为 `READY`
+- 数据库显示 `READY` 但对象缺失时，健康检查应自动标记异常并告警
+- 隔离区对象设置自动过期
+- 记录指标：拒绝率、各拒绝原因、处理延迟、扫描失败率、缩略图失败率
+
+## 10. 测试方案
+
+### 单元测试
+
+- JPEG、PNG、WebP 的有效样本
+- 错误魔数和错误扩展名
+- `Content-Type` 与真实格式不一致
+- 截断文件、损坏 chunk、CRC 错误
+- 超大尺寸、超大像素数、压缩炸弹
+- 解析器异常和超时
+- EXIF 方向处理
+- 缩略图尺寸和输出格式
+- 幂等键重复提交
+- 所有拒绝码映射
+
+### 安全测试
+
+准备专门样本验证拒绝：
+
+- PE/ELF/Mach-O 可执行文件伪装
+- HTML、JavaScript、SVG、XML
+- 图片与 ZIP/脚本拼接的 polyglot
+- 含恶意 payload 的 metadata
+- 压缩包伪装图片
+- 已知恶意文件测试样本
+- 触发外部资源引用的 SVG/XML
+- 路径穿越、对象键注入和 Unicode 文件名
+
+### 集成测试
+
+验证完整链路：
+
+1. 上传进入隔离区。
+2. 校验失败时不产生正式对象。
+3. 校验通过后生成原图和全部缩略图。
+4. 数据库状态和对象存储保持一致。
+5. 审计事件完整且顺序正确。
+6. Worker 重试不会生成重复对象。
+7. 删除头像后访问 URL 失效。
+8. 扫描服务不可用时不会错误发布文件。
+
+### 属性和模糊测试
+
+对图片解析入口执行：
+
+- 随机字节流
+- 变异后的合法图片
+- 随机 chunk 顺序和长度
+- 超长 metadata
+- 边界尺寸和颜色空间
+
+目标是：不崩溃、不越权、不发布未验证对象。
+
+## 11. 最关键的发布门槛
+
+只有同时满足以下条件，状态才能变为 `READY`：
+
+```text
+真实格式允许
++ 完整解码成功
++ 尺寸和资源限制通过
++ 恶意内容扫描通过
++ 已重新编码
++ 所有缩略图生成成功
++ 正式对象写入成功
++ 元数据事务提交成功
+```
+
+任何一步失败，都只能进入 `REJECTED` 或 `FAILED`，绝不能让隔离区原文件被直接访问。

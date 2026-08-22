@@ -1,90 +1,82 @@
-下面是一套可直接落地的无 Docker 本地开发方案。假设技术栈为：
+下面是一套不依赖 Docker 的 Java 服务 + PostgreSQL 本地开发方案。以 Spring Boot、Maven、Flyway 为例，适用于 Windows、macOS 和 Linux。
 
-- Java 21
+## 1. 固定基础版本
+
+建议团队统一以下版本：
+
+- Java 21 LTS
 - Spring Boot 3.x
-- Maven Wrapper
-- PostgreSQL 16+
-- Flyway 数据库迁移
-- JUnit 5
-- 使用独立的本地测试数据库运行集成测试
+- Maven 3.9+
+- PostgreSQL 16
+- Flyway 10+
+- Git
 
-## 1. 项目结构
+检查环境：
 
-```text
-java-postgres-service/
-├── .env.example
-├── .gitignore
-├── pom.xml
-├── mvnw
-├── mvnw.cmd
-├── scripts/
-│   ├── init-db.sql
-│   ├── init-db.ps1
-│   ├── start.ps1
-│   ├── migrate.ps1
-│   └── test.ps1
-└── src/
-    ├── main/
-    │   ├── java/com/example/service/
-    │   │   └── Application.java
-    │   └── resources/
-    │       ├── application.yml
-    │       └── db/migration/
-    │           └── V1__create_users.sql
-    └── test/
-        ├── java/com/example/service/
-        └── resources/
-            └── application-test.yml
-```
-
-不要提交以下内容：
-
-```gitignore
-.env
-target/
-.idea/
-*.iml
-.vscode/
-```
-
-提交 `.env.example`，但不要提交真实密码。
-
-## 2. 安装本地依赖
-
-安装 JDK 21、PostgreSQL 和 Git。项目使用 Maven Wrapper，因此不强制全局安装 Maven。
-
-验证：
-
-```powershell
+```bash
 java -version
+mvn -version
 psql --version
-.\mvnw.cmd --version
 ```
 
-如果 Windows 找不到 `psql`，将 PostgreSQL 的 `bin` 目录加入 `PATH`，例如：
+## 2. 安装 PostgreSQL
+
+安装 PostgreSQL 原生服务，并确保 `psql` 位于 PATH 中。
+
+建议开发环境使用独立用户和数据库：
+
+```sql
+CREATE USER app_dev WITH PASSWORD 'app_dev_password';
+CREATE DATABASE app_dev OWNER app_dev;
+```
+
+连接测试：
+
+```bash
+psql -h localhost -p 5432 -U app_dev -d app_dev
+```
+
+推荐约定：
+
+- 主机：`localhost`
+- 端口：`5432`
+- 数据库：`app_dev`
+- 用户：`app_dev`
+- 测试数据库：`app_test`
+
+创建测试库：
+
+```sql
+CREATE DATABASE app_test OWNER app_dev;
+```
+
+不要让应用使用 PostgreSQL 超级用户。
+
+## 3. 项目结构
 
 ```text
-C:\Program Files\PostgreSQL\16\bin
+service/
+├─ src/
+│  ├─ main/
+│  │  ├─ java/com/example/service/
+│  │  └─ resources/
+│  │     ├─ application.yml
+│  │     └─ db/migration/
+│  │        └─ V1__init.sql
+│  └─ test/
+│     ├─ java/com/example/service/
+│     └─ resources/
+│        └─ application-test.yml
+├─ pom.xml
+├─ .env.example
+└─ README.md
 ```
 
-启动 PostgreSQL：
+## 4. Maven 依赖
 
-```powershell
-Get-Service postgresql*
-Start-Service postgresql-x64-16
-```
-
-实际服务名可能因安装版本而不同。
-
-## 3. Maven 配置
-
-`pom.xml` 的核心依赖：
+核心依赖：
 
 ```xml
-<properties>
-    <java.version>21</java.version>
-</properties>
-
 <dependencies>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -94,11 +86,6 @@ Start-Service postgresql-x64-16
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
     <dependency>
@@ -125,360 +112,311 @@ Start-Service postgresql-x64-16
 </dependencies>
 ```
 
-同时使用 Spring Boot Maven Plugin 和 Maven Wrapper，确保团队使用相同构建入口：
+## 5. 配置管理
 
-```powershell
-.\mvnw.cmd clean verify
+不要把密码提交到 Git。提交 `.env.example`：
+
+```dotenv
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=app_dev
+DB_USER=app_dev
+DB_PASSWORD=app_dev_password
 ```
 
-## 4. 初始化数据库
-
-开发库和测试库必须分开，避免测试清理开发数据。
-
-`scripts/init-db.sql`：
-
-```sql
-CREATE ROLE app_user
-    WITH LOGIN
-    PASSWORD 'local-dev-password';
-
-CREATE DATABASE app_dev OWNER app_user;
-CREATE DATABASE app_test OWNER app_user;
-
-\connect app_dev
-REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA public TO app_user;
-
-\connect app_test
-REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA public TO app_user;
-```
-
-使用 PostgreSQL 管理员账号执行：
-
-```powershell
-psql -U postgres -f scripts/init-db.sql
-```
-
-该脚本适用于首次初始化。若要支持重复执行，应在 PowerShell 脚本中先查询角色和数据库是否存在，再有条件地创建，避免直接重复执行报错。
-
-确认连接：
-
-```powershell
-psql "postgresql://app_user:local-dev-password@localhost:5432/app_dev" `
-  -c "select current_database(), current_user;"
-```
-
-## 5. 应用配置
-
-`src/main/resources/application.yml`：
+本地实际配置可以通过环境变量提供：
 
 ```yaml
-server:
-  port: ${SERVER_PORT:8080}
-
 spring:
-  application:
-    name: java-postgres-service
-
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/app_dev}
-    username: ${DB_USER:app_user}
-    password: ${DB_PASSWORD:local-dev-password}
-    hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:10}
-      connection-timeout: 5000
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:app_dev}
+    username: ${DB_USER:app_dev}
+    password: ${DB_PASSWORD:app_dev_password}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
-    open-in-view: false
     hibernate:
       ddl-auto: validate
+    open-in-view: false
     properties:
       hibernate:
-        jdbc:
-          time_zone: UTC
+        format_sql: true
 
   flyway:
     enabled: true
     locations: classpath:db/migration
-    validate-on-migrate: true
-    clean-disabled: true
+    baseline-on-migrate: true
 
+server:
+  port: ${SERVER_PORT:8080}
+```
+
+建议区分配置：
+
+- `application.yml`：通用默认配置
+- `application-local.yml`：个人本地覆盖配置
+- `application-test.yml`：测试数据库配置
+- 生产密码通过环境变量或密钥系统注入
+
+启动本地环境：
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+或者：
+
+```bash
+java -jar target/service.jar --spring.profiles.active=local
+```
+
+## 6. 数据库迁移
+
+所有表结构变更都通过 Flyway 管理，不直接修改已执行的迁移文件。
+
+初始迁移示例：
+
+```sql
+-- src/main/resources/db/migration/V1__init.sql
+
+CREATE TABLE users (
+    id          BIGSERIAL PRIMARY KEY,
+    username    VARCHAR(100) NOT NULL UNIQUE,
+    email       VARCHAR(255) NOT NULL UNIQUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_users_email ON users(email);
+```
+
+新增迁移：
+
+```text
+V2__add_user_status.sql
+V3__create_orders.sql
+V4__add_order_user_id.sql
+```
+
+启动应用时自动执行迁移：
+
+```bash
+mvn spring-boot:run
+```
+
+查看 Flyway 状态：
+
+```bash
+mvn flyway:info
+```
+
+如需独立执行，可在 Maven 中配置 Flyway 插件，并使用：
+
+```bash
+mvn flyway:migrate
+mvn flyway:validate
+```
+
+开发规则：
+
+1. 已提交的迁移文件不可修改。
+2. 修复数据库结构必须创建新的版本迁移。
+3. 破坏性变更分多步进行：新增字段、回填数据、切换代码、删除旧字段。
+4. `ddl-auto` 使用 `validate`，不要使用 `create` 或 `update`。
+
+## 7. 初始化流程
+
+新开发者首次配置：
+
+```text
+1. 安装 Java、Maven、PostgreSQL
+2. 创建 app_dev 和 app_test 数据库
+3. 配置本地环境变量
+4. 拉取代码
+5. 执行 mvn clean verify
+6. 启动应用
+7. 访问健康检查接口
+```
+
+建议提供初始化脚本或 README 命令：
+
+```bash
+mvn clean verify
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+应用启动时由 Flyway 自动创建和升级表结构，因此不需要手工执行 SQL。
+
+## 8. 启动与健康检查
+
+建议引入 Actuator：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+配置：
+
+```yaml
 management:
   endpoints:
     web:
       exposure:
         include: health,info
-  endpoint:
-    health:
-      probes:
-        enabled: true
 ```
 
-关键原则：
+检查：
 
-- Hibernate 只做 `validate`，不自动修改表结构。
-- 所有结构变更由 Flyway 管理。
-- 配置允许通过环境变量覆盖。
-- 本地默认值只能用于无敏感数据的开发环境。
-
-`.env.example`：
-
-```dotenv
-SERVER_PORT=8080
-DB_URL=jdbc:postgresql://localhost:5432/app_dev
-DB_USER=app_user
-DB_PASSWORD=local-dev-password
-DB_POOL_SIZE=10
+```bash
+curl http://localhost:8080/actuator/health
 ```
 
-Spring Boot 默认不会自动读取 `.env`。启动脚本需要显式加载它，或者开发者直接设置系统环境变量。
-
-## 6. 数据库迁移
-
-第一个迁移文件：
-
-`src/main/resources/db/migration/V1__create_users.sql`
-
-```sql
-CREATE TABLE users (
-    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    email       VARCHAR(320) NOT NULL,
-    display_name VARCHAR(100) NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT uq_users_email UNIQUE (email)
-);
-
-CREATE INDEX idx_users_created_at ON users (created_at);
-```
-
-命名规则：
-
-```text
-V1__create_users.sql
-V2__add_user_status.sql
-V3__create_orders.sql
-```
-
-已经在共享环境执行过的迁移不得修改。发现错误时创建下一版本迁移。
-
-默认情况下，应用启动会自动执行待应用的迁移：
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-检查迁移状态：
-
-```powershell
-psql "postgresql://app_user:local-dev-password@localhost:5432/app_dev" `
-  -c "select installed_rank, version, description, success from flyway_schema_history order by installed_rank;"
-```
-
-如需“只迁移、不常驻启动服务”，可配置 Flyway Maven Plugin，或启动应用后等待迁移完成再退出。团队通常应统一选择一种入口，避免本地和 CI 使用不同迁移机制。
-
-## 7. 启动服务
-
-PowerShell 当前会话中设置配置：
-
-```powershell
-$env:DB_URL = "jdbc:postgresql://localhost:5432/app_dev"
-$env:DB_USER = "app_user"
-$env:DB_PASSWORD = "local-dev-password"
-
-.\mvnw.cmd spring-boot:run
-```
-
-或者构建后运行：
-
-```powershell
-.\mvnw.cmd clean package
-java -jar target/java-postgres-service-*.jar
-```
-
-验证服务：
-
-```powershell
-Invoke-RestMethod http://localhost:8080/actuator/health
-```
-
-预期结果包含：
+预期：
 
 ```json
-{
-  "status": "UP"
-}
+{"status":"UP"}
 ```
 
-如果数据库不可用，健康检查应返回非 `UP` 状态，应用日志中会显示连接失败原因。
-
-## 8. 测试配置
-
-`src/test/resources/application-test.yml`：
+开发时可以配置数据库连接池参数：
 
 ```yaml
 spring:
   datasource:
-    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/app_test}
-    username: ${TEST_DB_USER:app_user}
-    password: ${TEST_DB_PASSWORD:local-dev-password}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+```
 
-  jpa:
-    hibernate:
-      ddl-auto: validate
+## 9. 测试方案
+
+### 单元测试
+
+单元测试不连接数据库：
+
+```bash
+mvn test
+```
+
+覆盖：
+
+- Service 业务逻辑
+- 参数校验
+- 异常处理
+- DTO 转换
+- 权限判断
+
+### 数据库集成测试
+
+因为不使用 Docker，使用本机独立的 `app_test` 数据库：
+
+```yaml
+# application-test.yml
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:app_test}
+    username: ${DB_USER:app_dev}
+    password: ${DB_PASSWORD:app_dev_password}
 
   flyway:
-    enabled: true
     clean-disabled: false
-
-  main:
-    banner-mode: "off"
 ```
 
-集成测试启用 `test` profile：
+运行：
 
-```java
-@SpringBootTest
-@ActiveProfiles("test")
-class ApplicationIntegrationTest {
-}
+```bash
+mvn verify -Dspring.profiles.active=test
 ```
 
-仓储层测试可以使用：
+测试隔离方式：
 
-```java
-@DataJpaTest
-@ActiveProfiles("test")
-@ImportAutoConfiguration(FlywayAutoConfiguration.class)
-class UserRepositoryTest {
-}
+- 每次测试前执行事务回滚，适合单事务测试。
+- 使用 `@Sql` 清理数据，适合少量测试。
+- 测试套件开始前执行 `flyway clean` 和 `flyway migrate`，适合完整集成测试。
+- 不要让测试连接 `app_dev`。
+
+可增加 Maven profile：
+
+```xml
+<profiles>
+    <profile>
+        <id>integration</id>
+        <properties>
+            <spring.profiles.active>test</spring.profiles.active>
+        </properties>
+    </profile>
+</profiles>
 ```
 
-不要使用 H2 替代 PostgreSQL做数据库集成测试。两者在 SQL、约束、事务、JSON、时间类型和大小写行为上存在差异。
+执行：
 
-## 9. 测试数据隔离
+```bash
+mvn verify -Pintegration
+```
 
-有三种常见策略：
+## 10. 常见数据库操作
 
-1. 每个测试使用 `@Transactional`，完成后自动回滚。
-2. 测试前执行明确的清理 SQL。
-3. 整个测试套件开始前执行 `flywayClean` 和 `flywayMigrate`。
+查看数据库：
 
-推荐组合：
+```bash
+psql -h localhost -U app_dev -d app_dev
+```
 
-- Repository 测试使用事务回滚。
-- 涉及多线程、异步或真实 HTTP 请求的测试使用显式清理。
-- 在完整测试套件开始前重建测试库结构。
-
-清理脚本必须验证当前数据库名为 `app_test`，否则立即失败：
+列出表：
 
 ```sql
-DO $$
-BEGIN
-    IF current_database() <> 'app_test' THEN
-        RAISE EXCEPTION 'Refusing to clean database %', current_database();
-    END IF;
-END
-$$;
+\dt
 ```
 
-然后再执行：
+查看迁移记录：
 
 ```sql
-TRUNCATE TABLE users RESTART IDENTITY CASCADE;
+SELECT installed_rank, version, description, success
+FROM flyway_schema_history
+ORDER BY installed_rank;
 ```
 
-## 10. 日常命令
+重置本地开发库：
 
-启动数据库：
-
-```powershell
-Start-Service postgresql-x64-16
+```sql
+DROP DATABASE app_dev;
+CREATE DATABASE app_dev OWNER app_dev;
 ```
 
-启动应用：
+只对本地开发库执行重置，不要在共享环境或生产环境使用。
 
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-运行单元测试和集成测试：
-
-```powershell
-$env:SPRING_PROFILES_ACTIVE = "test"
-.\mvnw.cmd clean verify
-```
-
-运行单个测试：
-
-```powershell
-.\mvnw.cmd -Dtest=UserRepositoryTest test
-```
-
-连接开发库：
-
-```powershell
-psql "postgresql://app_user:local-dev-password@localhost:5432/app_dev"
-```
-
-连接测试库：
-
-```powershell
-psql "postgresql://app_user:local-dev-password@localhost:5432/app_test"
-```
-
-查看应用端口：
-
-```powershell
-Get-NetTCPConnection -LocalPort 8080
-```
-
-## 11. 自动化脚本职责
-
-建议为团队提供以下入口：
+## 11. 推荐开发工作流
 
 ```text
-scripts/init-db.ps1   首次创建用户、开发库和测试库
-scripts/migrate.ps1   对开发库执行迁移并检查结果
-scripts/start.ps1     加载本地环境变量并启动应用
-scripts/test.ps1      校验测试库、重建结构并运行测试
+修改 Java 代码
+    ↓
+新增或修改测试
+    ↓
+需要表结构变更时新增 Flyway migration
+    ↓
+执行 mvn verify
+    ↓
+启动应用并检查 /actuator/health
+    ↓
+提交代码和新的迁移文件
 ```
 
-`test.ps1` 在执行任何清理操作前，应同时检查：
+提交前至少执行：
 
-- `TEST_DB_URL` 已配置。
-- URL 中数据库名确实为 `app_test`。
-- 数据库返回的 `current_database()` 为 `app_test`。
-- 目标主机为 `localhost` 或 `127.0.0.1`。
-
-这能防止测试脚本误清理开发库或远程数据库。
-
-## 12. 团队工作流
-
-首次使用：
-
-```powershell
-psql -U postgres -f scripts/init-db.sql
-.\mvnw.cmd clean verify
-.\mvnw.cmd spring-boot:run
+```bash
+mvn clean verify
+mvn flyway:validate
 ```
 
-日常开发：
+## 12. 团队约定
 
-```powershell
-git pull
-.\mvnw.cmd clean verify
-.\mvnw.cmd spring-boot:run
-```
-
-修改数据库结构：
-
-1. 新建下一个 Flyway 版本文件。
-2. 在 `app_test` 上运行完整测试。
-3. 在 `app_dev` 上执行迁移。
-4. 检查 `flyway_schema_history`。
-5. 提交迁移、实体变更和测试。
-
-该方案让开发数据库、测试数据库和迁移历史彼此清晰分离，同时完全依赖本机 Java 与 PostgreSQL，不需要 Docker。
+- 每位开发者使用自己的本地 PostgreSQL 实例。
+- 共享环境只用于联调，不作为个人开发数据库。
+- 数据库 schema 由 Flyway 维护。
+- 应用不依赖 PostgreSQL 超级用户。
+- 密码、令牌和本地覆盖配置不提交到 Git。
+- CI 环境使用独立 PostgreSQL 服务；即使 CI 使用其他运行方式，也不影响本地方案。
+- README 必须包含安装、初始化、启动、迁移和测试命令。
+- 为常见故障提供排查说明：端口占用、认证失败、数据库不存在、迁移失败、Java 版本不匹配。

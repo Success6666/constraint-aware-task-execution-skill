@@ -1,16 +1,11 @@
-建议使用 **Pydantic v2** 完成类型校验，并把加载流程固定为：
+可以采用“三层配置 + Pydantic 校验”的设计：
 
-```text
-模型默认值 < JSON 文件 < 环境变量
-```
+- 默认值
+- JSON 文件覆盖默认值
+- 环境变量覆盖 JSON
+- 最终统一进行类型和约束校验
 
-环境变量采用统一前缀和双下划线表示嵌套字段，例如：
-
-```text
-MYAPP_HOST=0.0.0.0
-MYAPP_DATABASE__PORT=5433
-MYAPP_DEBUG=true
-```
+优先级：`默认值 < JSON < 环境变量`。环境变量使用 `APP_` 前缀，嵌套字段用 `__` 分隔，例如 `APP_DATABASE__PORT`。
 
 ```python
 # config.py
@@ -19,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -29,150 +24,140 @@ class DatabaseConfig(BaseModel):
 
     host: str = "localhost"
     port: int = Field(default=5432, ge=1, le=65535)
-    username: str
+    user: str
     password: str
-    pool_size: int = Field(default=10, ge=1)
 
 
-class AppConfig(BaseModel):
+class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    host: str = "127.0.0.1"
-    port: int = Field(default=8000, ge=1, le=65535)
+    app_name: str = "my-service"
     debug: bool = False
+    port: int = Field(default=8000, ge=1, le=65535)
     database: DatabaseConfig
 
 
-class ConfigError(RuntimeError):
-    """Raised when application configuration cannot be loaded."""
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise ConfigError(f"配置文件不存在：{path}")
-
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
-    except json.JSONDecodeError as exc:
-        raise ConfigError(
-            f"JSON 格式错误：{path}:{exc.lineno}:{exc.colno}，{exc.msg}"
-        ) from exc
-    except OSError as exc:
-        raise ConfigError(f"无法读取配置文件 {path}：{exc}") from exc
-
-    if not isinstance(data, dict):
-        raise ConfigError(f"配置文件顶层必须是 JSON 对象：{path}")
-
-    return data
+class ConfigError(Exception):
+    """配置加载或校验失败。"""
 
 
 def _parse_env_value(value: str) -> Any:
-    # 借助 JSON 语义转换布尔值、数字、null、数组和对象。
+    """
+    优先按 JSON 解析，使环境变量支持：
+    true、false、123、12.5、["a", "b"] 等类型。
+    """
     try:
         return json.loads(value)
     except json.JSONDecodeError:
         return value
 
 
-def _read_environment(prefix: str) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    normalized_prefix = prefix.upper()
+def _set_nested(data: dict[str, Any], path: list[str], value: Any) -> None:
+    current = data
 
-    for name, raw_value in os.environ.items():
-        if not name.upper().startswith(normalized_prefix):
-            continue
+    for key in path[:-1]:
+        child = current.get(key)
+        if not isinstance(child, dict):
+            child = {}
+            current[key] = child
+        current = child
 
-        key = name[len(prefix):].lower()
-        if not key:
-            continue
-
-        parts = key.split("__")
-        current = result
-
-        for part in parts[:-1]:
-            child = current.setdefault(part, {})
-            if not isinstance(child, dict):
-                raise ConfigError(f"环境变量路径冲突：{name}")
-            current = child
-
-        current[parts[-1]] = _parse_env_value(raw_value)
-
-    return result
+    current[path[-1]] = value
 
 
-def _deep_merge(
-    base: dict[str, Any],
-    overrides: dict[str, Any],
-) -> dict[str, Any]:
-    result = base.copy()
+def _load_json(path: str | Path) -> dict[str, Any]:
+    file_path = Path(path)
 
-    for key, value in overrides.items():
-        if isinstance(value, dict) and isinstance(result.get(key), dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-
-    return result
-
-
-def _format_validation_error(exc: ValidationError) -> str:
-    messages = ["配置校验失败："]
-
-    for error in exc.errors():
-        field = ".".join(str(part) for part in error["loc"])
-        value = error.get("input")
-        messages.append(f"- {field}: {error['msg']}（收到：{value!r}）")
-
-    return "\n".join(messages)
-
-
-def load_config(
-    path: str | Path,
-    *,
-    env_prefix: str = "MYAPP_",
-) -> AppConfig:
-    file_values = _read_json(Path(path))
-    env_values = _read_environment(env_prefix)
-    merged_values = _deep_merge(file_values, env_values)
+    if not file_path.exists():
+        return {}
 
     try:
-        return AppConfig.model_validate(merged_values)
+        content = json.loads(file_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ConfigError(
+            f"配置文件 {file_path} 不是合法 JSON："
+            f"第 {exc.lineno} 行，第 {exc.colno} 列"
+        ) from exc
+    except OSError as exc:
+        raise ConfigError(f"无法读取配置文件 {file_path}：{exc}") from exc
+
+    if not isinstance(content, dict):
+        raise ConfigError(f"配置文件 {file_path} 的根节点必须是 JSON 对象")
+
+    return content
+
+
+def load_settings(
+    json_path: str | Path = "config.json",
+    environ: Mapping[str, str] | None = None,
+) -> Settings:
+    env = environ if environ is not None else os.environ
+
+    raw: dict[str, Any] = _load_json(json_path)
+
+    for name, value in env.items():
+        if not name.startswith("APP_"):
+            continue
+
+        # APP_DATABASE__HOST -> ["database", "host"]
+        path = name.removeprefix("APP_").split("__")
+        path = [part.lower() for part in path]
+
+        if any(not part for part in path):
+            raise ConfigError(f"环境变量 {name} 的字段路径无效")
+
+        _set_nested(raw, path, _parse_env_value(value))
+
+    try:
+        return Settings.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(_format_validation_error(exc)) from exc
+        messages = []
+
+        for error in exc.errors():
+            location = ".".join(str(item) for item in error["loc"])
+            messages.append(f"{location}: {error['msg']}")
+
+        raise ConfigError("配置校验失败：\n- " + "\n- ".join(messages)) from exc
 ```
 
-JSON 配置示例：
+示例 `config.json`：
 
 ```json
 {
-  "host": "127.0.0.1",
-  "port": 8000,
-  "debug": false,
+  "port": 8080,
   "database": {
-    "host": "db.internal",
-    "port": 5432,
-    "username": "service_user",
-    "password": "secret",
-    "pool_size": 20
+    "user": "service",
+    "password": "secret"
   }
 }
+```
+
+环境变量覆盖：
+
+```text
+APP_DEBUG=true
+APP_PORT=9000
+APP_DATABASE__HOST=db.internal
+APP_DATABASE__PORT=5432
 ```
 
 使用方式：
 
 ```python
+from config import ConfigError, load_settings
+
 try:
-    config = load_config("config.json")
+    settings = load_settings("config.json")
 except ConfigError as exc:
     raise SystemExit(str(exc))
 
-print(config.database.host)
+print(settings.database.host)
 ```
 
-关键约束：
+依赖：
 
-- `extra="forbid"` 会把拼错或未声明的配置项直接报错。
-- 环境变量仅覆盖明确提供的字段，不会覆盖整个嵌套对象。
-- 密码等敏感字段应通过环境变量或密钥服务注入，生产配置文件中不要保存明文。
-- 单元测试至少覆盖非法 JSON、缺失必填项、未知字段、错误类型、嵌套覆盖和端口越界。
+```text
+pydantic>=2.0
+```
+
+该设计不解析 YAML，只接受 JSON；未知字段会被拒绝，端口范围、布尔值、整数等类型错误都会以字段路径形式报告。

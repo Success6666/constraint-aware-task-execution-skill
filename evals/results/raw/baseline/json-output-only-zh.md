@@ -1,300 +1,189 @@
 {
   "components": [
     {
-      "name": "session-api",
-      "responsibility": "提供会话创建、查询、刷新、撤销和批量下线接口，完成参数校验、身份认证、幂等控制与响应封装"
+      "name": "Session API",
+      "responsibility": "提供会话创建、查询、刷新、撤销和批量撤销接口；校验身份、权限、参数及幂等请求。"
     },
     {
-      "name": "session-service",
-      "responsibility": "实现会话生命周期、并发登录策略、滑动过期、绝对过期、令牌轮换和风险控制等核心业务逻辑"
+      "name": "Session Service",
+      "responsibility": "实现会话生命周期、滑动过期、并发控制、设备管理和风险策略。"
     },
     {
-      "name": "token-service",
-      "responsibility": "生成高熵访问令牌和刷新令牌，仅持久化令牌哈希；支持密钥轮换、令牌重放检测和常量时间比较"
+      "name": "Token Manager",
+      "responsibility": "生成和校验短期访问令牌及长期刷新令牌，支持令牌轮换、重放检测和密钥版本管理。"
     },
     {
-      "name": "session-store",
-      "responsibility": "以关系型数据库作为权威数据源，保存会话、令牌族、撤销状态和审计记录"
+      "name": "Session Repository",
+      "responsibility": "封装持久化访问，支持按会话ID、用户ID、令牌哈希和状态查询。"
     },
     {
-      "name": "session-cache",
-      "responsibility": "使用 Redis 缓存活跃会话、撤销标记和用户会话索引；采用短 TTL，并在缓存失效时回源数据库"
+      "name": "Cache and Revocation Store",
+      "responsibility": "缓存活跃会话和撤销状态，降低认证链路延迟并支持快速失效。"
     },
     {
-      "name": "cleanup-worker",
-      "responsibility": "分批清理过期会话和历史审计数据，修复缓存索引，并通过分布式锁避免重复执行"
+      "name": "Policy and Audit Module",
+      "responsibility": "执行空闲超时、绝对超时、设备数限制、异常IP检测，并记录安全审计事件。"
     },
     {
-      "name": "event-publisher",
-      "responsibility": "通过事务发件箱发布 session.created、session.refreshed、session.revoked 和 session.expired 事件"
-    },
-    {
-      "name": "observability",
-      "responsibility": "采集请求延迟、错误率、活跃会话数、刷新失败率、缓存命中率和异常撤销量，并记录不含原始令牌的结构化日志"
+      "name": "Key Management Adapter",
+      "responsibility": "从密钥管理系统读取签名密钥，支持轮换、灰度验证和旧密钥过渡期。"
     }
   ],
   "data_model": {
     "sessions": {
-      "fields": {
-        "id": "UUID，主键",
-        "user_id": "用户标识，必填并建立索引",
-        "tenant_id": "租户标识，可选；多租户场景下参与所有查询条件",
-        "status": "ACTIVE、REVOKED、EXPIRED",
-        "created_at": "创建时间",
-        "last_seen_at": "最近活动时间",
-        "idle_expires_at": "滑动过期时间",
-        "absolute_expires_at": "绝对过期时间",
-        "revoked_at": "撤销时间，可空",
-        "revoke_reason": "撤销原因，可空",
-        "device_id": "设备稳定标识，可空",
-        "device_name": "用户可识别的设备名称，可空",
-        "ip_hash": "标准化 IP 的加盐哈希",
-        "user_agent": "截断并清洗后的客户端信息",
-        "version": "乐观锁版本号"
-      },
-      "indexes": [
-        "tenant_id、user_id、status",
-        "status、idle_expires_at",
-        "status、absolute_expires_at",
-        "device_id"
-      ]
+      "id": "UUID，主键",
+      "user_id": "用户标识，建立索引",
+      "refresh_token_hash": "刷新令牌哈希，唯一索引，不保存明文令牌",
+      "access_token_version": "访问令牌版本或撤销代次",
+      "status": "ACTIVE、REVOKED、EXPIRED、COMPROMISED",
+      "device_id": "设备标识",
+      "user_agent": "客户端信息，可脱敏",
+      "ip_hash": "来源IP哈希或脱敏值",
+      "created_at": "创建时间",
+      "last_seen_at": "最近活动时间",
+      "expires_at": "绝对过期时间",
+      "idle_expires_at": "空闲过期时间",
+      "revoked_at": "撤销时间",
+      "revoke_reason": "撤销原因",
+      "metadata": "受限大小的扩展JSON字段"
     },
-    "refresh_tokens": {
-      "fields": {
-        "id": "UUID，主键",
-        "session_id": "关联 sessions.id",
-        "family_id": "令牌族标识，用于轮换和重放检测",
-        "token_hash": "刷新令牌的单向哈希，唯一索引",
-        "issued_at": "签发时间",
-        "expires_at": "过期时间",
-        "consumed_at": "被轮换使用的时间，可空",
-        "replaced_by_id": "后继令牌标识，可空",
-        "revoked_at": "撤销时间，可空"
-      },
-      "constraints": [
-        "禁止保存原始访问令牌或刷新令牌",
-        "刷新令牌成功使用后立即标记 consumed_at",
-        "已消费令牌再次出现时撤销整个 family_id 对应的会话"
-      ]
+    "session_events": {
+      "id": "递增ID或UUID",
+      "session_id": "关联会话",
+      "user_id": "关联用户",
+      "event_type": "CREATED、REFRESHED、REVOKED、EXPIRED、RISK_BLOCKED",
+      "request_id": "请求追踪标识",
+      "occurred_at": "事件时间",
+      "ip_hash": "来源IP哈希",
+      "metadata": "结构化事件详情"
     },
-    "session_audit": {
-      "fields": {
-        "id": "递增主键或 UUID",
-        "session_id": "会话标识",
-        "user_id": "用户标识",
-        "event_type": "CREATED、REFRESHED、REVOKED、EXPIRED、REPLAY_DETECTED",
-        "occurred_at": "事件时间",
-        "request_id": "请求追踪标识",
-        "metadata": "经过白名单过滤的 JSON 数据"
-      }
+    "key_versions": {
+      "kid": "密钥版本标识",
+      "algorithm": "签名算法",
+      "status": "ACTIVE、VERIFY_ONLY、RETIRED",
+      "activated_at": "启用时间",
+      "retired_at": "停用时间"
     },
-    "outbox_events": {
-      "fields": {
-        "id": "UUID，主键",
-        "aggregate_id": "会话标识",
-        "event_type": "事件类型",
-        "payload": "事件载荷 JSON",
-        "created_at": "创建时间",
-        "published_at": "发布时间，可空",
-        "retry_count": "发布重试次数"
-      }
-    }
-  },
-  "api": [
-    {
-      "method": "POST",
-      "path": "/v1/sessions",
-      "purpose": "认证成功后创建会话",
-      "request": {
-        "user_id": "由可信认证上下文提供",
-        "device_id": "可选",
-        "device_name": "可选"
-      },
-      "response": {
-        "session_id": "UUID",
-        "access_token": "短期令牌",
-        "refresh_token": "仅在创建时返回",
-        "expires_in": "访问令牌有效秒数",
-        "absolute_expires_at": "会话绝对过期时间"
-      },
-      "controls": [
-        "支持 Idempotency-Key",
-        "按用户、IP 和设备限流",
-        "执行单用户最大活跃会话数策略"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/v1/sessions/{session_id}",
-      "purpose": "查询当前会话详情",
-      "authorization": "仅会话所有者或具备会话管理权限的管理员可访问"
-    },
-    {
-      "method": "GET",
-      "path": "/v1/users/me/sessions",
-      "purpose": "分页列出当前用户的活跃会话和设备信息",
-      "query": {
-        "cursor": "可选游标",
-        "limit": "默认 20，最大 100"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/v1/sessions/refresh",
-      "purpose": "轮换刷新令牌并签发新的访问令牌",
-      "request": {
-        "refresh_token": "必填"
-      },
-      "behavior": [
-        "在单个数据库事务中消费旧令牌并创建新令牌",
-        "使用行锁或条件更新处理并发刷新",
-        "检测重放后撤销整个令牌族"
-      ]
-    },
-    {
-      "method": "DELETE",
-      "path": "/v1/sessions/{session_id}",
-      "purpose": "撤销指定会话",
-      "behavior": "幂等；重复撤销仍返回成功"
-    },
-    {
-      "method": "DELETE",
-      "path": "/v1/users/me/sessions",
-      "purpose": "撤销当前用户除当前会话外的全部会话",
-      "query": {
-        "except_current": "默认 true"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/v1/internal/sessions/introspect",
-      "purpose": "供受信任内部服务校验会话状态",
-      "controls": [
-        "仅允许服务身份调用",
-        "响应不包含令牌哈希或敏感设备数据",
-        "设置严格超时和调用方限流"
-      ]
-    }
-  ],
-  "migration": {
-    "strategy": "采用兼容性优先的分阶段迁移，支持随时回滚且不要求停机",
-    "phases": [
-      {
-        "phase": 1,
-        "name": "准备",
-        "actions": [
-          "建立会话、刷新令牌、审计和发件箱表",
-          "添加索引、外键、数据保留策略和监控面板",
-          "部署新服务但不接收生产流量"
-        ]
-      },
-      {
-        "phase": 2,
-        "name": "双写与影子校验",
-        "actions": [
-          "旧系统继续作为读取权威，同时异步或事务性写入新存储",
-          "对抽样请求执行影子读取并比较状态、过期时间和用户归属",
-          "记录差异但不影响用户请求"
-        ]
-      },
-      {
-        "phase": 3,
-        "name": "历史迁移",
-        "actions": [
-          "按主键游标分批迁移有效会话",
-          "仅迁移仍有效且可安全转换的数据",
-          "通过行数、校验和与抽样查询验证迁移结果"
-        ]
-      },
-      {
-        "phase": 4,
-        "name": "灰度切读",
-        "actions": [
-          "按租户或用户哈希逐步将 1%、10%、50%、100% 流量切换到新服务",
-          "持续观察登录失败率、刷新失败率、延迟和撤销量",
-          "异常时立即将读取路由切回旧系统"
-        ]
-      },
-      {
-        "phase": 5,
-        "name": "切写与收敛",
-        "actions": [
-          "新服务成为读写权威，旧系统保留只读兼容窗口",
-          "停止双写后执行最终差异核对",
-          "等待最长会话有效期后下线旧令牌验证逻辑"
-        ]
-      },
-      {
-        "phase": 6,
-        "name": "清理",
-        "actions": [
-          "删除旧系统依赖前确认无调用流量",
-          "归档必要审计数据",
-          "在独立变更中移除旧表、旧配置和兼容代码"
-        ]
-      }
-    ],
-    "rollback": [
-      "灰度期间通过路由开关恢复旧系统读取",
-      "双写保留至新系统稳定期结束，确保回滚后数据连续",
-      "数据库变更先扩展后收缩，回滚阶段不删除字段或表",
-      "若新令牌格式无法被旧系统识别，则保留兼容验证器或强制重新认证"
+    "indexes_and_constraints": [
+      "sessions(id) 主键",
+      "sessions(refresh_token_hash) 唯一索引",
+      "sessions(user_id, status, expires_at) 组合索引",
+      "sessions(user_id, device_id, status) 组合索引",
+      "session_events(session_id, occurred_at) 索引",
+      "所有时间字段统一使用UTC",
+      "敏感字段仅保存哈希、脱敏值或加密值"
     ]
   },
+  "api": {
+    "authentication": "管理接口要求已认证主体具备相应权限；令牌接口使用HTTPS、限流和审计。",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/v1/sessions",
+        "purpose": "创建会话并返回访问令牌、刷新令牌及过期信息",
+        "idempotency": "支持Idempotency-Key，重复请求返回同一结果或明确冲突"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/sessions/{id}/refresh",
+        "purpose": "刷新访问令牌并轮换刷新令牌；旧刷新令牌立即失效"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/sessions",
+        "purpose": "查询当前用户的会话列表，支持设备、状态和分页过滤"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/sessions/{id}",
+        "purpose": "撤销指定会话，要求用户本人或管理员权限"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/sessions",
+        "purpose": "撤销当前用户除当前会话外的全部会话"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/sessions/introspect",
+        "purpose": "内部服务验证令牌有效性、主体、权限和会话状态"
+      }
+    ],
+    "response_rules": [
+      "统一返回request_id、错误码、消息和可选详情",
+      "对不存在、已撤销和无权限资源采用不泄露状态的响应策略",
+      "刷新令牌重放时撤销关联会话或令牌族并触发高优先级审计事件",
+      "所有写操作使用乐观锁或条件更新，避免并发刷新产生多个有效令牌"
+    ]
+  },
+  "migration": [
+    {
+      "phase": 1,
+      "actions": [
+        "创建sessions、session_events和key_versions表及索引",
+        "部署只读仓储和审计写入能力",
+        "配置密钥管理、缓存、限流和监控"
+      ]
+    },
+    {
+      "phase": 2,
+      "actions": [
+        "在兼容模式下生成新格式令牌",
+        "双写旧会话系统与新服务，校验数据一致性",
+        "按用户或租户灰度启用新会话校验"
+      ]
+    },
+    {
+      "phase": 3,
+      "actions": [
+        "将令牌验证和刷新流量切换至新服务",
+        "对存量会话执行惰性迁移或强制重新登录策略",
+        "持续监控错误率、刷新重放、延迟和撤销传播时间"
+      ]
+    },
+    {
+      "phase": 4,
+      "actions": [
+        "停止旧系统写入并保留只读回滚窗口",
+        "确认无活跃依赖后归档旧数据和代码",
+        "删除兼容逻辑，完成密钥和配置清理"
+      ]
+    },
+    {
+      "rollback": "保留旧验证路径和可切换配置；发生异常时停止新令牌签发，恢复旧校验并使新会话进入只读或批量撤销状态。"
+    }
+  ],
   "tests": {
     "unit": [
-      "会话创建、滑动过期和绝对过期边界",
-      "最大并发会话策略",
-      "访问令牌与刷新令牌生成及哈希校验",
-      "刷新令牌轮换和重放检测",
-      "撤销幂等性",
-      "租户隔离和权限判断"
+      "令牌签名、解析、过期、密钥版本和声明校验",
+      "滑动过期、绝对过期、设备限制和策略判断",
+      "刷新令牌轮换、重放检测、撤销原因和幂等处理"
     ],
     "integration": [
-      "数据库事务、乐观锁和并发刷新竞争",
-      "Redis 命中、未命中、超时及不可用时的回源行为",
-      "事务发件箱与重复事件发布",
-      "过期清理任务的分批处理和分布式锁",
-      "密钥轮换期间新旧令牌兼容性"
-    ],
-    "contract": [
-      "验证所有接口的请求与响应结构",
-      "验证错误码、分页游标和幂等语义",
-      "验证内部 introspect 接口的服务身份认证"
+      "API与数据库事务、唯一约束、乐观锁和分页查询",
+      "缓存命中、缓存失效、撤销状态传播和缓存不可用降级",
+      "密钥管理系统轮换及旧密钥验证过渡",
+      "旧系统双写、双读和灰度切换一致性"
     ],
     "security": [
-      "原始令牌不会出现在数据库、日志、指标或事件中",
-      "令牌枚举、伪造、重放和时序攻击",
-      "跨用户及跨租户越权访问",
-      "CSRF、注入、恶意 User-Agent 和超长输入",
-      "限流、暴力刷新和异常设备登录场景"
+      "令牌伪造、篡改、重放、算法混淆和跨租户访问",
+      "越权撤销、用户枚举、敏感信息泄露和日志脱敏",
+      "限流、暴力刷新、异常IP和设备指纹策略"
     ],
-    "migration": [
-      "旧数据映射的完整性和幂等性",
-      "双写失败补偿与重试",
-      "影子读取差异检测",
-      "各灰度阶段的路由切换和回滚",
-      "旧令牌在兼容窗口内的验证行为"
+    "reliability": [
+      "数据库、缓存、密钥服务不可用时的超时和降级",
+      "并发刷新、重复撤销和消息重复投递",
+      "节点重启、时钟偏差、网络分区及恢复后的数据一致性"
     ],
     "performance": [
-      "按预估峰值两倍执行创建、校验、刷新和撤销压测",
-      "验证缓存冷启动和热点用户大量会话场景",
-      "确认数据库索引命中且不存在全表扫描",
-      "检查 p95 和 p99 延迟、连接池饱和度及错误率"
+      "按目标峰值验证创建、校验、刷新和撤销吞吐",
+      "验证P95/P99延迟、缓存命中率和撤销传播SLA",
+      "长时间运行测试内存、连接池、索引和事件表增长"
     ],
-    "resilience": [
-      "数据库主从切换",
-      "Redis 故障和缓存雪崩",
-      "事件系统不可用",
-      "时钟偏差",
-      "服务滚动发布期间的会话连续性"
-    ],
-    "acceptance_criteria": {
-      "availability": "核心校验接口月度可用性不低于 99.95%",
-      "latency": "缓存命中时会话校验 p99 小于 50 毫秒，回源数据库时 p99 小于 200 毫秒",
-      "consistency": "撤销操作完成后 5 秒内在所有实例生效",
-      "security": "刷新令牌重放能够撤销对应令牌族，且任何持久化位置均不存在原始令牌",
-      "migration": "全量切换前影子读取差异率低于 0.01%，且不存在跨用户或跨租户差异"
-    }
+    "acceptance": [
+      "端到端覆盖登录、续期、登出、单设备撤销和全端登出",
+      "灰度期间新旧系统结果一致率达到发布阈值",
+      "审计事件完整、可检索且满足合规保留周期"
+    ]
   }
 }

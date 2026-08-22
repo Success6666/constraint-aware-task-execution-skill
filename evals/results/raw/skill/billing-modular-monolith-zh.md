@@ -1,230 +1,299 @@
-建议采用“单进程、单部署单元、单数据库、强模块边界”的模块化单体。四个业务模块独立封装领域模型和数据表，跨模块只能调用公开接口或消费领域事件，禁止直接访问其他模块的内部类和表。
+## 总体架构
 
-## 总体结构
+采用**模块化单体**：一个部署单元、一个数据库、一个进程内调用模型，但通过代码和数据访问边界隔离领域模块。模块之间只依赖公开的应用服务、命令和查询接口，不直接访问其他模块的内部表或聚合。
 
-```text
-billing-system/
-├─ bootstrap/                 # 启动、配置、依赖装配
-├─ application/               # 跨模块用例编排
-│  ├─ GenerateInvoiceUseCase
-│  ├─ CollectPaymentUseCase
-│  └─ ChangeSubscriptionUseCase
-├─ subscription/
-│  ├─ api/                    # 对其他模块公开
-│  ├─ application/
-│  ├─ domain/
-│  └─ infrastructure/
-├─ metering/
-│  ├─ api/
-│  ├─ application/
-│  ├─ domain/
-│  └─ infrastructure/
-├─ invoicing/
-│  ├─ api/
-│  ├─ application/
-│  ├─ domain/
-│  └─ infrastructure/
-├─ payment/
-│  ├─ api/
-│  ├─ application/
-│  ├─ domain/
-│  └─ infrastructure/
-└─ shared-kernel/             # Money、时间、ID、事务接口等少量稳定类型
-```
-
-依赖规则：
+建议分层：
 
 ```text
-bootstrap -> application -> 各模块 api
-模块 application -> 本模块 domain
-模块 infrastructure -> 本模块 domain
-模块之间 -> 只能依赖对方 api
-domain -> 不依赖数据库、HTTP、消息框架
+API / Admin / 定时任务
+        |
+应用层（模块用例、权限、事务编排）
+        |
+领域层（聚合、领域服务、业务规则）
+        |
+基础设施层（数据库、支付网关、消息/outbox）
 ```
+
+四个核心模块：
+
+- `Subscription`：订阅与套餐生命周期
+- `Metering`：用量采集、幂等和计费量汇总
+- `Billing`：账单、账单项、应收金额和结算状态
+- `Payment`：支付订单、扣款、退款和支付回调
 
 ## 模块边界
 
-| 模块 | 负责 | 核心模型 | 拥有的数据 | 对外接口 |
-|---|---|---|---|---|
-| 订阅 | 客户订阅、套餐、价格版本、生效期、取消与变更 | `Subscription`、`PlanVersion`、`PricePolicy` | `subscriptions`、`plan_versions`、`subscription_changes` | 查询指定时间的有效订阅及计价快照 |
-| 计量 | 接收用量、幂等去重、聚合、结算周期封账 | `UsageEvent`、`UsageAggregate`、`MeteringPeriod` | `usage_events`、`usage_aggregates`、`metering_periods` | 写入用量、查询周期用量、封账 |
-| 账单 | 生成账单、税费/折扣、账单状态、贷项与作废 | `Invoice`、`InvoiceLine`、`BillingRun` | `invoices`、`invoice_lines`、`billing_runs` | 生成、查询、确认、支付确认、作废账单 |
-| 支付 | 支付意图、扣款、退款、支付渠道回调、对账 | `Payment`、`PaymentAttempt`、`Refund` | `payments`、`payment_attempts`、`refunds`、`webhook_receipts` | 发起支付、处理回调、退款、查询支付结果 |
+### 1. 订阅模块
 
-关键原则：
+负责：
 
-- 账单生成时复制套餐名称、单价、币种、税率等快照，历史账单不依赖当前套餐配置。
-- 计量模块只记录“用了多少”，不决定最终应收金额。
-- 支付模块只记录资金动作，不直接修改账单表。
-- 账单模块是应收金额和账单状态的唯一所有者。
-- `customerId`、`subscriptionId`、`invoiceId` 等跨模块只以标识符传递，不共享领域实体。
-- 数据库可以共用实例，但建议按 schema 或表名前缀划分所有权，例如 `subscription.*`、`metering.*`。
+- 套餐、价格版本、计费周期
+- 客户订阅的创建、暂停、变更、取消
+- 生效时间、续费时间、试用期
+- 订阅状态机：`trialing`、`active`、`paused`、`canceled`、`expired`
 
-## 公开接口示例
-
-```java
-public interface SubscriptionQuery {
-    SubscriptionSnapshot getEffectiveSubscription(
-        CustomerId customerId,
-        Instant billingTime
-    );
-}
-
-public interface MeteringService {
-    UsageReceipt recordUsage(RecordUsageCommand command);
-    UsageSnapshot closeAndGetUsage(
-        SubscriptionId subscriptionId,
-        BillingPeriod period
-    );
-}
-
-public interface InvoiceService {
-    InvoiceId generate(GenerateInvoiceCommand command);
-    void confirmPayment(InvoiceId invoiceId, PaymentId paymentId, Money amount);
-}
-
-public interface PaymentService {
-    PaymentId charge(ChargeCommand command);
-    void handleCallback(PaymentCallback callback);
-}
-```
-
-查询接口返回专用 DTO 或不可变快照，不返回模块内部聚合对象。
-
-## 事务设计
-
-### 1. 订阅变更
-
-一个本地事务完成：
-
-1. 锁定或按版本号更新订阅。
-2. 校验状态迁移和生效时间。
-3. 写入订阅变更记录。
-4. 提交新版本。
-
-使用乐观锁防止并发修改。套餐变更默认从明确的生效时间开始，不回写已经确认的账单。
-
-### 2. 用量接收
-
-一个用量事件对应一个短事务：
-
-1. 根据 `source + idempotencyKey` 去重。
-2. 写入原始用量事件。
-3. 更新或追加聚合记录。
-4. 提交。
-
-数据库对幂等键建立唯一约束。已封账周期拒绝普通用量写入，迟到数据进入调整流程，不静默修改历史结果。
-
-### 3. 账单生成
-
-账单生成由顶层应用用例编排：
+核心聚合：
 
 ```text
-读取订阅计价快照
-    -> 封闭并读取计量周期
-    -> 在账单事务中创建账单及明细
+Subscription
+  - customerId
+  - planVersionId
+  - billingCycle
+  - status
+  - currentPeriodStart
+  - currentPeriodEnd
 ```
 
-账单事务负责：
-
-- 以 `subscriptionId + billingPeriod` 作为业务幂等键。
-- 保存计价输入快照、计算结果和舍入结果。
-- 原子写入账单头、明细及生成批次状态。
-
-“封闭计量周期”和“创建账单”难以成为一个纯粹的单聚合事务时，应保证命令可重试：重复生成返回原账单，而不是创建第二张账单。
-
-### 4. 支付
-
-发起扣款分成两个阶段：
-
-1. 本地事务创建 `Payment(PENDING)` 和支付尝试记录。
-2. 事务提交后调用支付渠道。
-3. 将渠道受理结果写回新的本地事务。
-
-不要在持有数据库事务期间调用外部支付渠道。
-
-支付回调处理事务：
-
-1. 使用渠道事件 ID 幂等去重。
-2. 锁定支付记录并更新状态。
-3. 记录原始回调和渠道流水号。
-4. 提交后发布 `PaymentSucceeded` 或 `PaymentFailed`。
-
-账单模块消费 `PaymentSucceeded`，在自己的事务中登记收款并更新状态。事件处理器必须幂等，可使用 `eventId` 唯一约束。进程内事件应在原事务提交后分发；如果要求宕机后仍能可靠恢复，可把待发布事件与业务数据一同写入本地事件表，再由后台任务重试投递。
-
-## 状态约束
+对外提供：
 
 ```text
-Subscription:
-PENDING -> ACTIVE -> PAUSED/CANCELED/EXPIRED
-
-MeteringPeriod:
-OPEN -> CLOSED -> ADJUSTED
-
-Invoice:
-DRAFT -> ISSUED -> PARTIALLY_PAID -> PAID
-              \-> VOID
-              \-> OVERDUE
-
-Payment:
-PENDING -> PROCESSING -> SUCCEEDED
-                      \-> FAILED
-SUCCEEDED -> PARTIALLY_REFUNDED -> REFUNDED
+getActiveSubscription(customerId)
+changePlan(command)
+cancelSubscription(command)
 ```
 
-状态转换由所属模块的方法完成，禁止控制器或其他模块直接更新状态字段。
+不负责计算实际用量金额，也不负责发起支付。
+
+### 2. 计量模块
+
+负责：
+
+- 接收 API 调用、存储、消息数等用量事件
+- 用量事件去重和顺序处理
+- 按客户、订阅、计费周期汇总用量
+- 保存可审计的原始用量记录
+
+核心聚合/实体：
+
+```text
+UsageRecord
+  - usageId
+  - customerId
+  - subscriptionId
+  - metric
+  - quantity
+  - occurredAt
+  - idempotencyKey
+
+UsageSummary
+  - subscriptionId
+  - period
+  - metric
+  - totalQuantity
+```
+
+计量模块只输出“某周期各计量项的数量”，价格和应收金额由账单模块计算。
+
+### 3. 账单模块
+
+负责：
+
+- 根据订阅和用量生成账单
+- 固定费用、按量费用、折扣、税费计算
+- 账单项明细和金额快照
+- 账单状态：`draft`、`issued`、`partially_paid`、`paid`、`void`、`overdue`
+- 账单日、到期日和重试所需的应收金额
+
+核心聚合：
+
+```text
+Invoice
+  - invoiceId
+  - customerId
+  - subscriptionId
+  - period
+  - status
+  - subtotal
+  - discount
+  - tax
+  - total
+  - amountDue
+```
+
+账单必须保存套餐价格、折扣规则和用量快照，避免后续价格变更影响历史账单。
+
+对外提供：
+
+```text
+generateInvoice(command)
+issueInvoice(invoiceId)
+getAmountDue(invoiceId)
+markPaymentApplied(command)
+```
+
+账单模块可以读取订阅模块的公开查询接口和计量模块的周期汇总接口，但不能修改其数据。
+
+### 4. 支付模块
+
+负责：
+
+- 创建支付订单
+- 调用支付渠道
+- 处理同步结果和异步回调
+- 回调验签、幂等和状态转换
+- 退款、撤销和支付失败重试
+
+核心聚合：
+
+```text
+Payment
+  - paymentId
+  - invoiceId
+  - amount
+  - currency
+  - status
+  - provider
+  - providerTransactionId
+```
+
+支付状态转换：
+
+```text
+pending -> processing -> succeeded
+                         -> failed
+succeeded -> refunded
+```
+
+支付模块不直接把账单状态改成 `paid`，而是通过账单模块的应用服务申请核销。
+
+## 模块间协作
+
+模块之间采用两种方式：
+
+1. **同步调用**：需要立即得到结果的查询或命令，例如账单生成时读取有效订阅和用量汇总。
+2. **进程内领域事件**：状态变化后的通知，例如：
+
+```text
+SubscriptionActivated
+UsageRecorded
+InvoiceIssued
+PaymentSucceeded
+PaymentFailed
+```
+
+事件只在单体内部发布，可先使用事务内事件表或 outbox 表，避免引入外部消息系统。未来即使拆分部署，也可以替换事件传输方式，而不改变领域接口。
+
+## 事务边界
+
+原则是：**一个业务不变量对应一个本地事务；跨模块流程采用最终一致性和可重试编排。**
+
+### 单模块事务
+
+以下操作各自使用一个数据库事务：
+
+- 创建或变更订阅
+- 写入一条幂等用量记录并更新汇总
+- 创建账单及全部账单项
+- 创建支付订单
+- 处理支付回调并更新支付状态
+
+### 跨模块流程
+
+#### 周期出账
+
+```text
+定时任务
+  -> Subscription 查询有效订阅
+  -> Metering 查询周期用量
+  -> Billing 事务生成 draft invoice
+  -> Billing 事务 issue invoice
+  -> 发布 InvoiceIssued
+```
+
+每一步可重试，账单使用唯一键：
+
+```text
+(subscriptionId, billingPeriod)
+```
+
+保证重复执行不会生成重复账单。
+
+#### 自动扣款
+
+```text
+InvoiceIssued
+  -> Payment 创建支付订单
+  -> 调用支付渠道
+  -> Payment 回调事务确认成功
+  -> 调用 Billing.markPaymentApplied
+  -> Billing 更新 paid / partially_paid
+```
+
+支付回调必须按 `providerTransactionId` 和幂等键去重。支付成功与账单核销不要求同一事务，但必须可重试、可对账。
+
+#### 取消订阅
+
+取消订阅只在订阅模块事务内完成；未结账单仍由账单和支付模块继续处理。若业务要求立即停止服务，应发布 `SubscriptionCanceled`，由权限或服务开通逻辑消费，而不是跨表强行修改。
+
+## 数据隔离
+
+可以共用一个数据库实例，但保持以下约束：
+
+- 每个模块拥有自己的 schema 或表前缀：`subscription_*`、`metering_*`、`billing_*`、`payment_*`
+- 禁止跨模块直接写表
+- 跨模块读取通过查询服务、只读 DTO 或数据库视图
+- 外键只在模块内部建立；跨模块使用业务 ID，不建立跨边界外键
+- 金额使用整数最小货币单位或定点类型，禁止浮点数
+- 所有状态变更记录审计日志
 
 ## 测试策略
 
-### 单元测试
+### 领域单元测试
 
-重点测试纯领域规则：
+覆盖纯业务规则：
 
-- 订阅升级、降级、取消和生效时间。
-- 阶梯价、包量、超额计费、折扣、税费和货币舍入。
-- 重复用量事件去重。
-- 账单状态迁移、部分支付、超额支付和退款。
-- 支付回调乱序、重复和失败重试。
+- 订阅状态转换和变更生效日
+- 用量事件重复提交不重复计费
+- 分段计价、阶梯价、折扣和税费
+- 账单金额和舍入规则
+- 支付状态机及非法转换
 
-计价测试建议使用表驱动参数，并覆盖周期边界、时区、闰日和小数精度。
+### 模块应用服务测试
 
-### 模块集成测试
+使用测试数据库或事务回滚：
 
-每个模块使用真实数据库验证：
+- 创建订阅的完整用例
+- 生成账单的幂等性
+- 支付回调重复到达
+- 部分支付、退款和核销
+- 权限、租户和数据边界
 
-- Repository 映射和数据库约束。
-- 乐观锁及并发写入。
-- 唯一幂等键。
-- 事务回滚。
-- 模块公开 API，避免从测试绕过 API 操作内部表。
+### 契约测试
 
-### 跨模块场景测试
+验证模块公开接口稳定：
+
+- 订阅查询 DTO
+- 用量汇总 DTO
+- 账单核销命令
+- 领域事件载荷和版本兼容性
+
+### 集成测试
+
+验证数据库和外部支付适配器：
+
+- 事务提交与回滚
+- outbox 事件可靠写入
+- 支付渠道验签和错误映射
+- 对账任务能修复“支付成功但账单未核销”
+
+### 端到端测试
 
 至少覆盖：
 
-1. 创建订阅 → 上报用量 → 周期封账 → 生成账单。
-2. 生成账单 → 支付成功 → 账单变为已支付。
-3. 支付回调重复到达，只登记一次收款。
-4. 支付失败后重试，不重复生成账单。
-5. 套餐中途变更，账单按有效区间正确拆分明细。
-6. 迟到用量产生调整项，不修改已确认账单。
-7. 任一步骤异常后重试，最终结果不重复、不丢失。
+```text
+创建订阅
+ -> 产生用量
+ -> 周期出账
+ -> 发起支付
+ -> 接收支付回调
+ -> 账单变为 paid
+```
 
-### 架构测试
+重点断言：
 
-自动检查：
+- 同一用量不会重复计费
+- 同一周期只生成一张账单
+- 同一支付回调只核销一次
+- 失败步骤重试后最终状态正确
 
-- 模块只能引用其他模块的 `api` 包。
-- 领域层不能依赖基础设施层。
-- 其他模块不能引用内部 Repository。
-- 数据库迁移按模块归属组织。
-
-## 建议的首期实现顺序
-
-1. 定义金额、周期、模块 ID 和时间语义。
-2. 完成订阅快照与计量幂等写入。
-3. 实现账单计算和账单生成幂等性。
-4. 接入支付及回调去重。
-5. 补齐跨模块场景、并发与故障恢复测试。
-
-最终产物保持为一个代码库、一个运行进程和一个部署包；模块化通过代码依赖、公开 API、数据所有权和事务边界实现。
+这样既保持单体部署和事务简单性，又通过模块边界、公开接口、幂等机制和测试体系控制复杂度。

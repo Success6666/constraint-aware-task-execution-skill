@@ -1,305 +1,210 @@
-Use FastAPI with `psycopg` 3 and `psycopg_pool`. Keep SQL explicit, place transaction boundaries in the service layer, and use keyset pagination rather than offset pagination.
+Use FastAPI with `asyncpg` and explicit SQL. Keep HTTP handling, transaction orchestration, and SQL access separated, but avoid introducing an ORM or repository abstraction that hides transaction boundaries.
 
-**Dependencies**
+**Project layout**
 
-```toml
-[project]
-dependencies = [
-  "fastapi",
-  "uvicorn[standard]",
-  "psycopg[binary,pool]",
-  "pydantic-settings",
-]
-
-[project.optional-dependencies]
-test = [
-  "httpx",
-  "pytest",
-  "pytest-asyncio",
-  "testcontainers[postgres]",
-]
+```text
+app/
+  main.py
+  db.py
+  errors.py
+  inventory/
+    models.py       # Pydantic request/response models
+    routes.py
+    service.py      # transaction and business rules
+    sql.py          # SQL constants or query functions
+tests/
+  integration/
+    conftest.py
+    test_inventory.py
+migrations/
+  001_inventory.sql
 ```
 
 **Database schema**
 
 ```sql
-CREATE TABLE inventory_items (
-    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    sku         text NOT NULL UNIQUE,
-    name        text NOT NULL,
-    quantity    integer NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-    version     bigint NOT NULL DEFAULT 1,
-    created_at  timestamptz NOT NULL DEFAULT now(),
-    updated_at  timestamptz NOT NULL DEFAULT now()
+CREATE TABLE products (
+    id          BIGSERIAL PRIMARY KEY,
+    sku         TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    quantity    INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX inventory_items_created_id_idx
-    ON inventory_items (created_at, id);
+CREATE INDEX products_created_id_idx
+    ON products (created_at DESC, id DESC);
 
 CREATE TABLE stock_adjustments (
-    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    item_id         bigint NOT NULL REFERENCES inventory_items(id),
-    delta           integer NOT NULL CHECK (delta <> 0),
-    quantity_after  integer NOT NULL CHECK (quantity_after >= 0),
-    reason          text,
-    request_id      uuid NOT NULL UNIQUE,
-    created_at      timestamptz NOT NULL DEFAULT now()
+    id          BIGSERIAL PRIMARY KEY,
+    product_id  BIGINT NOT NULL REFERENCES products(id),
+    delta       INTEGER NOT NULL CHECK (delta <> 0),
+    reason      TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX stock_adjustments_item_created_idx
-    ON stock_adjustments (item_id, created_at DESC);
+CREATE INDEX stock_adjustments_product_created_idx
+    ON stock_adjustments (product_id, created_at DESC, id DESC);
 ```
 
-`request_id` makes stock adjustment retries idempotent. The history table also provides an audit trail.
+The adjustment table provides an audit trail; `products.quantity` is the current materialized stock level.
 
-**API**
+**Connection management**
+
+Use an `asyncpg.Pool` created during FastAPI lifespan:
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.db = await asyncpg.create_pool(
+        dsn=settings.database_url,
+        min_size=2,
+        max_size=10,
+    )
+    yield
+    await app.state.db.close()
+```
+
+Expose the pool through a dependency. Acquire a connection only for the duration of a request or transaction.
+
+**API surface**
 
 ```text
-POST   /items
-GET    /items/{id}
-GET    /items?limit=50&cursor=...
-POST   /items/{id}/adjustments
-GET    /items/{id}/adjustments?limit=50&cursor=...
+POST   /products
+GET    /products?limit=50&cursor=...
+GET    /products/{product_id}
+POST   /products/{product_id}/adjustments
+GET    /products/{product_id}/adjustments?limit=50&cursor=...
 ```
 
-Example adjustment request:
+Example payloads:
 
 ```json
+POST /products
 {
-  "delta": -3,
-  "reason": "order fulfillment",
-  "request_id": "44d39739-dd60-4e06-a3f4-6aacaaab27af"
+  "sku": "SKU-1001",
+  "name": "Keyboard",
+  "quantity": 20
 }
 ```
 
-A negative adjustment that would take stock below zero returns `409 Conflict`.
-
-**Connection lifecycle**
-
-```python
-# db.py
-from contextlib import asynccontextmanager
-
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
-
-pool = AsyncConnectionPool(
-    conninfo="postgresql://inventory:inventory@localhost/inventory",
-    kwargs={"autocommit": False, "row_factory": dict_row},
-    open=False,
-)
-
-@asynccontextmanager
-async def lifespan(app):
-    await pool.open()
-    await pool.wait()
-    yield
-    await pool.close()
+```json
+POST /products/1/adjustments
+{
+  "delta": -3,
+  "reason": "damaged stock"
+}
 ```
 
-```python
-app = FastAPI(lifespan=lifespan)
-```
+Responses should use Pydantic models and include `id`, `sku`, `name`, `quantity`, and timestamps. Return `409 Conflict` for duplicate SKUs or an adjustment that would make stock negative, `404` for missing products, and `422` for malformed input.
 
-Do not let repositories open transactions implicitly. Pass a transaction-bound connection into repository functions so a service operation can span multiple statements atomically.
+**Key transaction for stock adjustments**
 
-**Atomic stock adjustment**
+Perform the lock, validation, update, and audit insert in one transaction:
 
 ```python
-from uuid import UUID
+async def adjust_stock(pool, product_id: int, delta: int, reason: str):
+    if delta == 0:
+        raise InvalidAdjustment()
 
-from psycopg import AsyncConnection
-from psycopg.errors import UniqueViolation
-
-
-class ItemNotFound(Exception):
-    pass
-
-
-class InsufficientStock(Exception):
-    pass
-
-
-async def adjust_stock(
-    conn: AsyncConnection,
-    *,
-    item_id: int,
-    delta: int,
-    reason: str | None,
-    request_id: UUID,
-) -> dict:
-    async with conn.transaction():
-        existing = await conn.execute(
-            """
-            SELECT i.*
-            FROM stock_adjustments a
-            JOIN inventory_items i ON i.id = a.item_id
-            WHERE a.request_id = %s AND a.item_id = %s
-            """,
-            (request_id, item_id),
-        )
-        if row := await existing.fetchone():
-            return row
-
-        result = await conn.execute(
-            """
-            UPDATE inventory_items
-               SET quantity = quantity + %s,
-                   version = version + 1,
-                   updated_at = now()
-             WHERE id = %s
-               AND quantity + %s >= 0
-         RETURNING *
-            """,
-            (delta, item_id, delta),
-        )
-        item = await result.fetchone()
-
-        if item is None:
-            found = await conn.execute(
-                "SELECT 1 FROM inventory_items WHERE id = %s",
-                (item_id,),
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            product = await conn.fetchrow(
+                """
+                SELECT id, quantity
+                FROM products
+                WHERE id = $1
+                FOR UPDATE
+                """,
+                product_id,
             )
-            if await found.fetchone() is None:
-                raise ItemNotFound
-            raise InsufficientStock
+            if product is None:
+                raise ProductNotFound()
 
-        await conn.execute(
-            """
-            INSERT INTO stock_adjustments
-                (item_id, delta, quantity_after, reason, request_id)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (item_id, delta, item["quantity"], reason, request_id),
-        )
+            new_quantity = product["quantity"] + delta
+            if new_quantity < 0:
+                raise InsufficientStock()
 
-        return item
-```
-
-The conditional `UPDATE` is atomic under concurrent requests. There is no read-modify-write race and no need for a process-local lock.
-
-For complete idempotency under simultaneous requests using the same `request_id`, insert or reserve the adjustment request first, or catch `UniqueViolation`, roll back, then read the already committed result in a new transaction. Also reject reuse of a `request_id` with different input values.
-
-**Route transaction usage**
-
-```python
-@router.post(
-    "/items/{item_id}/adjustments",
-    response_model=ItemResponse,
-)
-async def create_adjustment(
-    item_id: int,
-    body: AdjustmentRequest,
-) -> ItemResponse:
-    async with pool.connection() as conn:
-        try:
-            item = await adjust_stock(
-                conn,
-                item_id=item_id,
-                delta=body.delta,
-                reason=body.reason,
-                request_id=body.request_id,
+            updated = await conn.fetchrow(
+                """
+                UPDATE products
+                SET quantity = $2, updated_at = now()
+                WHERE id = $1
+                RETURNING id, sku, name, quantity, created_at, updated_at
+                """,
+                product_id,
+                new_quantity,
             )
-        except ItemNotFound:
-            raise HTTPException(404, "Item not found")
-        except InsufficientStock:
-            raise HTTPException(409, "Insufficient stock")
 
-    return ItemResponse.model_validate(item)
+            await conn.execute(
+                """
+                INSERT INTO stock_adjustments(product_id, delta, reason)
+                VALUES ($1, $2, $3)
+                """,
+                product_id,
+                delta,
+                reason,
+            )
+
+            return updated
 ```
 
-**Keyset pagination**
+`SELECT ... FOR UPDATE` serializes concurrent adjustments for the same product. The transaction guarantees that the quantity update and audit record either both commit or both roll back.
 
-Encode `(created_at, id)` into an opaque URL-safe base64 cursor. Validate decoded values before passing them to SQL.
+For product creation, insert the initial quantity and optionally create an initial adjustment in the same transaction. Convert PostgreSQL unique-constraint violations into `409`.
+
+**Pagination**
+
+Prefer keyset pagination over offsets for stable performance:
 
 ```sql
-SELECT id, sku, name, quantity, version, created_at, updated_at
-FROM inventory_items
-WHERE (
-    %(cursor_created_at)s IS NULL
-    OR (created_at, id) > (%(cursor_created_at)s, %(cursor_id)s)
-)
-ORDER BY created_at, id
-LIMIT %(fetch_limit)s;
+SELECT id, sku, name, quantity, created_at, updated_at
+FROM products
+WHERE ($1::timestamptz IS NULL AND $2::bigint IS NULL)
+   OR (created_at, id) < ($1, $2)
+ORDER BY created_at DESC, id DESC
+LIMIT $3;
 ```
 
-Fetch `limit + 1` rows. Return only `limit`; if the extra row exists, create `next_cursor` from the last returned row.
+Encode the last row’s `(created_at, id)` as an opaque base64 URL-safe cursor. Validate `limit` with `Query(50, ge=1, le=200)`. Return:
 
 ```json
 {
   "items": [],
-  "next_cursor": "opaque-value-or-null"
+  "next_cursor": "opaque-token-or-null"
 }
 ```
 
-Constrain `limit`, for example `1 <= limit <= 100`. Keyset pagination avoids duplicates and increasingly slow scans associated with large offsets.
+Apply the same pattern to adjustment history, using `(created_at, id)` scoped to a single `product_id`.
 
-**Suggested layout**
+**Error handling**
 
-```text
-app/
-  main.py
-  config.py
-  db.py
-  errors.py
-  models.py
-  pagination.py
-  repositories/
-    items.py
-  services/
-    inventory.py
-  routes/
-    items.py
-migrations/
-  001_initial.sql
-tests/
-  conftest.py
-  test_items.py
-  test_adjustments.py
-  test_pagination.py
-  test_concurrency.py
-```
+Register handlers for:
 
-**Integration testing**
+- domain exceptions (`ProductNotFound`, `InsufficientStock`)
+- `asyncpg.UniqueViolationError`
+- database connectivity errors, mapped to `503`
+- unexpected exceptions, logged with a request ID and returned as generic `500`
 
-Start a real PostgreSQL container once per test session, apply SQL migrations, and override the application pool configuration. Clean tables between tests with `TRUNCATE ... RESTART IDENTITY CASCADE`.
+Do not expose SQL errors or connection details to clients.
 
-Critical cases:
+**Integration tests**
 
-- Creating and retrieving an item.
-- Duplicate SKU returns `409`.
-- Pagination has stable ordering, no duplicates, and correct terminal cursor.
-- Positive and negative adjustments update quantity and write audit rows.
-- Adjustment cannot make quantity negative.
-- Missing item returns `404`.
-- Repeated `request_id` produces one adjustment.
-- Reusing a request ID with different input returns `409`.
-- Concurrent decrements never produce negative stock.
-- Failure while inserting the audit record rolls back the quantity update.
+Run PostgreSQL in CI and locally with Testcontainers or Docker Compose. Tests should use the real database and migrations, not SQLite or mocks.
 
-Concurrency test outline:
+Recommended cases:
 
-```python
-async def test_concurrent_decrements_do_not_oversell(client):
-    item = await create_item(client, quantity=5)
+1. Create a product and retrieve it.
+2. Reject duplicate SKU with `409`.
+3. Apply a positive adjustment and verify quantity plus audit row.
+4. Reject an adjustment that would make quantity negative; verify neither table changed.
+5. Run concurrent adjustments against one product and verify the final quantity equals the sum of successful deltas.
+6. Verify cursor pagination has no duplicates or gaps across multiple pages.
+7. Verify adjustment history pagination.
+8. Verify missing product returns `404`.
+9. Roll back when the audit insert fails (inject a database constraint failure in a test transaction).
+10. Verify request validation rejects zero deltas and invalid limits.
 
-    responses = await asyncio.gather(*[
-        client.post(
-            f"/items/{item['id']}/adjustments",
-            json={
-                "delta": -1,
-                "request_id": str(uuid4()),
-                "reason": "test",
-            },
-        )
-        for _ in range(10)
-    ])
+A concurrency test can start multiple async tasks, each calling the adjustment endpoint, then assert the final quantity and count of audit records. Use a separate connection per task so row locking is exercised realistically.
 
-    assert sum(r.status_code == 200 for r in responses) == 5
-    assert sum(r.status_code == 409 for r in responses) == 5
-
-    current = await client.get(f"/items/{item['id']}")
-    assert current.json()["quantity"] == 0
-```
-
-Run migrations against the container using `psql`, a small ordered migration runner, or a non-ORM migration tool such as Flyway. The production and test environments should execute the exact same migration files.
+This design keeps SQL explicit, makes transaction boundaries visible, supports safe concurrent stock changes, and provides production-like integration coverage without an ORM.

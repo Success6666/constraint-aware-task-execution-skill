@@ -1,213 +1,190 @@
 ## Architecture
 
-Expose a single operation:
+Expose a small service:
 
 ```text
-fetchMetadata(rawURL) -> {
+fetchMetadata(url, options) -> {
   finalUrl,
-  title?,
-  description?,
-  contentType?,
-  statusCode,
+  status,
+  contentType,
+  title,
+  description,
   fetchedAt,
-  cacheStatus
+  cache: "hit" | "miss" | "stale"
 }
 ```
 
-Use a dedicated outbound HTTP client with system proxies disabled. Do not accept caller-supplied headers, credentials, proxy settings, or redirect behavior.
+Components:
 
-Request flow:
+- URL parser and canonicalizer
+- SSRF policy checker
+- DNS resolver
+- HTTP client with a pinned-IP dialer
+- redirect handler
+- bounded metadata parser
+- TTL cache
+- metrics, logs, and tracing
 
-```text
-Normalize URL
-  -> Check cache
-  -> Resolve hostname
-  -> Validate every resolved IP
-  -> Connect to one validated IP while preserving the hostname for Host/SNI
-  -> Read bounded response
-  -> Validate each redirect from scratch
-  -> Parse metadata
-  -> Cache result
-```
+## Request Flow
 
-## URL Policy
+1. Parse and canonicalize the URL.
+   - Permit only `http` and `https`.
+   - Reject credentials, malformed ports, fragments, and unsupported schemes.
+   - Normalize hostname casing, trailing dots, and IDNs.
 
-Accept only absolute `http` and `https` URLs.
+2. Check the cache using the canonical URL.
 
-Reject:
+3. Resolve the hostname explicitly.
 
-- Embedded credentials
-- Missing host
-- Noncanonical or malformed IP literals
-- IPv6 zone identifiers
-- Control characters
-- URLs exceeding a configured length
-- Ports outside an explicit policy, preferably only `80` and `443`
+4. Reject the target if any resolved address is unsafe.
 
-Canonicalize for cache keys by lowercasing scheme/host, converting international hostnames to ASCII, removing fragments, removing default ports, and normalizing the path without changing query semantics.
+5. Connect only to the approved resolved address.
+   - Use a custom dialer so the HTTP client cannot perform a second unrestricted DNS lookup.
+   - Preserve the original hostname for the `Host` header and TLS SNI.
+   - Apply the same policy to every address returned by DNS.
 
-## SSRF Protection
+6. Send the request with bounded headers and a strict response body limit.
 
-For every initial request and redirect:
+7. On redirect:
+   - Resolve the `Location` against the current URL.
+   - Re-run URL validation and DNS resolution.
+   - Re-run the IP policy check.
+   - Pin the new approved address before connecting.
+   - Enforce a small redirect limit, such as five.
+   - Do not automatically downgrade HTTPS to HTTP unless explicitly allowed.
 
-1. Parse and canonicalize the destination.
-2. If the host is an IP literal, validate it directly.
-3. Otherwise resolve all `A` and `AAAA` records using a trusted resolver.
-4. Reject the destination if any answer is non-public.
-5. Select one validated address.
-6. Connect directly to that exact address.
-7. Preserve the original hostname for HTTP `Host` and TLS SNI/certificate verification.
+8. Parse only the required metadata (`title`, description, canonical URL, Open Graph fields) with a maximum document size and parser timeout.
 
-Pinning the connection to the validated address closes the DNS rebinding gap between validation and connection. Do not let the HTTP library resolve the hostname again.
+9. Store the result in the cache and emit observability data.
 
-Block all non-global destinations, including:
+## SSRF Policy
 
-- IPv4 and IPv6 loopback
-- RFC1918 private space
-- IPv4 and IPv6 link-local
-- Unique-local IPv6
-- Unspecified addresses
-- Multicast
-- Broadcast and reserved ranges
-- Carrier-grade NAT space
-- Documentation and benchmarking ranges
-- IPv4-mapped IPv6 representations of blocked IPv4 addresses
-- Cloud metadata endpoints, including `169.254.169.254`, their IPv6 equivalents, and provider metadata hostnames
+Reject any resolved IP in:
 
-Use a maintained IP classification library plus an explicit denylist. Avoid string-prefix IP checks.
+- IPv4 loopback: `127.0.0.0/8`
+- IPv4 private: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+- IPv4 link-local: `169.254.0.0/16`
+- IPv4 unspecified/current network: `0.0.0.0/8`
+- IPv4 multicast/reserved ranges
+- IPv6 loopback: `::1/128`
+- IPv6 unspecified: `::/128`
+- IPv6 link-local: `fe80::/10`
+- IPv6 unique-local/private: `fc00::/7`
+- IPv6 multicast/reserved ranges
+- Explicit cloud metadata targets, including:
+  - `169.254.169.254`
+  - `169.254.170.2`
+  - `168.63.129.16`
 
-Redirects must be processed manually. Disable automatic redirects and repeat the full parse, DNS resolution, IP validation, and pinned connection procedure for every `Location`. Reject malformed, non-HTTP(S), or policy-violating redirects. Limit redirect count, for example to five, and detect loops.
+Also reject hostnames that resolve to any mixture of public and blocked addresses. A hostname is allowed only when every candidate address is approved.
 
-Deployment should add a second control: outbound firewall rules allowing only public internet destinations. Application validation remains necessary because network policy alone may vary by environment.
+Do not rely on string checks such as “starts with `192.168`”. Parse IP literals structurally, including bracketed IPv6 URLs and IPv4-mapped IPv6 addresses.
 
-## Resource Limits
-
-Apply separate deadlines:
-
-- DNS: 1 second
-- Connect: 2 seconds
-- TLS handshake: 2 seconds
-- First byte: 3 seconds
-- Idle read: 2 seconds
-- Total operation, including redirects: 8 seconds
-
-Also enforce:
-
-- Maximum five redirects
-- Maximum compressed response size
-- Maximum decompressed response size, for example 2 MiB
-- Maximum HTML parsing input
-- Restricted accepted content types
-- Limited connection pool and per-host concurrency
-- Cancellation propagation when the total deadline expires
-
-Read through a bounded stream. Do not rely only on `Content-Length`, since it may be absent or false. Treat decompression expansion as part of the response-size limit.
-
-A `HEAD` request is not sufficient because many sites omit metadata or handle it differently. Use a bounded `GET`, optionally requesting an initial byte range, while tolerating servers that ignore range requests.
-
-## Caching
-
-Cache only successful, policy-compliant results.
-
-A cache entry should contain:
+Conceptually:
 
 ```text
-canonical URL
-metadata
-final canonical URL
-fetch timestamp
-expiry
-ETag and Last-Modified, when present
+validateTarget(url):
+  scheme = validateScheme(url)
+  host = normalizeHostname(url.host)
+
+  if host is an IP literal:
+      addresses = [parseIP(host)]
+  else:
+      addresses = dns.resolveAll(host)
+
+  if addresses is empty:
+      reject("no DNS answers")
+
+  if any(isBlocked(address) for address in addresses):
+      reject("unsafe destination")
+
+  return connectUsingPinnedAddresses(url, addresses)
 ```
+
+For DNS rebinding resistance, resolve immediately before each connection and bind the socket to the validated address. Never validate one lookup and then let a separate resolver choose the connection address.
+
+## Timeouts and Limits
+
+Use independent limits:
+
+- DNS timeout: 1–2 seconds
+- TCP connect timeout: 2–3 seconds
+- TLS handshake timeout: 3 seconds
+- Response-header timeout: 3–5 seconds
+- Total request deadline: 10 seconds
+- Maximum redirects: 5
+- Maximum response body: 1–2 MB
+- Maximum metadata field length
+- Maximum concurrent fetches per caller
+- Optional rate limit per hostname
+
+Cancel all operations when the request deadline expires.
+
+## Cache
+
+Use a bounded LRU or distributed cache keyed by:
+
+```text
+sha256(canonicalUrl + fetchProfileVersion)
+```
+
+Store:
+
+- Parsed metadata
+- Final URL
+- HTTP status
+- Fetch timestamp
+- Expiration timestamp
+- Content hash
+- Error classification, where appropriate
 
 Recommended behavior:
 
-- TTL based on trusted response headers but capped by service policy
-- Conservative default TTL, such as 15 minutes
-- Conditional refresh with `If-None-Match` or `If-Modified-Since`
-- Request coalescing so concurrent misses for the same URL perform one fetch
-- Short negative caching for ordinary public failures
-- Never cache policy denials as proof that a hostname remains unsafe or safe
-- Re-run destination validation before every network revalidation
-
-Keep cache keys independent of DNS results. Do not serve cached metadata across authorization or tenant boundaries if output can vary by tenant configuration.
-
-## Metadata Parsing
-
-Parse HTML with a real HTML parser. Extract a bounded set of fields, such as:
-
-- `<title>`
-- Open Graph title and description
-- Standard meta description
-- Canonical URL, treated only as metadata and never fetched automatically
-
-Define deterministic precedence and trim field lengths. Decode only supported character encodings and return partial metadata when parsing fails after a valid bounded response.
-
-Do not execute JavaScript, load images, resolve embedded resources, or follow HTML refresh directives.
+- Fresh hit: return immediately.
+- Expired entry: fetch synchronously.
+- Optional stale-while-revalidate: return stale data while one background refresh runs.
+- Request coalescing: only one in-flight fetch per cache key.
+- Never cache credentials or full response bodies unless required.
 
 ## Observability
 
-Emit one structured event per attempt and redirect hop:
+Emit structured events and metrics:
 
-```text
-request_id
-cache_status
-normalized_scheme
-destination_host_hash
-selected_ip_class
-redirect_count
-status_code
-content_type
-bytes_read
-dns_ms
-connect_ms
-tls_ms
-first_byte_ms
-total_ms
-outcome
-policy_denial_reason
-```
+- `fetch_started`, `fetch_completed`, `fetch_blocked`
+- Cache hit/miss/stale counts
+- DNS duration, connect duration, TLS duration, total duration
+- Redirect count and final scheme
+- Status-code distribution
+- Body-size-limit and timeout counts
+- SSRF rejection reason and resolved address family
 
-Do not log full URLs by default because paths, queries, and credentials may contain secrets. Log a hostname hash or approved hostname plus a redacted URL form.
-
-Metrics should include:
-
-- Request count and latency
-- Cache hit, miss, and revalidation rates
-- Outcomes by category
-- SSRF policy denials by reason
-- DNS, connect, TLS, and read timeouts
-- Redirect depth
-- Downloaded and decompressed byte counts
-- Coalesced request count
-- Parser failures
-
-Create tracing spans for cache lookup, each DNS lookup, each redirect hop, connection, response read, and parsing. Alerts should cover spikes in policy denials, timeout rates, redirect loops, and outbound attempts rejected by the network layer.
+Redact query strings, authorization headers, cookies, and response contents. Include a correlation ID and a stable hostname hash where privacy matters.
 
 ## Tests
 
-Use a controlled DNS resolver and local HTTP/TLS test servers. Never make tests depend on the public internet.
+Test the policy independently with table-driven cases:
 
-Core test cases:
+- Public IPv4 and IPv6: allowed
+- RFC1918, loopback, link-local, multicast, unspecified, and ULA: blocked
+- IPv4-mapped IPv6 private address: blocked
+- Decimal, hexadecimal, and unusual IPv4 representations: blocked
+- Explicit metadata IPs: blocked
+- Hostname with both public and private DNS answers: blocked
+- DNS failure and empty answers: classified correctly
 
-- Public IPv4 and IPv6 targets succeed.
-- Loopback, private, link-local, unique-local, multicast, unspecified, reserved, and metadata IPs fail.
-- Decimal, octal-like, hexadecimal, shortened, mixed, and IPv4-mapped IPv6 representations cannot bypass validation.
-- A hostname resolving to both public and private addresses is rejected.
-- DNS rebinding cannot change the actual connection destination after validation.
-- Redirect from public to private, loopback, link-local, or metadata address fails before connection.
-- Every hop is resolved and validated independently.
-- Relative redirects work; redirect loops and excess hops fail.
-- TLS uses the original hostname for SNI and certificate validation while connecting to the pinned IP.
-- Environment proxy variables do not redirect traffic through a proxy.
-- DNS, connect, TLS, first-byte, idle-read, and total deadlines fire independently.
-- Infinite streams, false `Content-Length`, chunked responses, and decompression bombs hit size limits.
-- Unsupported schemes and embedded credentials fail.
-- Cache hits avoid network calls.
-- Concurrent misses are coalesced.
-- Expired entries revalidate correctly after fresh SSRF checks.
-- Failed or blocked fetches do not poison successful entries.
-- Sensitive query values and credentials never appear in logs.
-- Cancellation closes response bodies and releases pool capacity.
+Integration tests should use a controllable DNS resolver and local HTTP server to verify:
 
-Add property-based tests for URL parsing and IP normalization, and fuzz the URL parser, redirect handling, content encoding, and HTML parser. The key invariant is: no socket may be opened until the exact destination IP for that socket has passed the public-address policy.
+- Initial private target is blocked
+- Public URL redirecting to a private IP is blocked
+- Public URL redirecting to a hostname resolving privately is blocked
+- Redirect chains are revalidated at every hop
+- DNS rebinding between validation and connection cannot bypass the policy
+- HTTPS SNI and `Host` remain correct when dialing a pinned IP
+- Redirect loops and excessive redirects terminate
+- DNS, connect, TLS, header, total, and body-size timeouts work
+- Cache hits avoid network calls
+- Concurrent identical requests are coalesced
+- Malformed or oversized HTML is safely handled
+- Metrics and redaction behavior are correct
+
+A useful security invariant is: **no socket is opened until the exact destination IP has been resolved, classified as public, and pinned for that connection.**

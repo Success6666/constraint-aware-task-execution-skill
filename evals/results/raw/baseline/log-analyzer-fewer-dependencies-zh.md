@@ -1,74 +1,21 @@
-建议实现为一个 Python 命令行工具，仅依赖标准库，采用“解析 → 过滤 → 聚合 → 输出”的流式管道。
-
-**目标与假设**
-
-- 输入：一个或多个文本日志文件，也支持 `-` 从 stdin 读取。
-- 默认日志格式：
+建议用 Python 标准库实现一个单文件可扩展 CLI，依赖保持为 0：
 
 ```text
-2026-08-16T10:12:03Z ERROR database connection failed
+log-analyzer/
+├─ log_analyzer/
+│  ├─ __main__.py       # python -m log_analyzer
+│  ├─ cli.py            # argparse、退出码
+│  ├─ reader.py         # 流式读取 stdin/文件
+│  ├─ parser.py         # 日志解析
+│  ├─ filter.py         # 时间范围过滤
+│  ├─ aggregate.py      # 错误聚合
+│  └─ output.py         # 文本/JSON 输出
+└─ tests/
+   ├─ test_parser.py
+   ├─ test_filter.py
+   ├─ test_aggregate.py
+   └─ test_cli.py
 ```
-
-- 日志级别至少支持 `DEBUG/INFO/WARN/WARNING/ERROR/FATAL`。
-- 无法解析的行不应中断处理，可计入 `unparsed` 统计并通过 stderr 提示。
-
-**命令行接口**
-
-```bash
-python -m log_analyzer logs/app.log
-python -m log_analyzer logs/*.log \
-  --from 2026-08-16T10:00:00Z \
-  --to 2026-08-16T11:00:00Z \
-  --level ERROR \
-  --top 20 \
-  --json report.json
-```
-
-建议参数：
-
-```text
-files                 输入文件，使用 - 表示 stdin
---from TIME           起始时间，包含
---to TIME             结束时间，不包含
---level LEVEL         最低日志级别
---pattern REGEX       错误消息归一化规则，可选
---top N               输出前 N 个错误
---json PATH           导出 JSON；使用 - 输出到 stdout
---encoding NAME       默认 utf-8
---fail-on-unparsed    存在无法解析的行时返回非零退出码
-```
-
-时间建议统一转换为带时区的 `datetime`。输入没有时区时，应通过 `--timezone` 指定，或明确按本地时区处理，避免静默混用。
-
-**核心模块**
-
-```text
-log_analyzer/
-  __main__.py       CLI 入口和退出码
-  cli.py            argparse 参数定义
-  model.py          LogRecord、AnalysisResult 数据类
-  parser.py         日志行解析
-  pipeline.py       流式读取、过滤、聚合
-  normalize.py      错误消息归一化
-  output.py         人类可读和 JSON 输出
-tests/
-  test_parser.py
-  test_filter.py
-  test_aggregator.py
-  test_cli.py
-```
-
-推荐使用：
-
-- `argparse`：命令行参数
-- `dataclasses`：结构化记录
-- `datetime`：时间解析和比较
-- `re`：日志解析和消息归一化
-- `collections.Counter`：错误计数
-- `json`：JSON 导出
-- `pathlib`：文件处理
-- `unittest`、`unittest.mock`：测试
-- `gzip`：可选支持 `.gz`，仍属于标准库
 
 核心数据结构：
 
@@ -78,131 +25,132 @@ class LogRecord:
     timestamp: datetime
     level: str
     message: str
-    source: str
-    line_number: int
+    source: str | None = None
+    raw: str = ""
 ```
+
+默认支持常见格式，例如：
+
+```text
+2026-08-22T10:15:30Z ERROR database connection failed
+2026-08-22 10:16:02,123 WARN retrying request
+```
+
+解析器按优先级尝试：
+
+1. JSON 日志：使用 `json.loads`
+2. 结构化文本：正则提取时间、级别和消息
+3. 未知格式：记录为解析失败，可配置为忽略或报错
+
+流式处理流程：
+
+```text
+输入文件/stdin
+    -> 逐行读取
+    -> 解析
+    -> 时间过滤
+    -> 错误聚合
+    -> 输出结果
+```
+
+始终使用迭代器，不将整个日志文件载入内存：
 
 ```python
-@dataclass
-class AnalysisResult:
-    total_lines: int
-    parsed_lines: int
-    unparsed_lines: int
-    level_counts: dict[str, int]
-    error_counts: Counter[str]
-    first_timestamp: datetime | None
-    last_timestamp: datetime | None
+def iter_records(stream):
+    for line in stream:
+        record = parse_line(line)
+        if record is not None:
+            yield record
 ```
 
-**流式处理逻辑**
+CLI 示例：
 
-```python
-for source in sources:
-    for line_number, line in enumerate(source, start=1):
-        record = parser.parse(line)
-
-        if record is None:
-            result.unparsed_lines += 1
-            continue
-
-        if start_time and record.timestamp < start_time:
-            continue
-        if end_time and record.timestamp >= end_time:
-            continue
-        if not level_at_least(record.level, minimum_level):
-            continue
-
-        result.parsed_lines += 1
-        result.level_counts[record.level] += 1
-
-        if record.level in {"ERROR", "FATAL"}:
-            key = normalizer(record.message)
-            result.error_counts[key] += 1
+```bash
+python -m log_analyzer app.log
 ```
 
-这样内存占用主要取决于错误聚合键数量，而不是日志总量。对于超大规模、错误种类极多的日志，可以增加：
+```bash
+cat app.log | python -m log_analyzer --level ERROR
+```
+
+```bash
+python -m log_analyzer app.log \
+  --from "2026-08-22T10:00:00Z" \
+  --to "2026-08-22T11:00:00Z"
+```
+
+```bash
+python -m log_analyzer app.log \
+  --level ERROR \
+  --group-by "message" \
+  --json result.json
+```
+
+建议参数：
 
 ```text
---max-error-keys N
+--from TIME          包含该时间点
+--to TIME            不包含该时间点
+--level LEVEL        DEBUG/INFO/WARN/ERROR/FATAL
+--group-by FIELD     message、exception、source
+--json PATH          导出 JSON；使用 - 输出到 stdout
+--format FORMAT      auto、text、json
+--ignore-malformed   忽略无法解析的行
+--encoding ENCODING  默认 utf-8
 ```
 
-超过上限后归入 `"<other>"`，防止聚合字典无限增长。
-
-**错误聚合**
-
-默认按完整消息统计。可选归一化应处理常见动态字段，例如：
-
-```text
-request 12345 failed
-request 67890 failed
-```
-
-归一化为：
-
-```text
-request <number> failed
-```
-
-建议只提供有限、可预测的规则：
-
-- 数字替换为 `<number>`
-- UUID 替换为 `<uuid>`
-- IP 替换为 `<ip>`
-- 用户自定义 `--pattern REGEX`
-
-不要默认进行过于激进的模糊聚类，否则会把不同错误合并。
-
-**JSON 输出**
-
-示例：
+错误聚合结果：
 
 ```json
 {
   "summary": {
-    "total_lines": 120034,
-    "parsed_lines": 119980,
-    "unparsed_lines": 54,
-    "first_timestamp": "2026-08-16T10:00:00+00:00",
-    "last_timestamp": "2026-08-16T10:59:59+00:00"
-  },
-  "levels": {
-    "INFO": 110000,
-    "WARN": 7000,
-    "ERROR": 2900,
-    "FATAL": 80
+    "total_lines": 12000,
+    "parsed_lines": 11980,
+    "matched_lines": 530,
+    "malformed_lines": 20
   },
   "errors": [
     {
-      "message": "database connection failed",
-      "count": 124
+      "key": "database connection failed",
+      "count": 42,
+      "first_seen": "2026-08-22T10:01:03Z",
+      "last_seen": "2026-08-22T10:59:48Z",
+      "samples": [
+        "database connection failed"
+      ]
     }
   ]
 }
 ```
 
-JSON 应通过 `json.dump(..., ensure_ascii=False, indent=2)` 写出；时间统一使用 ISO 8601 字符串。人类可读模式则输出摘要、级别统计和 Top 错误。
+聚合器使用 `collections.Counter` 和字典保存首次/末次出现时间；采样消息限制数量，避免异常长日志导致内存增长：
 
-**退出码**
-
-```text
-0 处理成功
-1 参数错误或输入文件无法打开
-2 存在无法解析的日志行（仅 --fail-on-unparsed）
+```python
+groups[key] = {
+    "count": groups[key]["count"] + 1,
+    "first_seen": min(...),
+    "last_seen": max(...),
+    "samples": ...
+}
 ```
 
-**测试重点**
+实现时应明确：
 
-- 标准日志行解析
-- 不同时间格式、时区和边界条件
-- `--from` 包含、`--to` 不包含
-- 日志级别过滤
-- 未解析行不会中断流式处理
-- 多文件统计合并
-- 错误消息归一化
-- Top N 排序和相同计数时的稳定排序
-- stdin 输入
-- JSON 输出结构和时间序列化
-- 空文件、全是无效行、文件不存在
-- 大量输入下不按文件总大小增长内存
+- 时间统一转换为带时区的 `datetime`
+- `--from`、`--to` 使用半开区间 `[from, to)`
+- 输出 JSON 时通过 `datetime.isoformat()` 序列化
+- Broken pipe、文件不存在、参数错误分别返回不同退出码
+- 解析失败默认统计并继续处理；严格模式再返回失败
 
-测试优先使用 `unittest` 和 `io.StringIO`，CLI 测试使用 `subprocess` 或直接调用 `main(argv)`，无需引入 pytest。依赖控制为零第三方依赖；只有在未来需要高性能正则、复杂日志格式或并行处理时再评估增加依赖。
+测试重点：
+
+- 各种时间格式和时区解析
+- 时间边界包含/排除行为
+- ERROR/FATAL 过滤
+- 相同错误的聚合计数和首末时间
+- stdin 输入和大文件流式处理
+- JSON 输出结构稳定
+- malformed 行的忽略与严格模式
+- CLI 参数错误和退出码
+
+测试框架可直接使用标准库 `unittest`；仅在项目已有约定时再引入 pytest。性能测试可生成临时大文件，验证处理期间内存不会随文件总大小线性增长。

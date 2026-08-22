@@ -1,148 +1,290 @@
-Use FastAPI with `psycopg` 3’s async connection pool, SQL migrations, and explicit SQL. Keep transaction boundaries in the service layer so stock updates and movement records commit or roll back together.
+Implement the API with FastAPI, `psycopg` 3’s async driver, and explicit SQL. Keep database access in a small repository layer; do not introduce model mapping or ORM abstractions.
 
-**Suggested structure**
+### Database schema
+
+```sql
+CREATE TABLE products (
+    id          BIGSERIAL PRIMARY KEY,
+    sku         TEXT NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    quantity    INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE stock_adjustments (
+    id              BIGSERIAL PRIMARY KEY,
+    product_id      BIGINT NOT NULL REFERENCES products(id),
+    delta           INTEGER NOT NULL CHECK (delta <> 0),
+    quantity_before INTEGER NOT NULL,
+    quantity_after  INTEGER NOT NULL,
+    reason          TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX stock_adjustments_product_created_idx
+    ON stock_adjustments(product_id, created_at DESC, id DESC);
+
+CREATE INDEX products_created_idx
+    ON products(created_at DESC, id DESC);
+```
+
+The `products.quantity` column is the current balance. `stock_adjustments` provides an audit trail.
+
+### Connection management
+
+```python
+# app/db.py
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from psycopg_pool import AsyncConnectionPool
+from fastapi import FastAPI, Request
+
+pool = AsyncConnectionPool(
+    conninfo="postgresql://inventory:inventory@localhost/inventory",
+    min_size=2,
+    max_size=10,
+    open=False,
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await pool.open()
+    try:
+        yield
+    finally:
+        await pool.close()
+
+async def connection(request: Request) -> AsyncIterator:
+    async with pool.connection() as conn:
+        yield conn
+```
+
+Configure the pool through environment variables and inject `connection` with `Depends`.
+
+### API surface
+
+```text
+POST   /products
+GET    /products?limit=50&cursor=...
+GET    /products/{product_id}
+POST   /products/{product_id}/adjustments
+GET    /products/{product_id}/adjustments?limit=50&cursor=...
+```
+
+Suggested payloads:
+
+```json
+POST /products
+{
+  "sku": "SKU-100",
+  "name": "Keyboard",
+  "quantity": 25
+}
+```
+
+```json
+POST /products/1/adjustments
+{
+  "delta": -3,
+  "reason": "Order shipment"
+}
+```
+
+Return `409 Conflict` when an adjustment would make stock negative, `404` for unknown products, `422` for invalid request data, and `201` for successful creation.
+
+### Pagination
+
+Use keyset pagination rather than offset pagination. Return an opaque cursor containing the final row’s `(created_at, id)`.
+
+```sql
+SELECT id, sku, name, quantity, created_at
+FROM products
+WHERE ($1::timestamptz IS NULL)
+   OR (created_at, id) < ($1, $2)
+ORDER BY created_at DESC, id DESC
+LIMIT $3;
+```
+
+The cursor can be URL-safe base64-encoded JSON:
+
+```json
+{"created_at":"2026-08-22T10:20:30.123Z","id":42}
+```
+
+Response shape:
+
+```json
+{
+  "items": [],
+  "next_cursor": "eyJjcmVhdGVkX2F0Ijoi..."}
+```
+
+Always cap `limit` (for example, `1..100`).
+
+### Transactional stock adjustment
+
+The adjustment and balance update must happen in one transaction. Lock the product row before checking or changing quantity.
+
+```python
+# app/repositories/products.py
+from psycopg import AsyncConnection
+from fastapi import HTTPException
+
+async def adjust_stock(
+    conn: AsyncConnection,
+    product_id: int,
+    delta: int,
+    reason: str | None,
+) -> dict:
+    async with conn.transaction():
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, quantity
+                FROM products
+                WHERE id = %s
+                FOR UPDATE
+                """,
+                (product_id,),
+            )
+            product = await cur.fetchone()
+
+            if product is None:
+                raise HTTPException(404, "Product not found")
+
+            quantity_before = product[1]
+            quantity_after = quantity_before + delta
+
+            if quantity_after < 0:
+                raise HTTPException(409, "Insufficient stock")
+
+            await cur.execute(
+                """
+                UPDATE products
+                SET quantity = %s
+                WHERE id = %s
+                """,
+                (quantity_after, product_id),
+            )
+
+            await cur.execute(
+                """
+                INSERT INTO stock_adjustments
+                    (product_id, delta, quantity_before, quantity_after, reason)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id, product_id, delta,
+                          quantity_before, quantity_after, reason, created_at
+                """,
+                (
+                    product_id,
+                    delta,
+                    quantity_before,
+                    quantity_after,
+                    reason,
+                ),
+            )
+            row = await cur.fetchone()
+
+    return {
+        "id": row[0],
+        "product_id": row[1],
+        "delta": row[2],
+        "quantity_before": row[3],
+        "quantity_after": row[4],
+        "reason": row[5],
+        "created_at": row[6],
+    }
+```
+
+`SELECT ... FOR UPDATE` serializes concurrent adjustments for the same product. Keep the transaction short and avoid network calls inside it.
+
+### FastAPI routes
+
+```python
+# app/main.py
+from contextlib import asynccontextmanager
+from fastapi import Depends, FastAPI
+from psycopg import AsyncConnection
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await pool.open()
+    try:
+        yield
+    finally:
+        await pool.close()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/products/{product_id}/adjustments", status_code=201)
+async def create_adjustment(
+    product_id: int,
+    payload: AdjustmentRequest,
+    conn: AsyncConnection = Depends(connection),
+):
+    return await adjust_stock(conn, product_id, payload.delta, payload.reason)
+```
+
+Use Pydantic request/response schemas, but keep them separate from SQL result tuples.
+
+### Migrations
+
+Use a SQL migration tool such as Alembic in SQL-only mode, `yoyo-migrations`, or a simple numbered migration runner. Migrations should contain plain SQL and run in CI before tests.
+
+Example project layout:
 
 ```text
 app/
   main.py
   db.py
-  models.py
-  repositories/products.py
-  services/inventory.py
-  routers/products.py
-migrations/001_inventory.sql
+  schemas.py
+  repositories/
+    products.py
 tests/
   conftest.py
   test_products.py
-  test_stock_adjustments.py
+  test_adjustments.py
+migrations/
+  001_initial.sql
+pyproject.toml
 ```
 
-**Schema**
+### Integration tests
 
-```sql
-CREATE TABLE products (
-    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    sku text NOT NULL UNIQUE,
-    name text NOT NULL,
-    description text,
-    unit_price numeric(12, 2) NOT NULL CHECK (unit_price >= 0),
-    stock_quantity integer NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE stock_movements (
-    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    product_id bigint NOT NULL REFERENCES products(id),
-    delta integer NOT NULL CHECK (delta <> 0),
-    resulting_quantity integer NOT NULL CHECK (resulting_quantity >= 0),
-    reason text NOT NULL,
-    request_id uuid UNIQUE,
-    created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX products_page_idx ON products (id);
-CREATE INDEX stock_movements_product_idx
-    ON stock_movements (product_id, id DESC);
-```
-
-`request_id` makes retries idempotent. Clients should reuse it when retrying the same adjustment.
-
-**API**
-
-```text
-POST   /products
-GET    /products/{id}
-GET    /products?limit=50&after_id=123
-PATCH  /products/{id}
-POST   /products/{id}/stock-adjustments
-GET    /products/{id}/stock-movements?limit=50&before_id=456
-```
-
-Use cursor pagination instead of offsets:
-
-```sql
-SELECT id, sku, name, description, unit_price, stock_quantity, created_at, updated_at
-FROM products
-WHERE id > %(after_id)s
-ORDER BY id
-LIMIT %(fetch_limit)s;
-```
-
-Fetch `limit + 1` rows; the extra row determines whether to return a `next_cursor`. Enforce a limit such as `1..100`.
-
-**Stock transaction**
+Run tests against a real PostgreSQL instance, not SQLite.
 
 ```python
-async def adjust_stock(pool, product_id, delta, reason, request_id):
-    async with pool.connection() as conn:
-        async with conn.transaction():
-            if request_id:
-                existing = await conn.execute(
-                    """
-                    SELECT product_id, delta, resulting_quantity
-                    FROM stock_movements
-                    WHERE request_id = %s
-                    """,
-                    (request_id,),
-                )
-                row = await existing.fetchone()
-                if row:
-                    if row["product_id"] != product_id or row["delta"] != delta:
-                        raise IdempotencyConflict()
-                    return row["resulting_quantity"]
+# tests/conftest.py
+import pytest
+from httpx import ASGITransport, AsyncClient
+from testcontainers.postgres import PostgresContainer
 
-            result = await conn.execute(
-                """
-                UPDATE products
-                SET stock_quantity = stock_quantity + %s,
-                    updated_at = now()
-                WHERE id = %s
-                  AND stock_quantity + %s >= 0
-                RETURNING stock_quantity
-                """,
-                (delta, product_id, delta),
-            )
-            updated = await result.fetchone()
+@pytest.fixture(scope="session")
+def postgres():
+    with PostgresContainer("postgres:16") as container:
+        yield container
 
-            if updated is None:
-                exists = await conn.execute(
-                    "SELECT 1 FROM products WHERE id = %s", (product_id,)
-                )
-                if await exists.fetchone() is None:
-                    raise ProductNotFound()
-                raise InsufficientStock()
-
-            await conn.execute(
-                """
-                INSERT INTO stock_movements
-                    (product_id, delta, resulting_quantity, reason, request_id)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (product_id, delta, updated["stock_quantity"], reason, request_id),
-            )
-            return updated["stock_quantity"]
+@pytest.fixture
+async def client(postgres):
+    # Set DATABASE_URL, run migrations, and create a fresh schema here.
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+    ) as ac:
+        yield ac
 ```
 
-The conditional `UPDATE` prevents negative inventory and lost updates without requiring an application-level lock. Map missing products to `404`, insufficient stock to `409`, duplicate SKU or conflicting idempotency keys to `409`, and validation failures to `422`.
+Cover at least:
 
-Create the pool in FastAPI’s lifespan handler and inject it through `Depends`. Pydantic request models should use `Decimal` for prices and reject zero stock deltas.
-
-**Integration tests**
-
-Run tests against a real PostgreSQL container using `pytest`, `pytest-asyncio`, `httpx.AsyncClient`, and Testcontainers. Apply migrations once per test session and truncate tables between tests.
-
-Cover:
-
-- Product creation, duplicate SKU, retrieval, and updates.
-- Stable pagination with correct cursor and limit behavior.
+- Product creation and retrieval.
+- Pagination ordering and `next_cursor`.
+- Invalid limits and malformed cursors.
 - Positive and negative stock adjustments.
-- Rejection of adjustments that would produce negative stock.
-- Movement and product quantity committing together.
-- Rollback when movement insertion fails.
-- Replaying the same `request_id` without applying stock twice.
-- Conflicting reuse of a `request_id`.
-- Concurrent decrements, asserting successful adjustments never exceed available stock.
-- Decimal price serialization and database constraint behavior.
+- Rejection when stock would become negative.
+- `404` for missing products.
+- Audit-row contents (`before`, `after`, `delta`).
+- Rollback when the adjustment insert fails.
+- Concurrent adjustments to the same product, verifying the final quantity equals the serialized result.
 
-For the concurrency test, create stock of `10`, issue twenty simultaneous `-1` requests with distinct request IDs, and assert exactly ten succeed, ten return `409`, final stock is zero, and exactly ten movement rows exist.
+For concurrency, launch two adjustment requests with `asyncio.gather`; the row lock should prevent lost updates. Use unique test schemas or truncate tables between tests, and run migrations once per test database.

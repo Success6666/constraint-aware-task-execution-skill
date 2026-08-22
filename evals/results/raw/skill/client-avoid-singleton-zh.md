@@ -1,150 +1,143 @@
-建议把 HTTP 客户端定义为“应用生命周期级资源”：每个 FastAPI 应用实例创建一个 `httpx.AsyncClient`，所有请求复用它；通过依赖注入传递，不使用模块级单例。
+使用 FastAPI 的 `lifespan` 管理一个“每个应用实例一个”的 `httpx.AsyncClient`。它能复用连接池，又不会把客户端做成模块级全局单例。
 
 ```python
-# app.py
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from dataclasses import dataclass
 
 import httpx
-from fastapi import Depends, FastAPI, Request
-
-DEFAULT_TIMEOUT = httpx.Timeout(
-    connect=2.0,
-    read=5.0,
-    write=5.0,
-    pool=2.0,
-)
-DEFAULT_LIMITS = httpx.Limits(
-    max_connections=100,
-    max_keepalive_connections=20,
-    keepalive_expiry=30.0,
-)
+from fastapi import Depends, FastAPI, HTTPException, Request
 
 
-def build_http_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url="https://partner.example.com",
-        timeout=DEFAULT_TIMEOUT,
-        limits=DEFAULT_LIMITS,
-        headers={"User-Agent": "my-service/1.0"},
-        follow_redirects=True,
-    )
+@dataclass(frozen=True)
+class Settings:
+    upstream_url: str = "https://api.example.com"
+    connect_timeout: float = 2.0
+    read_timeout: float = 5.0
+    write_timeout: float = 5.0
+    pool_timeout: float = 1.0
+    max_connections: int = 100
+    max_keepalive_connections: int = 20
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    client = build_http_client()
-    app.state.http_client = client
+def create_app(
+    settings: Settings,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
 
-    try:
-        # 可选：启动时检查配置或执行轻量健康检查
-        # await client.get("/health")
-        yield
-    finally:
-        await client.aclose()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        timeout = httpx.Timeout(
+            connect=settings.connect_timeout,
+            read=settings.read_timeout,
+            write=settings.write_timeout,
+            pool=settings.pool_timeout,
+        )
+        limits = httpx.Limits(
+            max_connections=settings.max_connections,
+            max_keepalive_connections=settings.max_keepalive_connections,
+        )
 
+        client = httpx.AsyncClient(
+            base_url=settings.upstream_url,
+            timeout=timeout,
+            limits=limits,
+            transport=transport,
+            headers={"Accept": "application/json"},
+        )
+        app.state.upstream_client = client
 
-def create_app() -> FastAPI:
+        try:
+            yield
+        finally:
+            await client.aclose()
+            app.state.upstream_client = None
+
     app = FastAPI(lifespan=lifespan)
+
+    def get_upstream_client(request: Request) -> httpx.AsyncClient:
+        client = getattr(request.app.state, "upstream_client", None)
+        if client is None:
+            raise RuntimeError("HTTP client has not been initialized")
+        return client
 
     @app.get("/users/{user_id}")
     async def get_user(
         user_id: str,
-        client: httpx.AsyncClient = Depends(get_http_client),
+        client: httpx.AsyncClient = Depends(get_upstream_client),
     ):
-        response = await client.get(f"/users/{user_id}")
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = await client.get(f"/users/{user_id}")
+            response.raise_for_status()
+            return response.json()
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Upstream timeout")
+        except httpx.HTTPStatusError:
+            raise HTTPException(status_code=502, detail="Upstream returned an error")
+        except httpx.RequestError:
+            raise HTTPException(status_code=502, detail="Upstream unavailable")
 
     return app
-
-
-def get_http_client(request: Request) -> httpx.AsyncClient:
-    return request.app.state.http_client
-
-
-app = create_app()
 ```
 
-生命周期行为：
+### 生命周期原则
 
-- **启动初始化**：在 `lifespan` 中创建客户端。若初始化或必要的启动检查失败，应用不会进入可服务状态。
-- **连接复用**：`AsyncClient` 内部维护连接池，避免每个请求重新建立 TCP/TLS 连接。
-- **关闭释放**：`finally` 中调用 `aclose()`，释放连接池、套接字和后台资源。
-- **避免泄漏**：业务代码只通过依赖获取客户端，不在路由中创建 `AsyncClient()`，也不在每次调用后关闭共享客户端。
-- **应用实例隔离**：`app.state` 属于具体的 FastAPI 应用实例，测试、不同配置或不同进程之间不会共享隐藏的全局状态。
+- **启动初始化**：在 `lifespan` 中创建客户端，配置连接池、Keep-Alive 和分层超时。
+- **连接复用**：同一应用实例内通过依赖注入复用 `AsyncClient`，不要在每个请求中创建客户端。
+- **关闭释放**：`finally` 中调用 `await client.aclose()`，确保连接池和后台资源释放。
+- **作用域**：`app.state` 属于具体的 FastAPI 应用实例，因此测试应用、主应用、不同配置的应用可以各自拥有客户端。
+- **多上游服务**：当不同上游需要不同认证、代理或超时策略时，分别创建多个命名客户端，而不是强行共享一个客户端。
 
-建议将配置外置：
+### 超时建议
+
+将超时拆分为：
+
+- `connect`：建立连接的最大时间
+- `read`：等待响应数据的最大时间
+- `write`：发送请求体的最大时间
+- `pool`：等待连接池空闲连接的最大时间
+
+对特殊请求可覆盖默认值：
 
 ```python
-from pydantic_settings import BaseSettings
-
-
-class Settings(BaseSettings):
-    partner_base_url: str
-    connect_timeout: float = 2
-    read_timeout: float = 5
-    write_timeout: float = 5
-    pool_timeout: float = 2
-    max_connections: int = 100
-    max_keepalive_connections: int = 20
+await client.get("/slow-endpoint", timeout=httpx.Timeout(15.0))
 ```
 
-超时应分别设置，而不是只设置一个很大的总超时：
+通常只对幂等请求做有限重试；重试应放在服务层或专用策略中，并区分超时、连接错误和业务状态码，避免重复提交非幂等请求。
 
-- `connect`：建立连接的最长时间；
-- `read`：等待响应数据的最长时间；
-- `write`：发送请求体的最长时间；
-- `pool`：等待连接池空闲连接的最长时间。
+### 测试方式
 
-超时发生时捕获 `httpx.TimeoutException`，转换为服务自身的错误响应或重试策略。重试应只针对明确幂等的请求，并限制次数、退避时间和总耗时；不要对所有 `POST` 无条件重试。
-
-测试时使用应用工厂和依赖覆盖，不依赖真实网络：
+使用应用工厂和 `MockTransport` 注入假的 HTTP 层：
 
 ```python
 import httpx
-import pytest
 from fastapi.testclient import TestClient
 
-from app import create_app, get_http_client
+
+def handler(request: httpx.Request) -> httpx.Response:
+    assert request.url.path == "/users/42"
+    return httpx.Response(200, json={"id": "42"})
 
 
-@pytest.fixture
-def app():
-    app = create_app()
-
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(
-            200,
-            json={"id": "u-1", "name": "Alice"},
-        )
-    )
-    test_client = httpx.AsyncClient(
-        transport=transport,
-        base_url="https://test.local",
-        timeout=httpx.Timeout(1.0),
+def test_get_user():
+    app = create_app(
+        Settings(upstream_url="https://test.invalid"),
+        transport=httpx.MockTransport(handler),
     )
 
-    app.dependency_overrides[get_http_client] = lambda: test_client
-    return app, test_client
-
-
-def test_get_user(app):
-    application, client = app
-
-    with TestClient(application) as test_client:
-        response = test_client.get("/users/u-1")
+    with TestClient(app) as client:
+        response = client.get("/users/42")
 
     assert response.status_code == 200
-    assert response.json()["name"] == "Alice"
+    assert response.json() == {"id": "42"}
 ```
 
-`TestClient` 应使用上下文管理器，以便触发 FastAPI 的启动和关闭生命周期。实际项目中还应补充：
+应至少覆盖：
 
-- `MockTransport` 返回 4xx、5xx 和超时异常的测试；
-- 验证上游错误是否被正确映射；
-- 验证共享客户端被多次请求复用；
-- 使用假的客户端记录 `aclose()`，确认关闭阶段释放资源；
-- 并发测试连接池上限和池等待超时。
-
-只有在确实需要跨应用实例共享资源时才考虑进程级单例；普通 FastAPI 服务使用 `app.state + lifespan + dependency injection` 已能满足连接复用和资源管理，同时更容易测试和配置。
+1. 启动后客户端可用；
+2. 多次请求复用同一个客户端；
+3. 应用退出时调用 `aclose`；
+4. 上游连接、读取和连接池超时；
+5. 上游返回 4xx/5xx；
+6. `RequestError` 被转换为适当的服务错误；
+7. 测试之间客户端和连接池相互隔离。

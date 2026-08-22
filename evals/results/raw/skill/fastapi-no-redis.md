@@ -1,237 +1,279 @@
-Use FastAPI with PostgreSQL as the durable source of truth, SQLAlchemy 2.x for persistence, Alembic for migrations, and pytest against an isolated PostgreSQL test database.
+Use PostgreSQL as the source of truth, SQLAlchemy 2.x with async sessions, and Alembic for schema migrations. Keep redirect resolution in the database so aliases remain correct across multiple application instances. No external cache is required; an optional bounded in-process cache can be added later as a performance optimization, but it must never determine correctness.
 
-**File Layout**
+**Project layout**
 
 ```text
 url-shortener/
-├── app/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── config.py
-│   ├── dependencies.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── aliases.py
-│   │   └── redirects.py
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── models.py
-│   │   └── session.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── aliases.py
-│   ├── repositories/
-│   │   ├── __init__.py
-│   │   └── aliases.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── aliases.py
-│   └── domain/
-│       ├── __init__.py
-│       ├── exceptions.py
-│       └── short_codes.py
-├── migrations/
-│   ├── env.py
-│   └── versions/
-│       └── 0001_create_aliases.py
-├── tests/
-│   ├── conftest.py
-│   ├── factories.py
-│   ├── integration/
-│   │   ├── test_alias_api.py
-│   │   ├── test_redirects.py
-│   │   └── test_alias_repository.py
-│   └── unit/
-│       ├── test_alias_service.py
-│       └── test_short_codes.py
-├── alembic.ini
-├── Dockerfile
-├── compose.yaml
-├── pyproject.toml
-├── .env.example
-└── README.md
+├─ pyproject.toml
+├─ README.md
+├─ .env.example
+├─ Dockerfile
+├─ docker-compose.yml
+├─ alembic.ini
+├─ migrations/
+│  ├─ env.py
+│  ├─ script.py.mako
+│  └─ versions/
+│     └─ 0001_create_short_urls.py
+├─ app/
+│  ├─ __init__.py
+│  ├─ main.py
+│  ├─ api/
+│  │  ├─ __init__.py
+│  │  ├─ deps.py
+│  │  └─ routes/
+│  │     ├─ __init__.py
+│  │     ├─ urls.py
+│  │     └─ health.py
+│  ├─ core/
+│  │  ├─ config.py
+│  │  ├─ logging.py
+│  │  └─ errors.py
+│  ├─ db/
+│  │  ├─ session.py
+│  │  └─ base.py
+│  ├─ models/
+│  │  └─ short_url.py
+│  ├─ schemas/
+│  │  └─ short_url.py
+│  ├─ repositories/
+│  │  └─ short_url.py
+│  ├─ services/
+│  │  └─ short_url.py
+│  └─ utils/
+│     ├─ alias.py
+│     └─ time.py
+└─ tests/
+   ├─ conftest.py
+   ├─ unit/
+   │  ├─ test_alias.py
+   │  └─ test_service.py
+   └─ integration/
+      ├─ test_create_url.py
+      ├─ test_redirect.py
+      ├─ test_expiration.py
+      └─ test_health.py
 ```
 
-**Data Model**
+**Data model**
 
-`aliases` table:
+Table: `short_urls`
 
-| Column | Type | Rules |
-|---|---|---|
-| `id` | UUID | Primary key |
-| `code` | VARCHAR(32) | Unique, indexed, case-sensitive |
-| `target_url` | TEXT | Required |
-| `created_at` | TIMESTAMPTZ | Server-generated |
-| `expires_at` | TIMESTAMPTZ | Nullable, indexed |
-| `disabled_at` | TIMESTAMPTZ | Nullable |
-| `redirect_count` | BIGINT | Default `0` |
-| `last_accessed_at` | TIMESTAMPTZ | Nullable |
+- `id`: `BIGINT` or UUID primary key
+- `alias`: case-sensitive or normalized `VARCHAR(32)`, unique, indexed
+- `target_url`: `TEXT`, validated as HTTP/HTTPS
+- `expires_at`: nullable UTC timestamp with timezone
+- `created_at`: UTC timestamp
+- `updated_at`: UTC timestamp
+- `is_active`: boolean default `true`
+- `redirect_count`: bigint default `0`
 
-Important database rules:
+Recommended constraints and indexes:
 
-- Unique constraint on `code` handles concurrent alias creation safely.
-- Check constraint ensures `expires_at IS NULL OR expires_at > created_at`.
-- Store all timestamps in UTC.
-- Keep expired rows for consistent `410 Gone` behavior and future auditing.
-- Treat `target_url` as immutable initially; changing destinations introduces security and cache-consistency concerns.
+```sql
+UNIQUE (alias)
+INDEX (expires_at)
+CHECK (char_length(alias) BETWEEN 3 AND 32)
+CHECK (target_url <> '')
+```
 
-Click counting is useful but should not compromise redirects. Update it with a single atomic statement such as `redirect_count = redirect_count + 1`. For high traffic, move analytics to an event pipeline later while PostgreSQL remains authoritative for aliases.
+Normalize aliases consistently, for example lowercase and URL-safe characters only. Reserve operational paths such as `docs`, `health`, `metrics`, and `api`.
 
-**HTTP API**
+Expiration is evaluated at read time:
 
 ```text
-POST   /api/v1/aliases
-GET    /api/v1/aliases/{code}
-DELETE /api/v1/aliases/{code}
-GET    /{code}
-GET    /health/live
-GET    /health/ready
+active = is_active AND (expires_at IS NULL OR expires_at > now())
 ```
 
-Create request:
+Do not rely on a cleanup job for correctness. A periodic job may delete or archive expired rows later.
+
+**API contract**
+
+`POST /api/v1/urls`
+
+Request:
 
 ```json
 {
-  "target_url": "https://example.com/articles/42",
-  "custom_code": "article-42",
+  "target_url": "https://example.com/article",
+  "alias": "optional-custom-alias",
   "expires_at": "2026-12-31T23:59:59Z"
 }
 ```
 
-Create response, `201 Created`:
+Response `201 Created`:
 
 ```json
 {
-  "code": "article-42",
-  "short_url": "https://sho.rt/article-42",
-  "target_url": "https://example.com/articles/42",
-  "created_at": "2026-08-16T08:00:00Z",
+  "alias": "abc123",
+  "short_url": "https://short.example/abc123",
+  "target_url": "https://example.com/article",
   "expires_at": "2026-12-31T23:59:59Z"
 }
 ```
 
 Behavior:
 
-- Omitted `custom_code`: generate a cryptographically random Base62 code, initially 8 characters.
-- Duplicate custom code: `409 Conflict`.
-- Invalid or past expiration: `422 Unprocessable Entity`.
-- Unknown code: `404 Not Found`.
-- Expired or disabled code: `410 Gone`.
-- Active code: `307 Temporary Redirect` to preserve the request method. Use `302` instead if redirects are deliberately limited to browser-style GET requests.
-- Deletion performs a soft delete by setting `disabled_at`; return `204 No Content`.
-- Do not follow or fetch the target URL during creation. Validate syntax and permitted schemes only, avoiding an unnecessary SSRF path.
-- Reject control characters, credentials embedded in URLs, and schemes other than `http` and `https`.
-- Reserve operational paths such as `api`, `docs`, `openapi.json`, and `health` from use as codes.
+- Generate a cryptographically random alias when omitted.
+- Retry generation on a unique-key conflict.
+- Return `409 Conflict` when a requested alias already exists.
+- Reject expiration timestamps in the past with `422 Unprocessable Entity`.
+- Enforce maximum URL length and alias length through Pydantic settings.
 
-**Module Responsibilities**
+`GET /{alias}`
 
-`config.py`
-- Pydantic Settings configuration.
-- Database URL, public base URL, code length, SQL logging, environment, and trusted proxy settings.
+- Query only active, non-expired records.
+- Return `307 Temporary Redirect` or `302 Found`; use `307` if preserving the original method matters.
+- Set the `Location` header to `target_url`.
+- Return `404` for unknown aliases.
+- Return `410 Gone` for known but expired/inactive aliases if that distinction is part of the public contract; otherwise use `404` consistently.
+- Increment `redirect_count` with a lightweight atomic SQL update, or emit the metric asynchronously if exact counts are not required.
 
-`db/session.py`
-- Async SQLAlchemy engine and `async_sessionmaker`.
-- Request-scoped transaction lifecycle.
-- Pool sizing and connection health checks.
+`DELETE /api/v1/urls/{alias}`
 
-`api/aliases.py`
-- Request parsing and response mapping.
-- No persistence logic.
+- Mark `is_active = false` rather than deleting immediately.
+- Return `204 No Content`.
+- Make the endpoint authenticated in production, even if authentication is initially stubbed behind a dependency.
 
-`api/redirects.py`
-- Resolve the code, map domain states to HTTP responses, and return `RedirectResponse`.
-- Register this catch-all route after `/api` and health routes.
+`GET /health/live`
 
-`repositories/aliases.py`
-- Database queries and atomic counter updates.
-- Translate unique constraint violations into a repository conflict result.
+- Process-only liveness check; no database dependency.
 
-`services/aliases.py`
-- Creation, code generation, collision retry, expiration checks, and disable behavior.
-- Accept an injectable clock so expiration tests remain deterministic.
+`GET /health/ready`
 
-`domain/short_codes.py`
-- Code normalization policy, validation, reserved-name checks, and secure random generation.
-- Preserve case consistently; avoid silently lowercasing user aliases unless the product explicitly defines aliases as case-insensitive.
+- Execute a short database connectivity query.
+- Return `503` when the database is unavailable.
 
-`domain/exceptions.py`
-- Typed errors such as `AliasNotFound`, `AliasExpired`, `AliasConflict`, and `AliasDisabled`.
+**Layer responsibilities**
 
-**Creation Algorithm**
+`app/main.py`
 
-1. Validate and normalize the target URL without modifying its query string or fragment.
-2. Validate `expires_at` against the injected current time.
-3. If a custom code is supplied, validate it and attempt one insert.
-4. Otherwise, generate a random code and insert it.
-5. On a unique constraint violation for a generated code, retry up to five times.
-6. Return the committed row and construct `short_url` from the configured public base URL.
-7. If all generated-code attempts collide, return `503 Service Unavailable` and log the event.
+- Create the FastAPI application.
+- Register routers, exception handlers, middleware, and startup/shutdown hooks.
+- Configure trusted hosts, proxy headers, and request IDs.
 
-The database constraint, rather than an application-level “check then insert,” is what prevents races.
+`app/core/config.py`
 
-**Application Lifecycle**
+- Use `pydantic-settings`.
+- Include `DATABASE_URL`, `PUBLIC_BASE_URL`, alias length, URL length, redirect status, and environment name.
+- Fail fast on missing production configuration.
 
-`main.py` should use an application factory:
+`app/db/session.py`
 
-```python
-def create_app(settings: Settings | None = None) -> FastAPI:
-    ...
+- Build the async SQLAlchemy engine and session factory.
+- Configure pool size, overflow, timeout, and `pool_pre_ping`.
+- Expose a request-scoped `AsyncSession` dependency.
+
+`app/models/short_url.py`
+
+- Define the ORM model and database-level constraints.
+- Use timezone-aware `datetime`.
+
+`app/schemas/short_url.py`
+
+- Request/response DTOs.
+- Validate URL scheme, size, alias syntax, and expiration semantics.
+- Serialize timestamps as ISO-8601 UTC.
+
+`app/repositories/short_url.py`
+
+- Encapsulate SQL queries:
+  - `get_by_alias`
+  - `create`
+  - `deactivate`
+  - `increment_redirect_count`
+  - optional `get_expired_batch`
+- Keep transaction handling explicit.
+
+`app/services/short_url.py`
+
+- Implement alias generation and collision retries.
+- Enforce business rules.
+- Construct the public short URL from `PUBLIC_BASE_URL`.
+- Translate repository conflicts into domain exceptions.
+
+`app/api/routes/urls.py`
+
+- Keep handlers thin.
+- Inject the service and session.
+- Map domain exceptions to stable HTTP responses.
+
+**Alias generation**
+
+Use a URL-safe alphabet such as lowercase letters and digits. Generate 7–10 characters with `secrets.choice`, not a predictable hash. Collision handling must be database-backed:
+
+1. Generate an alias.
+2. Attempt `INSERT`.
+3. On unique violation, roll back the failed transaction and retry up to a bounded number of attempts.
+4. Return `503` if the system cannot allocate an alias after retries.
+
+Custom aliases should be validated with a strict regex such as:
+
+```text
+^[a-z0-9][a-z0-9_-]{2,31}$
 ```
 
-This makes tests independent of process-global configuration. Startup should verify configuration but should not run migrations automatically. Deploy migrations as a distinct release step before starting new application instances.
+**Transaction and concurrency rules**
 
-Readiness should execute a lightweight database query. Liveness should only confirm that the process event loop is responsive.
+- Creation and deactivation run inside transactions.
+- The unique index, not an application-side existence check, arbitrates alias ownership.
+- Redirect lookup and expiration filtering happen in one SQL query.
+- Use `SELECT ... FOR UPDATE` only where necessary; redirect reads should remain inexpensive.
+- Keep migrations backward-compatible and run them before application rollout.
 
-**Testing Strategy**
+**Testing strategy**
+
+`tests/conftest.py`
+
+- Create an isolated test database or transaction-per-test fixture.
+- Override the FastAPI session dependency.
+- Use `httpx.AsyncClient` with ASGI transport.
 
 Unit tests:
 
-- Generated codes use the allowed alphabet and configured length.
-- Custom-code validation covers length, reserved names, and invalid characters.
-- Expiration at the exact boundary is treated consistently as expired.
-- Generated collision retries work and have a bounded failure path.
-- URL validation accepts HTTP(S) URLs and rejects dangerous schemes.
-- Service behavior uses a fixed clock.
+- Alias format and length.
+- Reserved alias rejection.
+- URL and expiration validation.
+- Retry behavior after simulated unique conflicts.
+- Public URL construction.
 
-Integration tests with real PostgreSQL:
+Integration tests:
 
-- Create generated and custom aliases.
-- Reject duplicate codes.
-- Concurrent requests for the same custom code produce one success and conflicts for the rest.
-- Active aliases redirect with the expected status and `Location`.
-- Unknown aliases return `404`.
-- Expired and disabled aliases return `410`.
+- Create with generated alias returns `201`.
+- Create with custom alias persists and can be resolved.
+- Duplicate custom alias returns `409`.
+- Redirect returns the configured status and `Location`.
+- Unknown alias returns `404`.
+- Expired alias returns the chosen expired response and never redirects.
+- Deactivated alias no longer redirects.
 - Redirect count increments atomically.
-- Database state persists across app instances.
-- Transaction rollback isolates each test.
-- API responses do not expose internal IDs or database errors.
+- Readiness endpoint reflects database availability.
+- Concurrent creation attempts cannot produce duplicate aliases.
 
-Avoid substituting SQLite in persistence tests because its locking, constraint, timestamp, and concurrency behavior differs from PostgreSQL.
+Use PostgreSQL in CI rather than SQLite for behavior that depends on timestamp semantics, unique violations, and production SQL dialects.
 
-**Production Concerns**
+**Operational requirements**
 
-- Run behind a reverse proxy with forwarded headers configured only for trusted proxies.
-- Add structured JSON logs with request ID, code, status, and duration; do not log full destination URLs if they may contain sensitive query parameters.
-- Add request-body limits and edge-level rate limiting for alias creation.
-- Protect create, inspect, and delete endpoints with authentication; redirects normally remain public.
-- Expose Prometheus-compatible metrics for request rates, redirect outcomes, database latency, and generated-code collision retries.
-- Set explicit database pool limits and statement timeouts.
-- Configure graceful shutdown and container health checks.
-- Back up PostgreSQL and regularly verify restores.
-- Use a multi-stage Docker build, a non-root runtime user, pinned dependencies, and CI migration checks.
+- Structured JSON logs with request ID, alias, status code, and latency.
+- Metrics for creations, conflicts, redirects, expired lookups, and database errors.
+- OpenTelemetry tracing if already used by the platform.
+- Timeouts on database operations and HTTP requests.
+- Graceful shutdown that stops accepting traffic before disposing the engine.
+- Container runs migrations as a release step, not on every worker startup.
+- Add rate limiting at the gateway or application layer if the create endpoint is publicly exposed; this does not require a shared cache.
 
-**Implementation Sequence**
+**Dependency baseline**
 
-1. Establish configuration, application factory, database session, and health endpoints.
-2. Add the alias model and initial Alembic migration.
-3. Implement schemas, code generation, repository operations, and service rules.
-4. Add create, inspect, disable, and redirect routes.
-5. Add deterministic unit tests and PostgreSQL integration fixtures.
-6. Add concurrency and expiration-boundary tests.
-7. Containerize the application and database for local development.
-8. Add CI steps for formatting, linting, type checking, tests, and migration validation.
-9. Add authentication, operational metrics, structured logging, and deployment configuration.
-10. Load-test the redirect path and tune database pooling before production release.
+```text
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pydantic-settings
+httpx
+pytest
+pytest-asyncio
+```
 
-A suitable initial dependency set is FastAPI, Uvicorn, SQLAlchemy 2.x, asyncpg, Alembic, Pydantic Settings, pytest, pytest-asyncio, HTTPX, Ruff, and mypy.
+This structure keeps persistence, expiration, redirect behavior, and test seams explicit while remaining deployable as multiple stateless FastAPI workers backed by one PostgreSQL database.

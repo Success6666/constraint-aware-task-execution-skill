@@ -1,35 +1,35 @@
 {
   "baseline": {
-    "evaluation_pass": 1,
-    "required_pass": 1,
+    "evaluation_pass": 0.9667,
+    "required_pass": 0.9667,
     "objective_coverage": 1.0,
-    "constraint_adherence": 1.0,
+    "constraint_adherence": 0.9667,
     "constraint_violation_hits": 0,
     "required_enforcement_coverage": 1.0,
     "under_enforcement_hits": 0,
-    "failure_gate_hits": 0.0333,
-    "constraint_component_hits": 0.1,
-    "constraint_echo": 0.4333,
+    "failure_gate_hits": 0,
+    "constraint_component_hits": 0.0333,
+    "constraint_echo": 0.6,
     "soft_preference_hardening": 0,
-    "overoptimization_score": 0.8333
+    "overoptimization_score": 0.75
   },
   "skill": {
-    "evaluation_pass": 1,
+    "evaluation_pass": 0.9667,
     "required_pass": 1,
-    "objective_coverage": 1.0,
+    "objective_coverage": 0.9933,
     "constraint_adherence": 1.0,
     "constraint_violation_hits": 0,
     "required_enforcement_coverage": 1.0,
     "under_enforcement_hits": 0,
     "failure_gate_hits": 0,
     "constraint_component_hits": 0,
-    "constraint_echo": 0.1667,
+    "constraint_echo": 0.2333,
     "soft_preference_hardening": 0,
-    "overoptimization_score": 0.1667
+    "overoptimization_score": 0.25
   },
   "comparison": {
     "completed_pairs": 30,
-    "qualified_pairs": 30
+    "qualified_pairs": 28
   },
   "suite": {
     "cases": 30,
@@ -48,18 +48,18 @@
     "baseline_variant": "baseline",
     "eligible_variant_rows": 30,
     "paired_rows": 30,
-    "quality_retention_ratio": 1.0,
-    "non_constraint_requirement_retention": 1.0,
-    "capability_regression_hits": 0,
-    "capability_regression_hit": false,
-    "capability_regression_rate": 0.0,
+    "quality_retention_ratio": 0.9983333333333333,
+    "non_constraint_requirement_retention": 0.9977777777777778,
+    "capability_regression_hits": 1,
+    "capability_regression_hit": true,
+    "capability_regression_rate": 0.03333333333333333,
     "component_retention": {
       "objective_coverage": {
         "observed_pairs": 30,
         "missing_variant_evidence_hits": 0,
-        "retention_ratio": 1.0,
-        "regression_hits": 0,
-        "regression_rate": 0.0
+        "retention_ratio": 0.9933333333333333,
+        "regression_hits": 1,
+        "regression_rate": 0.03333333333333333
       },
       "non_constraint_requirement_coverage": {
         "observed_pairs": 0,
@@ -132,6 +132,10 @@
     "semantic_capability_status": "partial",
     "cost_ratio": null,
     "latency_ratio": null,
+    "plan_fallback_rows": 0,
+    "plan_fallback_rate": 0.0,
+    "plan_fallback_regression_hits": 0,
+    "plan_fallback_regression_rate": 0.0,
     "missing_pair_rows": 0,
     "pair_coverage": 1.0,
     "duplicate_rows": 0,
@@ -139,18 +143,18 @@
     "by_variant": {
       "skill": {
         "paired_rows": 30,
-        "quality_retention_ratio": 1.0,
-        "non_constraint_requirement_retention": 1.0,
-        "capability_regression_hits": 0,
-        "capability_regression_hit": false,
-        "capability_regression_rate": 0.0,
+        "quality_retention_ratio": 0.9983333333333333,
+        "non_constraint_requirement_retention": 0.9977777777777778,
+        "capability_regression_hits": 1,
+        "capability_regression_hit": true,
+        "capability_regression_rate": 0.03333333333333333,
         "component_retention": {
           "objective_coverage": {
             "observed_pairs": 30,
             "missing_variant_evidence_hits": 0,
-            "retention_ratio": 1.0,
-            "regression_hits": 0,
-            "regression_rate": 0.0
+            "retention_ratio": 0.9933333333333333,
+            "regression_hits": 1,
+            "regression_rate": 0.03333333333333333
           },
           "non_constraint_requirement_coverage": {
             "observed_pairs": 0,
@@ -223,6 +227,10 @@
         "semantic_capability_status": "partial",
         "cost_ratio": null,
         "latency_ratio": null,
+        "plan_fallback_rows": 0,
+        "plan_fallback_rate": 0.0,
+        "plan_fallback_regression_hits": 0,
+        "plan_fallback_regression_rate": 0.0,
         "eligible_rows": 30,
         "missing_pair_rows": 0,
         "pair_coverage": 1.0,
@@ -313,6 +321,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -409,6 +419,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -505,6 +517,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -601,6 +615,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -697,6 +713,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -793,6 +811,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -889,6 +909,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -985,6 +1007,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1081,6 +1105,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1177,6 +1203,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1273,6 +1301,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1369,6 +1399,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1424,18 +1456,18 @@
             "regression": false
           },
           "constraint_compliance": {
-            "baseline": 1.0,
+            "baseline": 0.0,
             "variant": 1.0,
-            "delta": 0.0,
+            "delta": 1.0,
             "retention_ratio": 1.0,
             "supported": true,
             "missing_variant_evidence": false,
             "regression": false
           },
           "format_compliance": {
-            "baseline": 1.0,
+            "baseline": 0.0,
             "variant": 1.0,
-            "delta": 0.0,
+            "delta": 1.0,
             "retention_ratio": 1.0,
             "supported": true,
             "missing_variant_evidence": false,
@@ -1465,6 +1497,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1561,6 +1595,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1657,6 +1693,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1753,6 +1791,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1777,17 +1817,17 @@
           "baseline_variant": "baseline",
           "variant": "skill"
         },
-        "quality_retention_ratio": 1.0,
-        "non_constraint_requirement_retention": 1.0,
+        "quality_retention_ratio": 0.95,
+        "non_constraint_requirement_retention": 0.9333333333333333,
         "component_retention": {
           "objective_coverage": {
             "baseline": 1.0,
-            "variant": 1.0,
-            "delta": 0.0,
-            "retention_ratio": 1.0,
+            "variant": 0.8,
+            "delta": -0.19999999999999996,
+            "retention_ratio": 0.8,
             "supported": true,
             "missing_variant_evidence": false,
-            "regression": false
+            "regression": true
           },
           "non_constraint_requirement_coverage": {
             "baseline": null,
@@ -1849,6 +1889,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -1857,8 +1899,11 @@
         },
         "cost_ratio": null,
         "latency_ratio": null,
-        "capability_regression_hit": false,
-        "capability_regression_reasons": [],
+        "capability_regression_hit": true,
+        "capability_regression_reasons": [
+          "objective_coverage",
+          "quality"
+        ],
         "efficiency_regression_hit": false,
         "efficiency_regression_reasons": [],
         "supported_component_count": 4
@@ -1945,6 +1990,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2041,6 +2088,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2137,6 +2186,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2233,6 +2284,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2329,6 +2382,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2425,6 +2480,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2521,6 +2578,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2617,6 +2676,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2713,6 +2774,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2809,6 +2872,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -2905,6 +2970,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -3001,6 +3068,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -3097,6 +3166,8 @@
           "unnecessary_clarification": false,
           "over_conservative": false
         },
+        "plan_fallback_used": false,
+        "plan_fallback_regression": false,
         "valid_information_retention": {
           "status": "unsupported",
           "value": null,
@@ -3113,14 +3184,27 @@
       }
     ],
     "acceptance": {
-      "status": "pass",
+      "status": "fail",
       "candidate_variants": [
         "skill"
       ],
       "quality_retention_floor": 1.0,
       "semantic_retention_floor": 1.0,
       "semantic_review_required": false,
-      "failures": []
+      "cost_ratio_ceiling": 1.0,
+      "latency_ratio_ceiling": 2.0,
+      "efficiency_evidence_required": true,
+      "failures": [
+        {
+          "variant": "skill",
+          "reasons": [
+            "quality_retention",
+            "non_constraint_requirement_retention",
+            "paired_regression",
+            "missing_efficiency_evidence"
+          ]
+        }
+      ]
     }
   }
 }

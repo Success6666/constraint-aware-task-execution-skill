@@ -1,239 +1,211 @@
-## Architecture
+Design the service as a quarantine-first upload pipeline:
 
-Use three durable stores:
-
-- **Object storage**: immutable file bytes, versioning enabled, server-side encryption.
-- **Relational database**: metadata, upload state, hashes, ownership, scan results.
-- **Append-only audit store**: security and lifecycle events, exported to tamper-resistant retention storage.
-
-Files enter a private **quarantine bucket** and are never downloadable until validation succeeds. Approved files are copied server-side to a separate private **clean bucket**. Clients never choose object keys or receive direct quarantine access.
+```text
+Client -> Upload API -> Quarantine object storage
+                    -> Validate bytes
+                    -> Persist metadata + audit event
+                    -> Promote to durable storage
+Client <- Download API <- authorization + audit logging
+```
 
 ## API
 
 ### Create upload
 
-```http
-POST /v1/files
-Content-Type: application/json
-Idempotency-Key: 76a...
-Authorization: Bearer ...
-```
+`POST /v1/files`
 
-```json
-{
-  "filename": "quarterly-report.pdf",
-  "declaredContentType": "application/pdf",
-  "size": 482910
-}
+Request:
+
+```http
+Content-Type: multipart/form-data
+file=<binary>
 ```
 
 Response:
 
 ```json
 {
-  "fileId": "fil_01J...",
-  "status": "awaiting_upload",
-  "upload": {
-    "url": "https://object-store/...",
-    "method": "PUT",
-    "headers": {
-      "Content-Type": "application/octet-stream"
-    },
-    "expiresAt": "2026-08-16T12:05:00Z"
-  }
+  "id": "file_01J...",
+  "status": "accepted",
+  "filename": "report.pdf",
+  "media_type": "application/pdf",
+  "size": 182734,
+  "sha256": "..."
 }
 ```
 
-The signed upload policy enforces the exact object key and maximum size.
+Possible responses:
 
-### Complete upload
+- `201 Accepted`
+- `400` malformed request
+- `413` size limit exceeded
+- `415` unsupported or executable content
+- `422` content cannot be safely classified
 
-```http
-POST /v1/files/{fileId}/complete
-Idempotency-Key: 19c...
-```
+### Get metadata
 
-Returns `202 Accepted` while validation runs:
-
-```json
-{
-  "fileId": "fil_01J...",
-  "status": "scanning"
-}
-```
-
-Completion verifies that the stored object exists and matches the reserved size. It then queues scanning using a transactional outbox.
-
-### Metadata
-
-```http
-GET /v1/files/{fileId}
-```
+`GET /v1/files/{id}`
 
 ```json
 {
-  "id": "fil_01J...",
-  "filename": "quarterly-report.pdf",
-  "size": 482910,
-  "sha256": "7e9...",
-  "detectedContentType": "application/pdf",
+  "id": "file_01J...",
+  "original_filename": "report.pdf",
+  "detected_media_type": "application/pdf",
+  "declared_media_type": "application/octet-stream",
+  "size": 182734,
+  "sha256": "...",
   "status": "available",
-  "createdAt": "2026-08-16T12:00:00Z"
+  "created_at": "2026-08-22T10:00:00Z"
 }
 ```
 
-Do not expose internal object keys, scanner diagnostics, or quarantine reasons to unauthorized users.
+Do not expose internal storage keys or quarantine paths.
 
 ### Download
 
-```http
-GET /v1/files/{fileId}/content
-```
+`GET /v1/files/{id}/content`
 
-After authorization and an `available` status check, return either a short-lived signed clean-object URL or stream the object. Use:
+Behavior:
+
+- Authenticate and authorize access.
+- Log the download attempt and result.
+- Stream from durable storage or return a short-lived signed URL.
+- Use the server-detected type, never the client-provided MIME type.
+- Return:
 
 ```http
-Content-Disposition: attachment; filename="quarterly-report.pdf"
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="report.pdf"
 X-Content-Type-Options: nosniff
-Content-Security-Policy: sandbox
 Cache-Control: private, no-store
 ```
 
-Never serve uploaded files inline from the application’s origin. Prefer a separate download origin without cookies.
+Sanitize filenames and force attachment for untrusted types.
 
-### Delete
+## Validation pipeline
 
-```http
-DELETE /v1/files/{fileId}
+1. Enforce request, per-user, and total size limits.
+2. Stream bytes to quarantine storage while calculating SHA-256.
+3. Ignore the supplied extension and MIME type for security decisions.
+4. Detect the actual type from magic bytes and format parsers.
+5. Reject known executable formats, including:
+
+   - PE/COFF: `MZ`, PE headers, Windows installers
+   - ELF: `0x7f ELF`
+   - Mach-O and Fat Mach-O
+   - Java class files and executable bytecode
+   - WebAssembly modules, if not explicitly supported
+   - Shell scripts and scripts with executable interpreters
+   - Office documents containing macros or executable embedded objects
+   - PDFs or archives containing disallowed active content, according to policy
+
+6. Inspect archives recursively:
+
+   - Limit nesting depth, entry count, expanded size, and compression ratio.
+   - Reject executable entries, scripts, macros, installers, and path traversal.
+   - Reject ambiguous or malformed polyglot files.
+7. Run antivirus/malware scanning and optionally sandbox detonation for high-risk formats.
+8. Compare detected type with the allowlist. A misleading extension or MIME type must never override detection.
+9. Promote only validated objects from quarantine to durable storage.
+10. On any failure, delete or expire the quarantine object and return `415` or `422`.
+
+A conservative policy is an allowlist of business-required types, such as PDF, PNG, JPEG, and plain text. Unknown, encrypted, malformed, or ambiguous files should be rejected rather than accepted.
+
+Use a validation result such as:
+
+```json
+{
+  "status": "rejected",
+  "reason_code": "EXECUTABLE_CONTENT",
+  "detected_types": ["application/x-dosexec"],
+  "scanner": "content-inspector-v3"
+}
 ```
 
-Perform a soft delete immediately, revoke downloads, and enqueue durable object deletion according to retention policy.
+Avoid returning detailed scanner signatures to unauthenticated callers.
 
-### Audit access
+## Durable storage
 
-```http
-GET /v1/files/{fileId}/audit?cursor=...
+Use:
+
+- Object storage with versioning, encryption, retention, and lifecycle policies.
+- A relational database for metadata and authorization.
+- A transactional outbox for audit events and asynchronous scanner results.
+
+Example tables:
+
+```sql
+files (
+  id uuid primary key,
+  owner_id uuid not null,
+  object_key text unique,
+  original_filename text not null,
+  declared_media_type text,
+  detected_media_type text,
+  size_bytes bigint not null,
+  sha256 char(64) not null,
+  status text not null, -- quarantined, scanning, available, rejected, deleted
+  created_at timestamptz not null,
+  deleted_at timestamptz
+);
+
+file_audit_events (
+  id bigint generated always as identity primary key,
+  file_id uuid,
+  actor_id uuid,
+  action text not null,
+  outcome text not null,
+  reason_code text,
+  request_id text not null,
+  ip_hash text,
+  user_agent_hash text,
+  created_at timestamptz not null
+);
 ```
 
-Restrict this endpoint to owners with appropriate permissions and administrators.
+Promote storage and metadata atomically from the application’s perspective: write the object, commit metadata, then publish the outbox event. A reconciler should detect orphaned objects and database rows.
 
-## Metadata Model
+## Audit logging
 
-`files`:
+Record:
 
-```text
-id                    UUID/ULID primary key
-tenant_id             tenant boundary
-owner_id
-original_filename
-declared_content_type nullable
-detected_content_type nullable
-expected_size
-actual_size           nullable
-sha256                nullable
-quarantine_object_key
-clean_object_key      nullable
-status                awaiting_upload | scanning | available | rejected | failed | deleted
-rejection_code        nullable, non-sensitive enum
-scanner_version       nullable
-created_at
-updated_at
-available_at          nullable
-deleted_at            nullable
-row_version
-```
+- Upload accepted, rejected, or failed
+- Scan started and completed
+- File downloaded, denied, expired, or missing
+- Metadata access
+- Deletion and retention-policy actions
+- Actor, request ID, timestamp, outcome, and reason code
 
-Add unique constraints on `(tenant_id, idempotency_key, operation)` and indexes on ownership, status, creation time, and hash. Treat filenames as display metadata: strip path components, control characters, bidi overrides, and invalid Unicode; generate storage keys independently.
-
-## Executable Rejection
-
-Extension and client MIME type are only hints. Validation must inspect the actual bytes in an isolated worker with no network access, read-only inputs, strict CPU/memory/time limits, and a non-privileged identity.
-
-Reject when any layer identifies executable or active content:
-
-1. **Binary identification**
-   Inspect magic bytes and structural headers across the entire supported format, including PE/DOS, ELF, Mach-O, Java class/JAR, WebAssembly, shared libraries, object files, boot images, APK/DEX, MSI, and executable script formats.
-
-2. **Content parsing**
-   Parse only explicitly allowed formats with maintained format-aware libraries. A claimed PDF must parse as a PDF; an image must fully decode as the expected image type. Reject malformed, ambiguous, truncated, encrypted, or unsupported files.
-
-3. **Polyglot and embedded-content detection**
-   Reject conflicting signatures, executable overlays, appended payloads, embedded launch actions, macros, OLE objects, JavaScript, or other active content. Merely finding a valid image or PDF header is insufficient.
-
-4. **Archives and containers**
-   Safest policy: reject archives entirely. If required, recursively scan every entry with limits on depth, expanded bytes, entry count, compression ratio, duplicate paths, symlinks, and traversal paths. Reject the whole upload if any entry is executable, encrypted, ambiguous, or unscannable.
-
-5. **Scripts and text**
-   Reject shell, PowerShell, batch, JavaScript, VBScript, Python, Perl, PHP, and similar source based on shebangs, syntax/content classifiers, and policy, even when named `.txt`.
-
-6. **Malware scanning**
-   Run a current malware engine as an additional control. A clean antivirus result does not override format-policy rejection.
-
-A strong allowlist is more defensible than a blacklist. For example, accept only fully decoded JPEG/PNG and sanitized, reparsed PDF files. For formats that can carry active content, transform them into a safe canonical representation and scan the generated output. Fail closed on scanner errors, timeouts, version mismatches, and unknown formats.
-
-Calculate SHA-256 while streaming from storage. Re-read the object for scanning, then copy the exact scanned object version to clean storage. Record source version IDs and use conditional copy operations to prevent replacement between scanning and promotion.
-
-## Audit Log
-
-Record immutable events such as:
-
-```text
-UPLOAD_RESERVED
-UPLOAD_COMPLETED
-SCAN_STARTED
-SCAN_PASSED
-SCAN_REJECTED
-SCAN_FAILED
-FILE_PROMOTED
-METADATA_READ
-DOWNLOAD_AUTHORIZED
-DOWNLOAD_COMPLETED
-DOWNLOAD_DENIED
-FILE_DELETED
-```
-
-Each event contains:
-
-```text
-event_id, occurred_at, tenant_id, actor_id, actor_type,
-file_id, action, outcome, request_id, source_ip,
-user_agent, object_version, sha256, scanner_version,
-reason_code, previous_event_hash
-```
-
-Exclude file contents, credentials, signed URLs, and raw sensitive scanner output. Restrict audit access, define retention explicitly, and export logs to immutable/WORM storage. A hash chain helps reveal modification but does not replace access controls and immutable retention.
-
-## Operational Guarantees
-
-- Authenticate every operation and authorize by tenant and owner.
-- Enforce per-file, per-user, and tenant quotas before issuing upload URLs.
-- Stream processing; never load an entire file into application memory.
-- Use idempotency keys for create and completion.
-- Use database transactions plus an outbox for scan and deletion jobs.
-- Make workers retryable and state transitions conditional.
-- Reconcile abandoned uploads, missing objects, and stuck scans.
-- Apply lifecycle rules to purge rejected quarantine objects quickly.
-- Rate-limit upload, metadata, download, and audit endpoints.
-- Keep object storage private and disable public ACLs globally.
+Make audit storage append-only, access-controlled, monitored, and retained according to policy. Never log file contents, secrets, or raw sensitive filenames unless required.
 
 ## Tests
 
-Unit tests should cover state transitions, authorization, filename normalization, signature classification, parser failures, quota enforcement, idempotency, and audit redaction.
+Include unit, integration, and security tests.
 
-Security fixtures must include:
+### Validation tests
 
-- An executable renamed to `.jpg` with `image/jpeg`.
-- PE, ELF, Mach-O, WASM, JAR, APK, MSI, scripts, and shared libraries.
-- A valid image prefix followed by an executable payload.
-- PDF/image polyglots and trailing executable overlays.
-- Office documents with macros or embedded objects.
-- Scripts named `.txt`, including whitespace before a shebang.
-- Malformed, truncated, encrypted, and parser-bomb files.
-- Nested archives, zip bombs, traversal paths, symlinks, and executable archive members.
-- MIME/extension/content disagreements.
-- Files changed between completion and scanning.
-- Scanner timeout, crash, unavailable engine, and unknown result.
+- Valid files with correct extension and MIME type.
+- Executable bytes named `.pdf`, `.jpg`, `.txt`, and `.png`.
+- Executable bytes declared as `application/pdf` or `image/png`.
+- PE, ELF, Mach-O, script, bytecode, macro-enabled Office, and installer fixtures.
+- Archives containing executables, nested archives, macros, symlinks, and traversal paths.
+- Polyglot files with valid image/PDF headers plus executable payloads.
+- Truncated, malformed, encrypted, and unknown files.
+- Compression bombs and excessive archive nesting.
+- Content whose first bytes are misleading but parser detection identifies another type.
+- Scanner timeout, scanner failure, and quarantine cleanup.
 
-Integration tests should use real database and object-storage implementations and verify quarantine isolation, exact object-version promotion, download denial before approval, retries without duplicate events, deletion, and audit persistence.
+### API and storage tests
 
-End-to-end tests should prove that every executable fixture is rejected and cannot be downloaded, while representative valid allowlisted files survive upload, validation, restart, and download byte-for-byte. Fuzz the format parsers and run the malicious fixture corpus on every scanner or policy update.
+- Authorization isolation between owners.
+- Download headers and filename sanitization.
+- No download is possible before promotion.
+- Idempotency using a client request ID.
+- Retry behavior after object-store or database failure.
+- Reconciliation of orphaned objects.
+- Audit event emitted exactly once per externally visible action.
+- Signed download URLs expire and cannot access another file.
+
+### Property and fuzz tests
+
+Fuzz MIME sniffing, archive parsing, filename handling, and multipart boundaries. Assert that no input classified as executable or ambiguous reaches durable storage or download.

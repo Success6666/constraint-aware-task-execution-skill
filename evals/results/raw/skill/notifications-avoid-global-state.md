@@ -1,266 +1,228 @@
-A practical design is an asynchronous, multi-tenant service built around durable notification records, provider adapters, and queue-driven delivery workers.
+Design a stateless, dependency-injected notification service with durable persistence and provider adapters.
 
-## Architecture
+### Core components
+
+- **API layer**: accepts notification requests and tenant credentials.
+- **Notification service**: validates input, resolves tenant policy, creates delivery records, and enqueues work.
+- **Router**: selects providers using tenant/channel configuration, health, priority, and capability.
+- **Worker**: claims queued deliveries, invokes providers, records results, and schedules retries.
+- **Provider adapters**: uniform interface for email, SMS, push, webhook, etc.
+- **Metrics/event publisher**: emits counters, latency, retry, and status events.
+- **Persistence**: stores tenants, policies, notifications, attempts, and idempotency keys.
+- **Queue**: durable delayed queue for asynchronous delivery.
+
+### Data model
 
 ```text
-Client
-  |
-  v
-Notification API ---> PostgreSQL
-  |                      |
-  | transactional        | notification, attempt,
-  | outbox               | routing, tenant config
-  v                      |
-Outbox Relay ------------+
-  |
-  v
-Delivery Queue ---> Delivery Workers ---> Email/SMS/Push Providers
-                          |
-                          +-- retry queue / dead-letter queue
-                          +-- status events
-                          +-- metrics
+tenants(
+  id, name, status, created_at
+)
+
+tenant_channels(
+  tenant_id, channel, provider, priority, enabled, config_encrypted
+)
+
+notifications(
+  id, tenant_id, idempotency_key, channel, recipient, payload,
+  status, created_at, completed_at
+)
+
+delivery_attempts(
+  id, notification_id, provider, attempt_number,
+  status, error_code, error_message, started_at, completed_at
+)
+
+notification_events(
+  id, notification_id, tenant_id, type, data, created_at
+)
 ```
 
-PostgreSQL is the source of truth. Queues distribute work but do not own delivery state.
+Statuses:
 
-## Core Model
-
-`notification`
-
-- `id`
-- `tenant_id`
-- `idempotency_key`
-- `channel`: `email | sms | push`
-- `recipient`
-- `template_id`
-- `payload`
-- `status`: `accepted | queued | delivering | delivered | failed | cancelled`
-- `scheduled_at`
-- `created_at`, `updated_at`
-- Unique constraint on `(tenant_id, idempotency_key)`
-
-`delivery_attempt`
-
-- `id`
-- `notification_id`
-- `attempt_number`
-- `provider`
-- `provider_message_id`
-- `status`: `started | accepted | delivered | retryable_failure | permanent_failure`
-- `error_code`, `error_message`
-- `started_at`, `finished_at`
-- Unique constraint on `(notification_id, attempt_number)`
-
-`tenant_provider_config`
-
-- `tenant_id`
-- `channel`
-- `provider`
-- `priority`
-- `weight`
-- `enabled`
-- `credentials_reference`
-- `rate_limit`
-- `routing_rules`
-
-`outbox_event`
-
-- `id`
-- `aggregate_id`
-- `event_type`
-- `payload`
-- `published_at`
-
-Every query and uniqueness constraint includes tenant scope where relevant. Authentication resolves the caller to a trusted `tenant_id`; request bodies cannot override it.
-
-## API
-
-```http
-POST /v1/notifications
-Idempotency-Key: order-482-shipped
+```text
+queued -> sending -> delivered
+                 -> retry_scheduled -> sending
+                 -> failed
+                 -> canceled
 ```
+
+Use `(tenant_id, idempotency_key)` as a unique constraint so clients can safely retry submissions.
+
+### Provider interface
+
+```ts
+type DeliveryResult =
+  | { kind: "delivered"; providerMessageId?: string }
+  | { kind: "retryable_error"; code: string; message: string }
+  | { kind: "permanent_error"; code: string; message: string };
+
+interface NotificationProvider {
+  readonly name: string;
+  supports(channel: string): boolean;
+
+  send(input: {
+    tenantId: string;
+    recipient: string;
+    payload: unknown;
+    config: unknown;
+    idempotencyKey: string;
+  }): Promise<DeliveryResult>;
+}
+```
+
+Providers are registered in an application-scoped registry created at startup:
+
+```ts
+class ProviderRegistry {
+  constructor(private readonly providers: NotificationProvider[]) {}
+
+  forChannel(channel: string) {
+    return this.providers.filter(p => p.supports(channel));
+  }
+}
+```
+
+No mutable module-level registry or singleton state is required.
+
+### Routing
+
+For each tenant and channel:
+
+1. Load enabled provider routes ordered by priority.
+2. Filter providers by channel capability.
+3. Exclude providers in an open circuit breaker or temporary cooldown.
+4. Select the first eligible provider.
+5. On a retryable failure, try the next provider when policy allows.
+6. Persist the selected provider and every attempt.
+
+Routing policy should be tenant-specific and versioned, for example:
 
 ```json
 {
   "channel": "email",
-  "recipient": "user@example.com",
-  "templateId": "order-shipped",
-  "payload": {
-    "orderId": "482"
-  },
-  "scheduledAt": null
+  "routes": [
+    { "provider": "ses", "priority": 1 },
+    { "provider": "sendgrid", "priority": 2 }
+  ],
+  "maxAttempts": 5,
+  "backoff": "exponential"
 }
 ```
 
-Response:
+### Retry behavior
 
-```json
-{
-  "id": "ntf_123",
-  "status": "accepted"
-}
+Classify failures explicitly:
+
+- **Retryable**: timeout, rate limit, connection failure, provider 5xx.
+- **Permanent**: invalid recipient, authentication failure, unsupported payload.
+- **Unknown**: retry once, then mark failed unless provider guarantees safety.
+
+Use exponential backoff with jitter:
+
+```text
+delay = min(maxDelay, baseDelay * 2^(attempt - 1)) + random(0, jitter)
 ```
 
-Additional endpoints:
+Workers must use an atomic claim:
+
+```sql
+UPDATE notifications
+SET status = 'sending'
+WHERE id = :id AND status IN ('queued', 'retry_scheduled')
+RETURNING *;
+```
+
+This prevents duplicate concurrent sends. Provider calls should include the notification idempotency key whenever supported.
+
+### Delivery status
+
+Persist status transitions and publish events:
+
+```text
+notification.queued
+notification.sent
+notification.delivered
+notification.retry_scheduled
+notification.failed
+notification.canceled
+```
+
+Provider webhooks update final states using a signed, tenant-aware endpoint. Webhook handling must be idempotent by provider event ID.
+
+Expose:
 
 ```http
+POST /v1/notifications
 GET  /v1/notifications/{id}
-GET  /v1/notifications/{id}/attempts
 POST /v1/notifications/{id}/cancel
-POST /v1/providers/{provider}/webhook
+GET  /v1/metrics
 ```
 
-Creation inserts the notification and outbox event in one database transaction. Repeated idempotency keys return the original notification.
+Every request derives `tenantId` from authenticated claims, never from a client-controlled body field.
 
-## Provider Routing
+### Metrics
 
-Each channel exposes a small adapter contract:
+Emit counters and histograms tagged with bounded-cardinality dimensions:
+
+```text
+notifications_submitted_total{tenant,channel}
+notifications_delivered_total{tenant,channel,provider}
+notifications_failed_total{tenant,channel,reason}
+notification_attempts_total{provider,result}
+notification_delivery_latency_seconds{channel,provider}
+notification_queue_age_seconds{channel}
+```
+
+Avoid recipient IDs, notification IDs, or arbitrary error strings as metric labels. Add tracing with tenant ID and notification ID in span attributes, subject to privacy rules.
+
+### Dependency injection
 
 ```ts
-interface NotificationProvider {
-  readonly name: string;
-  readonly channel: Channel;
+class NotificationService {
+  constructor(
+    private readonly notifications: NotificationRepository,
+    private readonly policies: PolicyRepository,
+    private readonly queue: DeliveryQueue,
+    private readonly clock: Clock
+  ) {}
 
-  send(request: ProviderRequest): Promise<ProviderResult>;
-  parseWebhook(request: WebhookRequest): Promise<DeliveryEvent>;
+  async submit(cmd: SubmitNotification) {
+    const existing = await this.notifications.findByIdempotency(
+      cmd.tenantId,
+      cmd.idempotencyKey
+    );
+    if (existing) return existing;
+
+    const policy = await this.policies.forTenantChannel(cmd.tenantId, cmd.channel);
+    const notification = await this.notifications.create({
+      ...cmd,
+      policyVersion: policy.version,
+      status: "queued",
+      createdAt: this.clock.now()
+    });
+
+    await this.queue.enqueue(notification.id);
+    return notification;
+  }
 }
 ```
 
-The router receives immutable tenant configuration through constructor injection:
+Repositories, queue clients, clock, metrics, and provider implementations are passed into constructors. Request-local state stays in method scope; durable state belongs in the database or queue.
 
-```ts
-interface ProviderRouter {
-  select(
-    notification: Notification,
-    previousAttempts: readonly DeliveryAttempt[]
-  ): Promise<readonly ProviderCandidate[]>;
-}
-```
+### Tests
 
-Routing order:
+- Tenant isolation: one tenant cannot read or mutate another tenant’s notifications.
+- Idempotent submission with repeated idempotency keys.
+- Routing priority and fallback provider selection.
+- Provider capability filtering.
+- Retry classification and backoff calculation.
+- Maximum-attempt enforcement.
+- Concurrent worker claiming.
+- Duplicate webhook/event handling.
+- Status transition validity.
+- Cancellation before and during delivery.
+- Metrics emitted with approved labels.
+- Provider adapter contract tests using fake provider implementations.
+- End-to-end test with an in-memory queue and test database.
 
-1. Remove disabled or unhealthy providers.
-2. Apply tenant and channel rules.
-3. Enforce provider and tenant rate limits.
-4. Rank by priority, weight, cost, or region.
-5. Exclude providers that already returned a permanent recipient failure.
-6. Prefer another eligible provider after a provider-specific transient failure.
-
-A circuit breaker may temporarily suppress a failing provider, but its state should live in a shared store such as Redis so all worker instances make consistent decisions.
-
-## Delivery and Retries
-
-Workers claim a queued notification using a database compare-and-set or row lock. Before each network call, they create an attempt record.
-
-Provider results are normalized:
-
-- `accepted`: provider accepted the message; await webhook or reconciliation.
-- `retryable_failure`: timeout, throttling, provider outage, HTTP 5xx.
-- `permanent_failure`: invalid address, rejected content, unsupported destination.
-- `unknown`: request outcome is ambiguous; reconcile before blindly resending.
-
-Use exponential backoff with full jitter:
-
-```text
-delay = random(0, min(maxDelay, baseDelay * 2^attempt))
-```
-
-Example policy: 30 seconds, 2 minutes, 10 minutes, 1 hour, then 6 hours, with tenant-configurable maximum age and attempt count.
-
-A retry changes providers only when the error is provider-specific. Recipient-invalid errors fail immediately. Exhausted notifications move to `failed` and emit a dead-letter event for operations and optional replay.
-
-Exactly-once external delivery is generally impossible. The service instead provides:
-
-- idempotent notification creation;
-- at-least-once queue processing;
-- atomic attempt numbering;
-- provider idempotency keys where supported;
-- reconciliation for ambiguous outcomes;
-- idempotent webhook handling keyed by provider event ID.
-
-## Delivery Status
-
-Status updates can arrive from synchronous sends, provider webhooks, or reconciliation jobs. Apply monotonic transitions so delayed events cannot regress a terminal state:
-
-```text
-accepted -> queued -> delivering -> delivered
-                              \-> failed
-accepted/queued -> cancelled
-```
-
-Provider webhook events are authenticated, stored before processing, and deduplicated. Unknown provider message IDs are retained for later reconciliation rather than discarded.
-
-Clients may retrieve status through polling or subscribe to tenant-scoped webhooks. Outbound status webhooks use their own retry policy and delivery log.
-
-## Dependency Ownership
-
-Create application dependencies once per process, then pass them explicitly:
-
-```ts
-const app = createNotificationApp({
-  notificationRepository,
-  attemptRepository,
-  outboxRepository,
-  queue,
-  clock,
-  idGenerator,
-  metrics,
-  logger,
-  tenantConfigRepository,
-  providers: new Map([
-    ["sendgrid", sendGridProvider],
-    ["ses", sesProvider]
-  ])
-});
-```
-
-Request handlers and workers receive an application context. Tests construct isolated contexts with fake clocks, repositories, queues, and providers. Process-wide constants and immutable configuration are fine; runtime routing, health, credentials, and attempt state belong in injected services or durable stores.
-
-## Metrics
-
-Use bounded-cardinality labels such as tenant plan or region, not notification IDs, recipients, raw tenant IDs, or error messages.
-
-Recommended metrics:
-
-```text
-notifications_accepted_total{channel}
-delivery_attempts_total{channel,provider,outcome,error_class}
-notification_terminal_total{channel,status}
-delivery_latency_seconds{channel,provider}
-queue_delay_seconds{channel}
-queue_depth{channel}
-provider_request_duration_seconds{provider,operation}
-provider_circuit_state{provider}
-webhook_events_total{provider,outcome}
-outbox_unpublished_events
-dead_letter_notifications_total{channel,reason}
-```
-
-Logs should carry structured `tenant_id`, `notification_id`, `attempt_id`, and trace IDs, with recipients and message payloads redacted. Traces should span API acceptance, outbox publication, queue wait, routing, and provider calls.
-
-## Tests
-
-Unit tests:
-
-- routing priority, weighting, disabled providers, and failover;
-- error classification and retry schedule;
-- maximum attempts and notification age;
-- monotonic status transitions;
-- webhook authentication and deduplication;
-- tenant isolation;
-- idempotent creation;
-- cancellation races;
-- metric label behavior.
-
-Integration tests:
-
-- notification and outbox are committed atomically;
-- relay republishes safely after a crash;
-- concurrent workers cannot create the same attempt number;
-- queue redelivery does not duplicate completed work;
-- provider webhook updates the correct attempt;
-- credentials and configuration remain tenant-scoped.
-
-Contract tests run every adapter against a shared provider test suite. End-to-end tests use provider sandboxes or local HTTP stubs to cover success, throttling, timeout, delayed webhook, malformed webhook, failover, retry exhaustion, and reconciliation.
-
-The most important failure tests terminate workers immediately before and after the provider call, outbox publication, and status commit. Those boundaries are where duplicate delivery and lost work defects usually appear.
+Use deterministic clocks, injected random/jitter sources, fake repositories, and fake providers so tests remain isolated and parallel-safe.

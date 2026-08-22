@@ -1,15 +1,4 @@
-配置模块可以采用明确的三层优先级：
-
-`默认值 < JSON 文件 < 环境变量`
-
-环境变量使用双下划线表示嵌套字段，例如：
-
-```text
-APP_SERVER__PORT=9000
-APP_DATABASE__HOST=db.internal
-```
-
-下面是一个只依赖 Python 标准库的实现。
+下面是一种轻量、可测试的配置加载设计，只使用 Python 标准库和 JSON。
 
 ```python
 # config.py
@@ -17,29 +6,26 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import MISSING, dataclass, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, get_args, get_origin, get_type_hints
 
 
-class ConfigError(Exception):
-    """配置错误，包含可读的字段路径和原因。"""
+class ConfigError(ValueError):
+    """配置文件或环境变量不合法。"""
 
 
 @dataclass(frozen=True)
 class ServerConfig:
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
 
 
 @dataclass(frozen=True)
 class DatabaseConfig:
-    host: str = "127.0.0.1"
-    port: int = 5432
-    user: str = "app"
-    password: str = ""
-    name: str = "app"
+    url: str
+    pool_size: int = 10
 
 
 @dataclass(frozen=True)
@@ -48,227 +34,180 @@ class AppConfig:
     database: DatabaseConfig
 
 
-DEFAULTS: dict[str, Any] = {
-    "server": {
-        "host": "127.0.0.1",
-        "port": 8000,
-        "debug": False,
-    },
-    "database": {
-        "host": "127.0.0.1",
-        "port": 5432,
-        "user": "app",
-        "password": "",
-        "name": "app",
-    },
-}
+def _parse_value(value: Any, expected_type: Any, key: str) -> Any:
+    origin = get_origin(expected_type)
+    args = get_args(expected_type)
 
-SCHEMA: dict[str, type] = {
-    "server.host": str,
-    "server.port": int,
-    "server.debug": bool,
-    "database.host": str,
-    "database.port": int,
-    "database.user": str,
-    "database.password": str,
-    "database.name": str,
-}
+    if value is None:
+        if expected_type is type(None):
+            return None
+        raise ConfigError(f"{key}: 不允许为空")
 
+    if origin is list:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                value = [item.strip() for item in value.split(",") if item.strip()]
 
-def _deep_merge(base: dict[str, Any], override: Mapping[str, Any]) -> None:
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            _deep_merge(base[key], value)
-        else:
-            base[key] = value
+        if not isinstance(value, list):
+            raise ConfigError(f"{key}: 需要列表，实际为 {type(value).__name__}")
 
-
-def _parse_bool(value: str, path: str) -> bool:
-    normalized = value.strip().lower()
-
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-
-    raise ConfigError(
-        f"{path}: 无效的布尔值 {value!r}，可使用 true/false"
-    )
-
-
-def _parse_value(value: Any, expected_type: type, path: str) -> Any:
-    # JSON 中的值已经是对应类型，只做校验。
-    if not isinstance(value, str):
-        if expected_type is int and isinstance(value, bool):
-            raise ConfigError(f"{path}: 期望整数，实际为布尔值")
-        if not isinstance(value, expected_type):
-            raise ConfigError(
-                f"{path}: 期望 {expected_type.__name__}，"
-                f"实际为 {type(value).__name__}"
-            )
-        return value
-
-    # 环境变量始终是字符串，需要显式转换。
-    if expected_type is str:
-        return value
+        item_type = args[0] if args else Any
+        return [
+            _parse_value(item, item_type, f"{key}[{index}]")
+            for index, item in enumerate(value)
+        ]
 
     if expected_type is bool:
-        return _parse_bool(value, path)
+        if isinstance(value, bool):
+            return value
+
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+
+        raise ConfigError(f"{key}: 需要布尔值 true/false，实际为 {value!r}")
 
     if expected_type is int:
         try:
             return int(value)
-        except ValueError as exc:
-            raise ConfigError(f"{path}: 无效的整数 {value!r}") from exc
+        except (TypeError, ValueError):
+            raise ConfigError(f"{key}: 需要整数，实际为 {value!r}") from None
 
-    raise ConfigError(f"{path}: 不支持的配置类型 {expected_type.__name__}")
+    if expected_type is float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            raise ConfigError(f"{key}: 需要数字，实际为 {value!r}") from None
+
+    if expected_type is str:
+        if not isinstance(value, str):
+            raise ConfigError(f"{key}: 需要字符串，实际为 {type(value).__name__}")
+        return value
+
+    return value
 
 
-def _get(data: Mapping[str, Any], path: str) -> Any:
-    current: Any = data
-    for part in path.split("."):
-        if not isinstance(current, Mapping) or part not in current:
-            raise ConfigError(f"{path}: 缺少必填配置")
-        current = current[part]
-    return current
+def _build_config(cls: type, data: dict[str, Any], path: str = "") -> Any:
+    if not isinstance(data, dict):
+        raise ConfigError(f"{path or 'root'}: 需要 JSON 对象")
+
+    hints = get_type_hints(cls)
+    known_fields = {field.name for field in fields(cls)}
+
+    unknown = set(data) - known_fields
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ConfigError(f"{path or 'root'}: 未知配置项: {names}")
+
+    values = {}
+
+    for field in fields(cls):
+        key = f"{path}.{field.name}" if path else field.name
+        field_type = hints[field.name]
+
+        if field.name not in data:
+            if field.default is not MISSING or field.default_factory is not MISSING:
+                continue
+            raise ConfigError(f"{key}: 缺少必填配置")
+
+        raw_value = data[field.name]
+
+        if is_dataclass(field_type):
+            values[field.name] = _build_config(field_type, raw_value, key)
+        else:
+            values[field.name] = _parse_value(raw_value, field_type, key)
+
+    return cls(**values)
 
 
-def _set(data: dict[str, Any], path: str, value: Any) -> None:
-    parts = path.split(".")
+def _set_nested(data: dict[str, Any], path: list[str], value: str) -> None:
     current = data
 
-    for part in parts[:-1]:
-        child = current.setdefault(part, {})
-        if not isinstance(child, dict):
-            raise ConfigError(f"{path}: 父级配置不是对象")
-        current = child
+    for part in path[:-1]:
+        current = current.setdefault(part, {})
 
-    current[parts[-1]] = value
-
-
-def _validate_unknown_keys(data: Mapping[str, Any], prefix: str = "") -> None:
-    allowed = {
-        "server": {"host", "port", "debug"},
-        "database": {"host", "port", "user", "password", "name"},
-    }
-
-    for section, values in data.items():
-        if section not in allowed:
-            raise ConfigError(f"{section}: 未知配置段")
-
-        if not isinstance(values, Mapping):
-            raise ConfigError(f"{section}: 必须是 JSON 对象")
-
-        unknown = set(values) - allowed[section]
-        if unknown:
-            names = ", ".join(sorted(unknown))
-            raise ConfigError(f"{section}: 未知配置项: {names}")
+    current[path[-1]] = value
 
 
 def load_config(
-    config_path: str | Path = "config.json",
-    environ: Mapping[str, str] | None = None,
+    config_path: str | Path,
+    *,
+    env: dict[str, str] | None = None,
+    env_prefix: str = "APP_",
 ) -> AppConfig:
-    env = os.environ if environ is None else environ
-    data = json.loads(json.dumps(DEFAULTS))
+    env = os.environ if env is None else env
 
-    path = Path(config_path)
-    if path.exists():
-        try:
-            with path.open("r", encoding="utf-8") as file:
-                json_data = json.load(file)
-        except json.JSONDecodeError as exc:
-            raise ConfigError(
-                f"{path}: JSON 格式错误，第 {exc.lineno} 行第 {exc.colno} 列"
-            ) from exc
-        except OSError as exc:
-            raise ConfigError(f"{path}: 无法读取配置文件: {exc}") from exc
+    try:
+        raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ConfigError(f"配置文件不存在: {config_path}") from None
+    except json.JSONDecodeError as exc:
+        raise ConfigError(
+            f"JSON 配置格式错误: 第 {exc.lineno} 行，第 {exc.colno} 列: {exc.msg}"
+        ) from None
 
-        if not isinstance(json_data, dict):
-            raise ConfigError(f"{path}: 顶层必须是 JSON 对象")
+    if not isinstance(raw, dict):
+        raise ConfigError("配置文件根节点必须是 JSON 对象")
 
-        _deep_merge(data, json_data)
+    merged = dict(raw)
 
-    _validate_unknown_keys(data)
-
-    # APP_DATABASE__PORT -> database.port
-    for name, raw_value in env.items():
-        if not name.startswith("APP_"):
+    # APP_SERVER__PORT=9000 -> {"server": {"port": "9000"}}
+    for name, value in env.items():
+        if not name.startswith(env_prefix):
             continue
 
-        config_path = name[4:].lower().replace("__", ".")
-        expected_type = SCHEMA.get(config_path)
+        path = name[len(env_prefix):].lower().split("__")
+        if any(not part for part in path):
+            raise ConfigError(f"环境变量名非法: {name}")
 
-        # 非配置变量直接忽略，例如 APP_LOG_LEVEL。
-        if expected_type is None:
-            continue
+        _set_nested(merged, path, value)
 
-        parsed = _parse_value(raw_value, expected_type, config_path)
-        _set(data, config_path, parsed)
-
-    errors: list[str] = []
-
-    for field_path, expected_type in SCHEMA.items():
-        try:
-            value = _get(data, field_path)
-            _parse_value(value, expected_type, field_path)
-        except ConfigError as exc:
-            errors.append(str(exc))
-
-    if errors:
-        raise ConfigError("配置校验失败:\n- " + "\n- ".join(errors))
-
-    return AppConfig(
-        server=ServerConfig(
-            host=data["server"]["host"],
-            port=data["server"]["port"],
-            debug=data["server"]["debug"],
-        ),
-        database=DatabaseConfig(
-            host=data["database"]["host"],
-            port=data["database"]["port"],
-            user=data["database"]["user"],
-            password=data["database"]["password"],
-            name=data["database"]["name"],
-        ),
-    )
+    return _build_config(AppConfig, merged)
 ```
 
-`config.json` 示例：
+JSON 示例：
 
 ```json
 {
   "server": {
-    "port": 8080,
+    "host": "127.0.0.1",
+    "port": 8000,
     "debug": false
   },
   "database": {
-    "host": "db.internal",
-    "name": "orders"
+    "url": "postgresql://localhost/app",
+    "pool_size": 10
   }
 }
+```
+
+环境变量覆盖：
+
+```text
+APP_SERVER__PORT=9000
+APP_SERVER__DEBUG=true
+APP_DATABASE__POOL_SIZE=20
 ```
 
 使用方式：
 
 ```python
-from config import ConfigError, load_config
-
 try:
     config = load_config("config.json")
 except ConfigError as exc:
-    print(f"启动失败: {exc}")
-    raise SystemExit(1)
-
-print(config.server.port)
-print(config.database.host)
+    print(f"配置错误: {exc}")
+    raise SystemExit(2)
 ```
 
-建议约定：
+设计要点：
 
-- JSON 文件缺失时使用默认值。
-- JSON 存在但格式错误时立即失败。
-- 环境变量只覆盖已声明字段。
-- 整数、布尔值等环境变量必须显式转换。
-- 一次校验收集多个错误，便于启动时集中修复。
-- 密码等敏感值只从环境变量传入，避免写入 JSON 或日志。
+- 加载顺序为：JSON 默认值，再由环境变量覆盖。
+- 环境变量使用 `APP_` 前缀，嵌套字段使用双下划线。
+- 支持 `str`、`int`、`float`、`bool` 和 `list[T]` 类型转换。
+- 聚焦于启动阶段失败，错误信息包含字段路径，例如 `server.port`。
+- 拒绝未知 JSON 配置项，避免拼写错误被静默忽略。
+- 通过传入 `env` 字典即可在单元测试中验证覆盖和错误场景。

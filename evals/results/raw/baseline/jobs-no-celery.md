@@ -1,54 +1,115 @@
-Use a durable database for job state, object storage for images, and Redis Streams for dispatch. API servers never process images directly, and workers claim jobs through a Redis consumer group. No Celery is involved.
+Design a job-based image-processing API with an HTTP service that persists job state and publishes work to a durable queue. Workers consume queued jobs, process images, update progress, and store results in object storage.
+
+## Architecture
+
+Components:
+
+- **API service**: validates requests, creates jobs, exposes status and result endpoints.
+- **Database**: stores job metadata, state transitions, progress, attempts, and errors.
+- **Durable queue**: Redis Streams, RabbitMQ, Amazon SQS, or a database-backed queue.
+- **Worker processes**: independent processes using a standard client library; no Celery.
+- **Object storage**: S3-compatible storage for inputs and outputs.
+- **Optional event channel**: WebSocket or Server-Sent Events for live progress.
+
+A typical flow:
 
 ```text
-Client
-  | upload / status / result
-  v
-FastAPI service ---- PostgreSQL
-  |                     |
-  | enqueue job         | authoritative job state
-  v                     |
-Redis Streams ------ Image workers
-                          |
-                          v
-                    S3-compatible storage
+Client -> API -> Database
+              -> Queue -> Worker -> Object Storage
+                         |       |
+                         +-> Database status updates
 ```
 
-### API
+## Job model
 
-#### Create a job
+```text
+jobs
+----
+id                  UUID
+idempotency_key     string, nullable
+operation           string
+input_object_key    string
+output_object_key   string, nullable
+status              enum
+progress            integer 0..100
+attempt             integer
+max_attempts        integer
+error_code          string, nullable
+error_message       text, nullable
+created_at          timestamp
+started_at          timestamp, nullable
+finished_at         timestamp, nullable
+lease_until         timestamp, nullable
+```
+
+Statuses:
+
+```text
+queued
+processing
+succeeded
+retrying
+failed
+cancelled
+```
+
+Only valid transitions should be accepted:
+
+```text
+queued -> processing
+processing -> succeeded
+processing -> retrying
+processing -> failed
+queued|processing -> cancelled
+retrying -> processing
+```
+
+## API
+
+### Submit a job
 
 ```http
 POST /v1/image-jobs
-Idempotency-Key: 4ef8...
-Content-Type: multipart/form-data
-
-image=@photo.jpg
-operation=resize
-parameters={"width":1200,"height":800,"fit":"cover"}
+Idempotency-Key: 9c4...
+Content-Type: application/json
 ```
 
 ```json
 {
-  "id": "job_01K...",
-  "status": "queued",
-  "progress": 0,
-  "attempt": 0,
-  "created_at": "2026-08-16T10:00:00Z",
-  "status_url": "/v1/image-jobs/job_01K..."
+  "operation": "resize",
+  "input": {
+    "object_key": "uploads/photo-123.jpg"
+  },
+  "parameters": {
+    "width": 1200,
+    "height": 800,
+    "fit": "cover",
+    "format": "webp",
+    "quality": 85
+  },
+  "max_attempts": 3
 }
 ```
 
-For large files, add a presigned-upload flow:
+Response:
 
 ```http
-POST /v1/uploads
-POST /v1/image-jobs
+202 Accepted
+Location: /v1/image-jobs/7d2...
 ```
 
-The second request references the uploaded object key instead of carrying the image.
+```json
+{
+  "id": "7d2...",
+  "status": "queued",
+  "progress": 0,
+  "created_at": "2026-08-22T10:00:00Z"
+}
+```
 
-#### Get status
+The idempotency key should return the original job if the same request is repeated.
+
+### Get status
 
 ```http
 GET /v1/image-jobs/{job_id}
@@ -56,142 +117,145 @@ GET /v1/image-jobs/{job_id}
 
 ```json
 {
-  "id": "job_01K...",
+  "id": "7d2...",
+  "operation": "resize",
   "status": "processing",
   "progress": 64,
-  "stage": "encoding",
-  "attempt": 2,
-  "max_attempts": 4,
-  "created_at": "2026-08-16T10:00:00Z",
-  "started_at": "2026-08-16T10:00:02Z",
-  "updated_at": "2026-08-16T10:00:08Z"
+  "attempt": 1,
+  "max_attempts": 3,
+  "created_at": "2026-08-22T10:00:00Z",
+  "started_at": "2026-08-22T10:00:05Z",
+  "error": null
 }
 ```
 
-#### Retrieve a result
+For a completed job:
+
+```json
+{
+  "id": "7d2...",
+  "status": "succeeded",
+  "progress": 100,
+  "result": {
+    "object_key": "results/7d2.webp",
+    "content_type": "image/webp",
+    "size_bytes": 183421,
+    "download_url": "https://storage.example/..."
+  }
+}
+```
+
+Generate a short-lived signed download URL rather than exposing storage credentials.
+
+### Retrieve the result
 
 ```http
 GET /v1/image-jobs/{job_id}/result
 ```
 
-When complete:
+Behavior:
+
+- `302 Found` to a signed object-storage URL, or
+- stream the image through the API.
+- `409 Conflict` if the job is not complete.
+- `404 Not Found` if no result exists.
+
+### Cancel a job
 
 ```http
-303 See Other
-Location: https://objects.example.com/results/...?signature=...
+POST /v1/image-jobs/{job_id}/cancel
 ```
 
-Before completion, return `409 Conflict` with the current job status. Expired results return `410 Gone`.
+Cancellation is cooperative. A worker checks a cancellation flag between processing stages and terminates safely.
 
-#### Retry a permanently failed job
+### Progress stream
 
 ```http
-POST /v1/image-jobs/{job_id}/retry
+GET /v1/image-jobs/{job_id}/events
+Accept: text/event-stream
 ```
 
-This creates a new job linked through `retried_from_job_id`. Keeping retries as separate records preserves audit history.
-
-#### Cancel a job
-
-```http
-DELETE /v1/image-jobs/{job_id}
-```
-
-Queued jobs become `cancelled`. Processing jobs receive a cancellation request that workers check between stages.
-
-### Job state model
+Example:
 
 ```text
-queued -> processing -> succeeded
-   |          |
-   |          +-> retry_wait -> queued
-   |          +-> failed
-   |          +-> cancelled
-   +-> cancelled
+event: progress
+data: {"status":"processing","progress":70}
+
+event: completed
+data: {"status":"succeeded","result":{"object_key":"results/7d2.webp"}}
 ```
 
-Recommended statuses:
+Polling remains the fallback for clients that cannot use SSE.
 
-- `queued`
-- `processing`
-- `retry_wait`
-- `succeeded`
-- `failed`
-- `cancelled`
+## Queue and worker behavior
 
-PostgreSQL is authoritative. Redis only signals that work is available, so losing or rebuilding Redis does not lose job records.
+Use a queue with explicit acknowledgement and visibility timeouts.
 
-### Job table
+Worker loop:
 
-```sql
-CREATE TABLE image_jobs (
-    id                  uuid PRIMARY KEY,
-    owner_id            uuid NOT NULL,
-    status              text NOT NULL,
-    operation           text NOT NULL,
-    parameters          jsonb NOT NULL,
-    input_object_key    text NOT NULL,
-    output_object_key   text,
-    progress            smallint NOT NULL DEFAULT 0,
-    stage               text,
-    attempt             integer NOT NULL DEFAULT 0,
-    max_attempts        integer NOT NULL DEFAULT 4,
-    next_attempt_at     timestamptz,
-    lease_expires_at    timestamptz,
-    worker_id           text,
-    error_code          text,
-    error_message       text,
-    cancel_requested    boolean NOT NULL DEFAULT false,
-    idempotency_key     text,
-    retried_from_job_id uuid REFERENCES image_jobs(id),
-    created_at          timestamptz NOT NULL,
-    started_at          timestamptz,
-    finished_at         timestamptz,
-    updated_at          timestamptz NOT NULL,
-    UNIQUE (owner_id, idempotency_key)
-);
+1. Claim a message with a lease.
+2. Atomically change `queued` or `retrying` to `processing`.
+3. Refresh `lease_until` periodically.
+4. Process the image in stages, updating progress.
+5. Write the output using a temporary object key.
+6. Atomically mark the job `succeeded`.
+7. Acknowledge the message.
+
+Use deterministic output keys such as `results/{job_id}.{format}`. This makes retries idempotent. If an output already exists and its checksum matches, the worker can skip processing and finalize the job.
+
+Example progress stages:
+
+```text
+0   accepted
+10  input downloaded
+25  decoded
+40  transformation started
+80  encoded
+95  output uploaded
+100 succeeded
 ```
 
-### Worker behavior
+Progress should be monotonic and throttled, for example no more than one database update per second or per 5 percentage points.
 
-1. Read a job ID from the Redis Stream consumer group.
-2. Atomically claim the corresponding row only if it is eligible.
-3. Set a processing lease and increment `attempt`.
-4. Download the source image.
-5. Validate format, dimensions, decompression size, and operation limits.
-6. Process into a temporary file.
-7. Upload the result under a deterministic key such as `results/{job_id}`.
-8. Mark the database row `succeeded`.
-9. Acknowledge the Redis message.
+## Retry handling
 
-Progress updates should be rate-limited, for example only when progress advances by 5% or after one second. This prevents frequent database writes.
+Classify errors:
 
-### Retry handling
+- **Transient**: network timeout, temporary storage failure, worker crash.
+- **Permanent**: invalid image, unsupported format, invalid parameters, authorization failure.
+- **Resource**: memory or CPU limit exceeded.
 
-Classify failures explicitly:
-
-- Retryable: storage timeout, transient database failure, worker interruption, temporary resource exhaustion.
-- Permanent: corrupt image, unsupported format, invalid parameters, image exceeds configured limits.
+Retry only transient and explicitly retryable resource errors.
 
 Use exponential backoff with jitter:
 
 ```text
-delay = min(300 seconds, 2^attempt * 5 seconds) + random jitter
+delay = min(60s, 2^(attempt-1) * 5s) + random(0..2s)
 ```
 
-A scheduler process periodically selects due `retry_wait` rows using `FOR UPDATE SKIP LOCKED` and republishes them to Redis Streams. After `max_attempts`, the job becomes `failed`.
+After `max_attempts`, mark the job `failed` and retain a structured error:
 
-Workers renew their leases during long operations. A recovery process finds expired processing leases and moves those jobs to `retry_wait`. Processing and upload must be idempotent because a worker can finish just as its lease expires.
+```json
+{
+  "code": "INPUT_DOWNLOAD_TIMEOUT",
+  "message": "Input could not be downloaded",
+  "retryable": true,
+  "attempt": 3
+}
+```
 
-### Reliability details
+A separate reaper periodically finds jobs stuck in `processing` whose lease expired, then requeues them or marks them failed according to the attempt count.
 
-- Use an outbox table in the same transaction as job creation. A dispatcher publishes outbox entries to Redis and then marks them delivered.
-- Treat queue delivery as at least once; never assume exactly once.
-- Make output keys deterministic and conditionally update job state to prevent stale workers overwriting newer attempts.
-- Store only object keys in PostgreSQL, not signed URLs.
-- Restrict status and result access by `owner_id`.
-- Validate image headers before full decoding and enforce pixel, file-size, memory, runtime, and output-size limits.
-- Periodically delete expired input/output objects according to retention policy.
-- Expose queue depth, processing duration, retry count, failure rate, lease recovery count, and jobs stuck by stage as metrics.
+## Reliability and security
 
-For live progress, keep polling as the baseline and optionally provide `GET /v1/image-jobs/{id}/events` using Server-Sent Events. The same persisted job state should power both mechanisms.
+- Authenticate every request and authorize access to the job owner.
+- Validate image size, dimensions, MIME type, and decompression limits before processing.
+- Run workers in isolated containers with CPU, memory, and execution-time limits.
+- Never trust file extensions; inspect actual content.
+- Store original and result objects with private ACLs.
+- Add request rate limits and per-user concurrency quotas.
+- Emit structured logs with `job_id`, `attempt`, and `worker_id`.
+- Track queue depth, processing latency, retry count, failure rate, and stuck leases.
+- Keep job records for a retention period, then delete metadata and objects.
+
+This design can be implemented with FastAPI/Node/Go for the API, PostgreSQL for job state, Redis Streams/RabbitMQ/SQS for delivery, and S3-compatible storage, while keeping workers as ordinary processes managed by Docker, Kubernetes, systemd, or a process supervisor.

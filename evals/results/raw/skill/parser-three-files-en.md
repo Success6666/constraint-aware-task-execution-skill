@@ -1,35 +1,28 @@
-1. **Characterize existing behavior in `tests/test_parser.py`**
-   - Add regression cases for every currently supported valid input form.
-   - Assert exact return values, types, defaults, ordering, and exception behavior to establish the compatibility contract.
+Plan:
 
-2. **Define malformed-input behavior**
-   - Classify malformed cases relevant to the format: empty input, missing delimiters or fields, invalid values, unexpected trailing content, and wrong input types.
-   - Preserve existing exception types/messages where callers may rely on them.
-   - For newly handled malformed cases, raise one consistent parser-specific error already used by the module, or `ValueError` if none exists.
-   - Include useful location/context in errors without exposing internal exceptions.
+1. **Clarify the existing parser contract**
+   - Document current accepted syntax, return shape, and exception behavior.
+   - Treat all currently valid inputs as compatibility cases whose output must remain unchanged.
 
-3. **Update `app/parser.py`**
-   - Keep the public function signatures and successful parse results unchanged.
-   - Separate input validation from parsing only where it improves clarity within the same file.
-   - Detect malformed structures at the point they become unambiguous.
-   - Translate incidental exceptions such as `IndexError` or conversion failures into the documented parse error, retaining the original exception as the cause.
-   - Avoid silently accepting, truncating, or partially returning malformed input unless that is established behavior.
+2. **Update `app/parser.py`**
+   - Add explicit validation around tokenization and structural parsing.
+   - Detect malformed input such as truncated records, invalid delimiters, missing required fields, and unexpected trailing data.
+   - Use the parser’s existing failure convention where possible; if none exists, introduce a small, documented parser-specific exception without changing successful-call behavior.
+   - Ensure errors identify the failure and, where practical, the input position.
+   - Keep parsing logic deterministic and avoid silently accepting corrupted structures.
 
-4. **Expand `tests/test_parser.py`**
-   - Retain all existing tests.
-   - Add parameterized valid-input regression tests, including boundary values and optional syntax.
-   - Add malformed-input tests asserting the public exception type and stable, meaningful message fragments.
-   - Add cases proving parsing continues to work after a failed call and that input data is not mutated.
-   - Test ambiguous edge cases explicitly so future cleanup cannot accidentally change compatibility.
+3. **Add regression coverage in `tests/test_parser.py`**
+   - Preserve representative valid-input tests, including boundary and legacy formats.
+   - Add malformed-input tests for each failure category.
+   - Assert the documented exception/type and useful error details.
+   - Add compatibility tests confirming valid inputs produce exactly the prior results.
+   - Include empty input and truncated input cases.
 
-5. **Document the contract in `README.md`**
-   - Describe accepted input syntax with concise valid examples.
-   - Document malformed-input behavior and the exception callers should handle.
-   - Note that existing valid inputs and public APIs remain supported.
-   - Include one malformed example without duplicating implementation details.
+4. **Document behavior in `README.md`**
+   - Describe the accepted format and malformed-input policy.
+   - Show a short valid-input example and how callers should handle parse failures.
+   - Call out that existing valid inputs remain backward-compatible.
 
-6. **Verification criteria**
-   - All pre-existing parser tests pass unchanged.
-   - New valid-input regression tests pass.
-   - Every defined malformed-input category fails predictably rather than leaking incidental exceptions or returning partial results.
-   - The complete change touches only `app/parser.py`, `tests/test_parser.py`, and `README.md`.
+5. **Verification**
+   - Run the parser test suite and the full test suite.
+   - Review the diff to confirm only `app/parser.py`, `tests/test_parser.py`, and `README.md` are changed.

@@ -1,185 +1,111 @@
-## License Policy
+## Dependency License Policy
 
-**Default rule:** All direct and transitive dependencies are scanned. A dependency whose effective SPDX license expression requires GPL or AGPL compliance is denied unless it matches an active, approved exception.
+- Permitted by default: permissive licenses such as MIT, BSD-2-Clause/3-Clause, Apache-2.0, ISC, and 0BSD.
+- GPL and AGPL licenses are prohibited unless an explicit, unexpired exception exists.
+- Detect both direct and transitive dependencies from the lockfile.
+- Normalize SPDX identifiers and license expressions before evaluation.
+- Unknown, missing, or ambiguous licenses fail CI for manual review.
+- Exceptions must identify the exact package and version, rationale, owner, approval ticket, and expiration date.
 
-Denied license families:
-
-- `GPL-1.0-only`, `GPL-1.0-or-later`
-- `GPL-2.0-only`, `GPL-2.0-or-later`
-- `GPL-3.0-only`, `GPL-3.0-or-later`
-- `AGPL-1.0-only`, `AGPL-1.0-or-later`
-- `AGPL-3.0-only`, `AGPL-3.0-or-later`
-- Deprecated SPDX aliases after normalization
-
-Use an SPDX-aware expression parser. Do not detect licenses with substring or regular-expression matching.
-
-Expression behavior:
-
-- `MIT OR GPL-3.0-only`: allowed when the project may select MIT.
-- `MIT AND GPL-3.0-only`: denied.
-- `GPL-2.0-only WITH Classpath-exception-2.0`: denied unless policy explicitly recognizes that exception or an approved package exception exists.
-- `NOASSERTION` and unknown licenses: reported as warnings initially, with an option to make them blocking later.
-
-## Repository Layout
-
-```text
-compliance/
-  license-policy.yaml
-  license-exceptions.yaml
-  README.md
-scripts/
-  check-licenses
-tests/
-  fixtures/sbom/
-    allowed.json
-    gpl-direct.json
-    agpl-transitive.json
-    dual-license-or.json
-    dual-license-and.json
-    approved-exception.json
-    expired-exception.json
-.github/
-  workflows/license-compliance.yml
-  CODEOWNERS
-artifacts/
-  # CI-generated only; not committed
-```
-
-Example policy:
+Example `license-policy.yml`:
 
 ```yaml
-version: 1
+default: deny-unknown
 
 deny:
-  - GPL-1.0-only
-  - GPL-1.0-or-later
+  - GPL-2.0
   - GPL-2.0-only
   - GPL-2.0-or-later
+  - GPL-3.0
   - GPL-3.0-only
   - GPL-3.0-or-later
-  - AGPL-1.0-only
-  - AGPL-1.0-or-later
+  - AGPL-3.0
   - AGPL-3.0-only
   - AGPL-3.0-or-later
 
-unknown_license: warn
-exception_file: compliance/license-exceptions.yaml
-```
-
-Exceptions should be narrow and auditable:
-
-```yaml
-version: 1
-
 exceptions:
-  - id: LIC-2026-004
-    package: pkg:npm/example-package
-    versions: ">=2.4.1 <2.5.0"
-    licenses:
-      - GPL-3.0-only
-    scopes:
-      - development
-    justification: Used only by an internal build-time tool and not distributed.
-    obligations: Do not include the package in production artifacts.
-    owner: developer-platform
-    approval_ticket: LEGAL-1842
-    approved_by: legal-compliance
-    approved_on: 2026-08-10
-    expires_on: 2026-11-10
+  - package: example-gpl-library
+    version: 2.4.1
+    license: GPL-3.0-only
+    reason: "Required for legacy data import"
+    owner: platform-team
+    approval: LEGAL-1427
+    expires: 2027-01-31
 ```
 
-An exception matches only when package URL, version, license, and scope all match and the expiry date has not passed. Avoid package-name wildcards and unbounded version ranges.
+Exceptions should be exact-version entries; wildcard versions should be disallowed unless separately approved.
 
 ## CI Workflow
 
-The workflow should:
-
-1. Install dependencies using locked or frozen resolution.
-2. Build distributable artifacts or container images.
-3. Generate a CycloneDX JSON SBOM containing direct and transitive dependencies.
-4. Generate a second SBOM from the final container or distributable artifact when applicable.
-5. Validate the SBOM schema.
-6. Evaluate every component’s SPDX expression against the policy and exceptions.
-7. Upload the SBOM and machine-readable compliance report even when policy evaluation fails.
-8. Exit nonzero for every unexcepted GPL or AGPL finding.
-
-Conceptual GitHub Actions job:
+Use Syft to produce a CycloneDX or SPDX SBOM, then run a policy checker against it.
 
 ```yaml
-name: License compliance
+name: dependency-license-policy
 
 on:
   pull_request:
   push:
     branches: [main]
-
-permissions:
-  contents: read
+  schedule:
+    - cron: "0 3 * * 1"
 
 jobs:
-  license-compliance:
+  licenses:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install locked dependencies
-        run: ./scripts/install-dependencies --frozen
-
-      - name: Build production artifact
-        run: ./scripts/build
-
       - name: Generate SBOM
-        run: |
-          syft dir:. -o cyclonedx-json=workspace.sbom.json
-          syft ./dist -o cyclonedx-json=artifact.sbom.json
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          artifact-name: dependency-sbom
 
-      - name: Enforce license policy
+      - name: Validate dependency licenses
         run: |
-          ./scripts/check-licenses \
-            --policy compliance/license-policy.yaml \
-            --exceptions compliance/license-exceptions.yaml \
-            --sbom workspace.sbom.json \
-            --sbom artifact.sbom.json \
-            --report license-report.json
+          python ci/check_licenses.py \
+            --sbom sbom.cdx.json \
+            --policy license-policy.yml \
+            --lockfile-diff "${{ github.event.before }}...${{ github.sha }}"
 
-      - name: Upload compliance evidence
+      - name: Upload SBOM
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: license-compliance
-          path: |
-            *.sbom.json
-            license-report.json
+          name: dependency-sbom
+          path: sbom.cdx.json
 ```
 
-The checker’s failure output should identify the package URL, resolved version, dependency scope, detected SPDX expression, dependency path, and the reason no exception matched.
+The checker should:
 
-Protect the enforcement boundary with branch protection and ownership:
+1. Read every component and its SPDX license expression.
+2. Canonicalize equivalent identifiers.
+3. Reject GPL/AGPL components without a matching, non-expired exception.
+4. Reject unknown or malformed licenses.
+5. On pull requests, report newly introduced violations prominently.
+6. Exit nonzero so the required status check blocks merging.
+7. Emit dependency, version, detected license, exception status, and remediation guidance in the CI log.
+8. Revalidate all dependencies on scheduled builds so expired exceptions are caught.
 
-```text
-/compliance/license-policy.yaml       @legal-compliance
-/compliance/license-exceptions.yaml   @legal-compliance
-/scripts/check-licenses               @legal-compliance @developer-platform
-/.github/workflows/license-compliance.yml @legal-compliance @developer-platform
-```
-
-Require the `license-compliance` status check and CODEOWNER approval before merging.
+Protect the default branch by requiring the `licenses` job to pass before merge.
 
 ## Tests
 
-The policy checker should have fixture-based tests proving:
+Add policy-checker tests covering:
 
-- MIT, Apache-2.0, BSD, and ISC dependencies pass.
-- Direct GPL dependencies fail.
-- Transitive AGPL dependencies fail.
-- SPDX `OR` expressions pass when a permitted licensing choice exists.
-- SPDX `AND` expressions fail when a denied obligation remains.
+- MIT, BSD, Apache, and ISC dependencies pass.
+- GPL-2.0, GPL-3.0, and AGPL-3.0 dependencies fail.
 - An exact approved exception passes.
-- Wrong package, version, license, or scope does not match an exception.
-- Expired and malformed exceptions fail.
-- Missing or malformed SBOMs fail closed.
-- Multiple SBOMs are deduplicated without hiding violations.
-- Exit codes and JSON reports remain stable for CI consumers.
+- An expired exception fails.
+- A version mismatch fails.
+- A package-name mismatch fails.
+- Transitive GPL/AGPL dependencies fail.
+- SPDX expressions such as `GPL-3.0-only OR MIT` follow the organization’s chosen rule, preferably deny unless legal approval covers the expression.
+- Missing, unknown, and malformed license metadata fails.
+- Duplicate exceptions and wildcard versions fail policy validation.
+- A lockfile fixture introducing a prohibited dependency causes a nonzero exit.
+- A fixture removing the dependency passes.
+- SBOM output is generated and contains the expected component and license fields.
 
-Run these tests in the same required workflow before scanning the project. This makes the enforcement logic itself a tested part of the merge gate, while the generated SBOM and report provide review and audit evidence.
+Use small checked-in fixtures for allowed, denied, expired-exception, unknown-license, and transitive-dependency cases. The CI workflow itself should be tested with a YAML/linter check and one integration test invoking the checker against the denied fixture.
