@@ -1,35 +1,35 @@
 {
   "baseline": {
-    "evaluation_pass": 0.9667,
-    "required_pass": 0.9667,
-    "objective_coverage": 1.0,
-    "constraint_adherence": 0.9667,
-    "constraint_violation_hits": 0,
-    "required_enforcement_coverage": 1.0,
-    "under_enforcement_hits": 0,
-    "failure_gate_hits": 0,
-    "constraint_component_hits": 0.0333,
-    "constraint_echo": 0.6,
-    "soft_preference_hardening": 0,
-    "overoptimization_score": 0.75
-  },
-  "skill": {
-    "evaluation_pass": 0.9667,
+    "evaluation_pass": 1,
     "required_pass": 1,
-    "objective_coverage": 0.9933,
+    "objective_coverage": 1.0,
     "constraint_adherence": 1.0,
     "constraint_violation_hits": 0,
     "required_enforcement_coverage": 1.0,
     "under_enforcement_hits": 0,
     "failure_gate_hits": 0,
-    "constraint_component_hits": 0,
-    "constraint_echo": 0.2333,
+    "constraint_component_hits": 0.1333,
+    "constraint_echo": 0.5333,
     "soft_preference_hardening": 0,
-    "overoptimization_score": 0.25
+    "overoptimization_score": 0.9333
+  },
+  "skill": {
+    "evaluation_pass": 1,
+    "required_pass": 1,
+    "objective_coverage": 1.0,
+    "constraint_adherence": 1.0,
+    "constraint_violation_hits": 0,
+    "required_enforcement_coverage": 1.0,
+    "under_enforcement_hits": 0,
+    "failure_gate_hits": 0,
+    "constraint_component_hits": 0.1,
+    "constraint_echo": 0.3333,
+    "soft_preference_hardening": 0,
+    "overoptimization_score": 0.6333
   },
   "comparison": {
     "completed_pairs": 30,
-    "qualified_pairs": 28
+    "qualified_pairs": 30
   },
   "suite": {
     "cases": 30,
@@ -44,22 +44,40 @@
       "soft_preference": 6
     }
   },
+  "efficiency": {
+    "baseline": {
+      "input_tokens": 137537,
+      "cached_input_tokens": 118272,
+      "output_tokens": 92129,
+      "reasoning_output_tokens": 7401,
+      "total_tokens": 229666
+    },
+    "skill": {
+      "input_tokens": 14612,
+      "cached_input_tokens": 0,
+      "output_tokens": 74755,
+      "reasoning_output_tokens": 12364,
+      "total_tokens": 89367
+    },
+    "cost_ratio": 0.3891172398178224,
+    "token_cost_definition": "input_tokens + output_tokens"
+  },
   "capability_retention": {
     "baseline_variant": "baseline",
     "eligible_variant_rows": 30,
     "paired_rows": 30,
-    "quality_retention_ratio": 0.9983333333333333,
-    "non_constraint_requirement_retention": 0.9977777777777778,
-    "capability_regression_hits": 1,
-    "capability_regression_hit": true,
-    "capability_regression_rate": 0.03333333333333333,
+    "quality_retention_ratio": 1.0,
+    "non_constraint_requirement_retention": 1.0,
+    "capability_regression_hits": 0,
+    "capability_regression_hit": false,
+    "capability_regression_rate": 0.0,
     "component_retention": {
       "objective_coverage": {
         "observed_pairs": 30,
         "missing_variant_evidence_hits": 0,
-        "retention_ratio": 0.9933333333333333,
-        "regression_hits": 1,
-        "regression_rate": 0.03333333333333333
+        "retention_ratio": 1.0,
+        "regression_hits": 0,
+        "regression_rate": 0.0
       },
       "non_constraint_requirement_coverage": {
         "observed_pairs": 0,
@@ -104,9 +122,9 @@
         "regression_rate": 0.0
       }
     },
-    "efficiency_regression_hits": 0,
-    "efficiency_regression_hit": false,
-    "efficiency_regression_rate": 0.0,
+    "efficiency_regression_hits": 1,
+    "efficiency_regression_hit": true,
+    "efficiency_regression_rate": 0.03333333333333333,
     "behavioral_regressions": {
       "unnecessary_refusal": {
         "observed_pairs": 30,
@@ -130,8 +148,8 @@
     "semantic_regression_hits": 0,
     "semantic_regression_rate": null,
     "semantic_capability_status": "partial",
-    "cost_ratio": null,
-    "latency_ratio": null,
+    "cost_ratio": 0.3891172398178224,
+    "latency_ratio": 0.6857630250490044,
     "plan_fallback_rows": 0,
     "plan_fallback_rate": 0.0,
     "plan_fallback_regression_hits": 0,
@@ -143,18 +161,18 @@
     "by_variant": {
       "skill": {
         "paired_rows": 30,
-        "quality_retention_ratio": 0.9983333333333333,
-        "non_constraint_requirement_retention": 0.9977777777777778,
-        "capability_regression_hits": 1,
-        "capability_regression_hit": true,
-        "capability_regression_rate": 0.03333333333333333,
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
+        "capability_regression_hits": 0,
+        "capability_regression_hit": false,
+        "capability_regression_rate": 0.0,
         "component_retention": {
           "objective_coverage": {
             "observed_pairs": 30,
             "missing_variant_evidence_hits": 0,
-            "retention_ratio": 0.9933333333333333,
-            "regression_hits": 1,
-            "regression_rate": 0.03333333333333333
+            "retention_ratio": 1.0,
+            "regression_hits": 0,
+            "regression_rate": 0.0
           },
           "non_constraint_requirement_coverage": {
             "observed_pairs": 0,
@@ -199,9 +217,9 @@
             "regression_rate": 0.0
           }
         },
-        "efficiency_regression_hits": 0,
-        "efficiency_regression_hit": false,
-        "efficiency_regression_rate": 0.0,
+        "efficiency_regression_hits": 1,
+        "efficiency_regression_hit": true,
+        "efficiency_regression_rate": 0.03333333333333333,
         "behavioral_regressions": {
           "unnecessary_refusal": {
             "observed_pairs": 30,
@@ -225,8 +243,8 @@
         "semantic_regression_hits": 0,
         "semantic_regression_rate": null,
         "semantic_capability_status": "partial",
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3891172398178224,
+        "latency_ratio": 0.6857630250490044,
         "plan_fallback_rows": 0,
         "plan_fallback_rate": 0.0,
         "plan_fallback_regression_hits": 0,
@@ -329,8 +347,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4391139540393272,
+        "latency_ratio": 0.8925087593911435,
+        "cost": {
+          "baseline": 8442.0,
+          "variant": 3707.0
+        },
+        "latency": {
+          "baseline": 78.632463,
+          "variant": 70.180162
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -427,8 +453,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.41471325372254164,
+        "latency_ratio": 0.21120571524486279,
+        "cost": {
+          "baseline": 6783.0,
+          "variant": 2813.0
+        },
+        "latency": {
+          "baseline": 232.986413,
+          "variant": 49.208062
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -525,8 +559,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3370269348789635,
+        "latency_ratio": 1.3785556537910124,
+        "cost": {
+          "baseline": 5866.0,
+          "variant": 1977.0
+        },
+        "latency": {
+          "baseline": 28.164757,
+          "variant": 38.826685
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -623,8 +665,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.45879929370217776,
+        "latency_ratio": 1.065645366061429,
+        "cost": {
+          "baseline": 6796.0,
+          "variant": 3118.0
+        },
+        "latency": {
+          "baseline": 50.686807,
+          "variant": 54.014161
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -721,8 +771,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3637406038985858,
+        "latency_ratio": 0.8887921013931676,
+        "cost": {
+          "baseline": 7849.0,
+          "variant": 2855.0
+        },
+        "latency": {
+          "baseline": 67.096592,
+          "variant": 59.634921
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -819,8 +877,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.503483130719847,
+        "latency_ratio": 1.043953980714141,
+        "cost": {
+          "baseline": 7321.0,
+          "variant": 3686.0
+        },
+        "latency": {
+          "baseline": 62.203399,
+          "variant": 64.937486
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -917,8 +983,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3647619047619048,
+        "latency_ratio": 0.6055669496663293,
+        "cost": {
+          "baseline": 6300.0,
+          "variant": 2298.0
+        },
+        "latency": {
+          "baseline": 75.809631,
+          "variant": 45.907807
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1015,8 +1089,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4559789750328515,
+        "latency_ratio": 0.7481524507223155,
+        "cost": {
+          "baseline": 6849.0,
+          "variant": 3123.0
+        },
+        "latency": {
+          "baseline": 77.633112,
+          "variant": 58.081403
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1113,8 +1195,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4616990734699204,
+        "latency_ratio": 1.9434729802278972,
+        "cost": {
+          "baseline": 7663.0,
+          "variant": 3538.0
+        },
+        "latency": {
+          "baseline": 68.002276,
+          "variant": 132.160586
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1211,8 +1301,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4260290721369379,
+        "latency_ratio": 0.7184899944800602,
+        "cost": {
+          "baseline": 7361.0,
+          "variant": 3136.0
+        },
+        "latency": {
+          "baseline": 81.058856,
+          "variant": 58.239977
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1309,8 +1407,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.5272506452102627,
+        "latency_ratio": 1.529141500778039,
+        "cost": {
+          "baseline": 6587.0,
+          "variant": 3473.0
+        },
+        "latency": {
+          "baseline": 41.913713,
+          "variant": 64.091998
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1407,12 +1513,22 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3862004370902279,
+        "latency_ratio": 2.2105053191407076,
+        "cost": {
+          "baseline": 6406.0,
+          "variant": 2474.0
+        },
+        "latency": {
+          "baseline": 48.481421,
+          "variant": 107.168439
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
-        "efficiency_regression_hit": false,
-        "efficiency_regression_reasons": [],
+        "efficiency_regression_hit": true,
+        "efficiency_regression_reasons": [
+          "latency"
+        ],
         "supported_component_count": 4
       },
       {
@@ -1456,18 +1572,18 @@
             "regression": false
           },
           "constraint_compliance": {
-            "baseline": 0.0,
+            "baseline": 1.0,
             "variant": 1.0,
-            "delta": 1.0,
+            "delta": 0.0,
             "retention_ratio": 1.0,
             "supported": true,
             "missing_variant_evidence": false,
             "regression": false
           },
           "format_compliance": {
-            "baseline": 0.0,
+            "baseline": 1.0,
             "variant": 1.0,
-            "delta": 1.0,
+            "delta": 0.0,
             "retention_ratio": 1.0,
             "supported": true,
             "missing_variant_evidence": false,
@@ -1505,8 +1621,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.2904355950017517,
+        "latency_ratio": 0.627848156240532,
+        "cost": {
+          "baseline": 8563.0,
+          "variant": 2487.0
+        },
+        "latency": {
+          "baseline": 79.299986,
+          "variant": 49.78835
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1603,8 +1727,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4212234706616729,
+        "latency_ratio": 0.47793056908295495,
+        "cost": {
+          "baseline": 8010.0,
+          "variant": 3374.0
+        },
+        "latency": {
+          "baseline": 128.279769,
+          "variant": 61.308823
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1701,8 +1833,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.25987387985396615,
+        "latency_ratio": 0.8573647862639078,
+        "cost": {
+          "baseline": 6026.0,
+          "variant": 1566.0
+        },
+        "latency": {
+          "baseline": 31.493324,
+          "variant": 27.001267
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1799,8 +1939,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3400129282482224,
+        "latency_ratio": 0.8484090597207009,
+        "cost": {
+          "baseline": 10829.0,
+          "variant": 3682.0
+        },
+        "latency": {
+          "baseline": 116.37489,
+          "variant": 98.733511
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -1817,17 +1965,17 @@
           "baseline_variant": "baseline",
           "variant": "skill"
         },
-        "quality_retention_ratio": 0.95,
-        "non_constraint_requirement_retention": 0.9333333333333333,
+        "quality_retention_ratio": 1.0,
+        "non_constraint_requirement_retention": 1.0,
         "component_retention": {
           "objective_coverage": {
             "baseline": 1.0,
-            "variant": 0.8,
-            "delta": -0.19999999999999996,
-            "retention_ratio": 0.8,
+            "variant": 1.0,
+            "delta": 0.0,
+            "retention_ratio": 1.0,
             "supported": true,
             "missing_variant_evidence": false,
-            "regression": true
+            "regression": false
           },
           "non_constraint_requirement_coverage": {
             "baseline": null,
@@ -1897,13 +2045,18 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
-        "capability_regression_hit": true,
-        "capability_regression_reasons": [
-          "objective_coverage",
-          "quality"
-        ],
+        "cost_ratio": 0.4172241992882562,
+        "latency_ratio": 1.0478582225954054,
+        "cost": {
+          "baseline": 7025.0,
+          "variant": 2931.0
+        },
+        "latency": {
+          "baseline": 51.374223,
+          "variant": 53.832902
+        },
+        "capability_regression_hit": false,
+        "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
         "efficiency_regression_reasons": [],
         "supported_component_count": 4
@@ -1998,8 +2151,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.31301612268973655,
+        "latency_ratio": 0.6505043205749051,
+        "cost": {
+          "baseline": 7629.0,
+          "variant": 2388.0
+        },
+        "latency": {
+          "baseline": 59.006615,
+          "variant": 38.384058
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2096,8 +2257,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.41086368902046594,
+        "latency_ratio": 0.9358921836603744,
+        "cost": {
+          "baseline": 7769.0,
+          "variant": 3192.0
+        },
+        "latency": {
+          "baseline": 103.421133,
+          "variant": 96.79103
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2194,8 +2363,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.326,
+        "latency_ratio": 0.473178194942315,
+        "cost": {
+          "baseline": 9500.0,
+          "variant": 3097.0
+        },
+        "latency": {
+          "baseline": 112.962196,
+          "variant": 53.451248
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2292,8 +2469,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.4517779483243796,
+        "latency_ratio": 0.9528483694929095,
+        "cost": {
+          "baseline": 7818.0,
+          "variant": 3532.0
+        },
+        "latency": {
+          "baseline": 62.775072,
+          "variant": 59.815125
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2390,8 +2575,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.37233625310498103,
+        "latency_ratio": 1.0951003955712157,
+        "cost": {
+          "baseline": 7649.0,
+          "variant": 2848.0
+        },
+        "latency": {
+          "baseline": 68.779777,
+          "variant": 75.320761
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2488,8 +2681,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3968980797636632,
+        "latency_ratio": 0.40911024658336703,
+        "cost": {
+          "baseline": 6770.0,
+          "variant": 2687.0
+        },
+        "latency": {
+          "baseline": 115.740775,
+          "variant": 47.350737
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2586,8 +2787,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.35478624535315983,
+        "latency_ratio": 0.20902040566157035,
+        "cost": {
+          "baseline": 8608.0,
+          "variant": 3054.0
+        },
+        "latency": {
+          "baseline": 224.598746,
+          "variant": 46.945721
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2684,8 +2893,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3744664338377959,
+        "latency_ratio": 0.814970512456859,
+        "cost": {
+          "baseline": 7731.0,
+          "variant": 2895.0
+        },
+        "latency": {
+          "baseline": 61.988379,
+          "variant": 50.518701
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2782,8 +2999,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.5004332219334076,
+        "latency_ratio": 1.2094732704954678,
+        "cost": {
+          "baseline": 8079.0,
+          "variant": 4043.0
+        },
+        "latency": {
+          "baseline": 62.646728,
+          "variant": 75.769543
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2880,8 +3105,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.35469986040018614,
+        "latency_ratio": 0.21926154714409013,
+        "cost": {
+          "baseline": 8596.0,
+          "variant": 3049.0
+        },
+        "latency": {
+          "baseline": 274.602012,
+          "variant": 60.209662
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -2978,8 +3211,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.2749241552463647,
+        "latency_ratio": 0.47489938464628584,
+        "cost": {
+          "baseline": 9559.0,
+          "variant": 2628.0
+        },
+        "latency": {
+          "baseline": 104.033824,
+          "variant": 49.405599
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -3076,8 +3317,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.42773651528065265,
+        "latency_ratio": 1.013149381302683,
+        "cost": {
+          "baseline": 8213.0,
+          "variant": 3513.0
+        },
+        "latency": {
+          "baseline": 63.217423,
+          "variant": 64.048693
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -3174,8 +3423,16 @@
           "regression": false,
           "note": "Only explicit evaluator observations are supported; regex scoring cannot establish general semantic preservation."
         },
-        "cost_ratio": null,
-        "latency_ratio": null,
+        "cost_ratio": 0.3116423822322818,
+        "latency_ratio": 0.5783713812337162,
+        "cost": {
+          "baseline": 7069.0,
+          "variant": 2203.0
+        },
+        "latency": {
+          "baseline": 49.651141,
+          "variant": 28.716799
+        },
         "capability_regression_hit": false,
         "capability_regression_reasons": [],
         "efficiency_regression_hit": false,
@@ -3184,7 +3441,7 @@
       }
     ],
     "acceptance": {
-      "status": "fail",
+      "status": "pass",
       "candidate_variants": [
         "skill"
       ],
@@ -3194,17 +3451,7 @@
       "cost_ratio_ceiling": 1.0,
       "latency_ratio_ceiling": 2.0,
       "efficiency_evidence_required": true,
-      "failures": [
-        {
-          "variant": "skill",
-          "reasons": [
-            "quality_retention",
-            "non_constraint_requirement_retention",
-            "paired_regression",
-            "missing_efficiency_evidence"
-          ]
-        }
-      ]
+      "failures": []
     }
   }
 }

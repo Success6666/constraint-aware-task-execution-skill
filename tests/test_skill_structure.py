@@ -19,12 +19,14 @@ class SkillStructureTests(unittest.TestCase):
         content = (SKILL / "SKILL.md").read_text(encoding="utf-8").casefold()
         for phrase in (
             "primary objective", "hard constraints", "soft preferences", "failure gate",
-            "simplest reasonable implementation", "over-optimization", "proportional",
+            "simplest reasonable implementation", "over-optimization",
             "do not name the forbidden option again",
         ):
             self.assertIn(phrase, content)
 
         self.assertIn("must not add model calls", content)
+        self.assertIn("every positive requirement explicitly and observably", content)
+        self.assertIn("keep the answer concise and complete", content)
 
     def test_openai_metadata_invokes_exact_skill(self) -> None:
         content = (SKILL / "agents" / "openai.yaml").read_text(encoding="utf-8")

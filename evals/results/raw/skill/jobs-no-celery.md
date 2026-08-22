@@ -1,50 +1,56 @@
-Design the API as a durable job system with PostgreSQL for state, Redis Streams for dispatch, object storage for images, and stateless API/worker processes.
+# Image Processing API Design
 
-## Components
+## 1. Architecture
 
-- **API service**: accepts requests, validates input, exposes status and result endpoints.
-- **PostgreSQL**: source of truth for jobs, attempts, progress, and errors.
-- **Redis Streams**: transports pending work to workers.
-- **Object storage**: stores original and processed images; return signed URLs.
-- **Workers**: execute image operations in isolated temporary directories.
+- **API service:** FastAPI or equivalent HTTP service.
+- **Database:** PostgreSQL for job state, progress, retry scheduling, and idempotency.
+- **Object storage:** S3-compatible storage for inputs and outputs.
+- **Workers:** Separate worker processes polling PostgreSQL for available jobs.
+- **No in-process background execution:** API instances only enqueue jobs and return immediately.
 
-Use an outbox table so creating a job and publishing work cannot get out of sync.
+PostgreSQL acts as the durable job queue using row locking and `SKIP LOCKED`, avoiding an additional broker.
 
-## Job lifecycle
+## 2. API
 
-```text
-queued -> running -> succeeded
-   |         |
-   |         +-> retry_wait -> queued
-   |
-   +-> cancelled
-
-running -> failed
-```
-
-A job is terminal when it reaches `succeeded`, `failed`, or `cancelled`.
-
-## API
-
-### Create a job
+### Upload input
 
 ```http
-POST /v1/image-jobs
-Idempotency-Key: 5c1f...
+POST /v1/uploads
+Authorization: Bearer <token>
+```
+
+Response:
+
+```json
+{
+  "upload_id": "upl_123",
+  "object_key": "inputs/upl_123/source.jpg",
+  "upload_url": "https://storage.example/..."
+}
+```
+
+The client uploads the image directly to the returned URL.
+
+### Create job
+
+```http
+POST /v1/jobs
+Authorization: Bearer <token>
+Idempotency-Key: 7f7d...
 Content-Type: application/json
 ```
 
 ```json
 {
-  "input": {
-    "object_key": "uploads/user-42/original.png"
-  },
-  "operations": [
-    { "type": "resize", "width": 1200, "height": 800, "fit": "cover" },
-    { "type": "convert", "format": "webp", "quality": 82 }
-  ],
-  "priority": "normal",
-  "callback_url": "https://example.com/hooks/image-jobs"
+  "input_object_key": "inputs/upl_123/source.jpg",
+  "operation": "resize",
+  "options": {
+    "width": 1200,
+    "height": 800,
+    "fit": "cover",
+    "format": "webp",
+    "quality": 85
+  }
 }
 ```
 
@@ -52,227 +58,273 @@ Response:
 
 ```http
 202 Accepted
-Location: /v1/image-jobs/01J...
 ```
 
 ```json
 {
-  "id": "01J...",
+  "job_id": "job_123",
   "status": "queued",
-  "progress": 0,
-  "created_at": "2026-08-22T10:00:00Z"
+  "progress": {
+    "percent": 0,
+    "stage": "queued"
+  },
+  "status_url": "/v1/jobs/job_123",
+  "result_url": null
 }
 ```
 
-The upload can be handled separately with a presigned URL:
-
-```http
-POST /v1/uploads
-```
-
-This avoids sending large image bodies through the API service.
+Repeated requests with the same `Idempotency-Key` return the original job.
 
 ### Get status
 
 ```http
-GET /v1/image-jobs/{job_id}
+GET /v1/jobs/{job_id}
+Authorization: Bearer <token>
 ```
+
+Example:
 
 ```json
 {
-  "id": "01J...",
-  "status": "running",
-  "progress": 64,
-  "stage": "encoding",
+  "job_id": "job_123",
+  "status": "processing",
+  "progress": {
+    "percent": 62,
+    "stage": "encoding"
+  },
   "attempt": 1,
-  "max_attempts": 4,
-  "created_at": "2026-08-22T10:00:00Z",
-  "started_at": "2026-08-22T10:00:04Z",
-  "updated_at": "2026-08-22T10:00:19Z"
+  "max_attempts": 3,
+  "created_at": "2025-01-01T12:00:00Z",
+  "updated_at": "2025-01-01T12:00:14Z",
+  "error": null,
+  "result_url": null
 }
 ```
 
-For failures:
+Terminal success:
+
+```json
+{
+  "job_id": "job_123",
+  "status": "succeeded",
+  "progress": {
+    "percent": 100,
+    "stage": "completed"
+  },
+  "result_url": "/v1/jobs/job_123/result"
+}
+```
+
+### Retrieve result
+
+```http
+GET /v1/jobs/{job_id}/result
+Authorization: Bearer <token>
+```
+
+The API verifies ownership and returns a short-lived signed object-storage URL:
+
+```json
+{
+  "download_url": "https://storage.example/...",
+  "expires_in": 900,
+  "content_type": "image/webp"
+}
+```
+
+## 3. Job states
+
+```text
+queued
+  -> processing
+  -> succeeded
+
+processing
+  -> retry_wait
+  -> failed
+
+retry_wait
+  -> processing
+  -> failed
+```
+
+Optional terminal cancellation can be added later, but workers must at least reject jobs whose input or authorization is invalid.
+
+## 4. Database schema
+
+### `jobs`
+
+```sql
+CREATE TABLE jobs (
+    id UUID PRIMARY KEY,
+    owner_id UUID NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    input_object_key TEXT NOT NULL,
+    output_object_key TEXT,
+    operation TEXT NOT NULL,
+    options JSONB NOT NULL DEFAULT '{}',
+
+    status TEXT NOT NULL,
+    progress_percent INTEGER NOT NULL DEFAULT 0,
+    progress_stage TEXT NOT NULL DEFAULT 'queued',
+
+    attempt INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    lease_token UUID,
+    lease_until TIMESTAMPTZ,
+
+    error_code TEXT,
+    error_message TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+
+    UNIQUE (owner_id, idempotency_key)
+);
+
+CREATE INDEX jobs_claim_idx
+ON jobs (available_at, created_at)
+WHERE status IN ('queued', 'retry_wait');
+
+CREATE INDEX jobs_owner_idx
+ON jobs (owner_id, created_at DESC);
+```
+
+## 5. Worker behavior
+
+Workers repeatedly claim jobs in a transaction:
+
+1. Select one available `queued` or `retry_wait` job using `FOR UPDATE SKIP LOCKED`.
+2. Also reclaim `processing` jobs whose lease expired.
+3. Increment `attempt`.
+4. Set:
+   - `status = 'processing'`
+   - `lease_token = random UUID`
+   - `lease_until = now() + 2 minutes`
+   - `progress_stage = 'starting'`
+5. Commit before doing image work.
+
+Only the worker possessing the lease token may update or complete that job.
+
+Workers renew the lease periodically while processing. Progress updates use the lease token and enforce monotonic progress:
+
+```sql
+progress_percent = GREATEST(progress_percent, :percent)
+```
+
+Recommended stages:
+
+```text
+queued
+downloading
+validating
+decoding
+processing
+encoding
+uploading
+completed
+```
+
+## 6. Retry handling
+
+Retry only transient failures, such as:
+
+- Temporary object-storage errors
+- Network timeouts
+- Worker process termination
+- Temporary database failures
+
+Do not retry:
+
+- Invalid image data
+- Unsupported operation
+- Invalid options
+- Excessive dimensions or decompression-bomb limits
+- Authorization or missing-input errors
+
+For a retryable failure:
+
+```text
+delay = min(300 seconds, 2^(attempt - 1) * 10 seconds) + random jitter
+```
+
+Set:
+
+- `status = retry_wait`
+- `available_at = now() + delay`
+- `error_code` and `error_message`
+
+After `max_attempts`, set:
+
+```text
+status = failed
+progress_stage = failed
+completed_at = now()
+```
+
+Return a stable error response:
 
 ```json
 {
   "status": "failed",
   "error": {
-    "code": "UNSUPPORTED_FORMAT",
-    "message": "Input format is not supported",
-    "retryable": false
+    "code": "PROCESSING_FAILED",
+    "message": "The image could not be processed."
   }
 }
 ```
 
-### Progress events
+Do not expose internal stack traces.
 
-```http
-GET /v1/image-jobs/{job_id}/events
-Accept: text/event-stream
-```
+## 7. Result handling
 
-```text
-event: progress
-data: {"status":"running","progress":40,"stage":"decoding"}
+Workers should:
 
-event: progress
-data: {"status":"running","progress":64,"stage":"encoding"}
-
-event: completed
-data: {"status":"succeeded","result_url":"/v1/image-jobs/01J.../result"}
-```
-
-Persist the latest progress in PostgreSQL; Redis can be used for low-latency fanout.
-
-### Retrieve the result
-
-```http
-GET /v1/image-jobs/{job_id}/result
-```
-
-Response:
-
-```json
-{
-  "format": "webp",
-  "size_bytes": 184220,
-  "width": 1200,
-  "height": 800,
-  "download_url": "https://object-store/...signed...",
-  "expires_at": "2026-08-22T11:00:00Z"
-}
-```
-
-### Cancel a job
-
-```http
-POST /v1/image-jobs/{job_id}/cancel
-```
-
-Cancellation is cooperative. Workers check a cancellation flag between operations and before uploading the result.
-
-## Database schema
-
-```sql
-image_jobs (
-  id              uuid primary key,
-  tenant_id       uuid not null,
-  status          text not null,
-  input_key       text not null,
-  operations      jsonb not null,
-  result_key      text,
-  progress        integer not null default 0,
-  stage           text,
-  attempt         integer not null default 0,
-  max_attempts    integer not null default 4,
-  next_run_at     timestamptz,
-  lease_until     timestamptz,
-  idempotency_key text,
-  error_code      text,
-  error_message   text,
-  created_at      timestamptz not null,
-  started_at      timestamptz,
-  finished_at     timestamptz,
-  updated_at      timestamptz not null
-);
-
-job_outbox (
-  id          bigserial primary key,
-  job_id      uuid not null,
-  event_type  text not null,
-  payload     jsonb not null,
-  published_at timestamptz
-);
-
-job_attempts (
-  id          bigserial primary key,
-  job_id      uuid not null,
-  attempt     integer not null,
-  started_at  timestamptz,
-  finished_at timestamptz,
-  error_code  text,
-  error_message text
-);
-```
-
-Add a unique constraint on `(tenant_id, idempotency_key)`.
-
-## Worker processing
-
-1. Read a message from Redis Stream `image-jobs`.
-2. Atomically claim the job if it is `queued` and `next_run_at <= now()`.
-3. Set `status = running`, increment `attempt`, and create a lease.
-4. Download the source image to a temporary directory.
-5. Execute operations, updating progress after each stage.
-6. Upload the result to a new object key.
-7. In one database transaction:
-   - set `status = succeeded`
-   - store `result_key` and metadata
-   - set `progress = 100`
-   - write a completion event
-8. Acknowledge the Redis message.
-
-Workers heartbeat the lease periodically. If a worker crashes, a reaper finds expired leases and requeues the job.
-
-## Retry policy
-
-Classify errors explicitly:
-
-- **Retryable**: network timeout, temporary object-store failure, worker crash, resource exhaustion.
-- **Non-retryable**: invalid parameters, corrupt image, unsupported format, policy violations.
-- **Unknown**: retry once, then mark failed for inspection.
-
-Use exponential backoff with jitter:
+1. Download the input to temporary storage.
+2. Validate MIME type, file size, dimensions, and decoded pixel count.
+3. Process the image.
+4. Write the output to a deterministic key:
 
 ```text
-delay = min(5 minutes, 2^(attempt-1) * 5 seconds) + random_jitter
+outputs/{owner_id}/{job_id}/result.{format}
 ```
 
-When retrying:
+5. Upload using a temporary object or unique key.
+6. Atomically update the job to `succeeded` with the output key.
 
-```text
-status = retry_wait
-next_run_at = now() + delay
-```
+If a worker crashes after upload but before database completion, the retry reuses the same deterministic output key and safely overwrites or verifies it.
 
-Do not retry after `attempt >= max_attempts`.
+Outputs should have lifecycle expiration policies appropriate to the product.
 
-Make result writes idempotent by using a deterministic key such as:
+## 8. Security and limits
 
-```text
-results/{job_id}/attempt-{attempt}.webp
-```
+- Authenticate every endpoint.
+- Restrict jobs and results to their owning account.
+- Allow only configured image formats and operations.
+- Enforce input size, dimensions, pixel count, processing time, and output size limits.
+- Do not fetch arbitrary user-supplied URLs; accept only uploaded object keys.
+- Store objects privately.
+- Use short-lived signed URLs for downloads.
+- Run image decoding in isolated worker processes with resource limits.
 
-Only the successful attempt is exposed through `result_key`.
+## 9. Verification
 
-## Progress model
+Implement tests for:
 
-Represent progress as weighted stages:
+- Job creation and idempotency.
+- Status transitions and progress updates.
+- Concurrent workers claiming distinct jobs.
+- Lease expiration and worker recovery.
+- Retry backoff and maximum-attempt behavior.
+- Permanent versus transient error classification.
+- Successful result upload and retrieval.
+- Missing, malformed, oversized, and unsupported images.
+- Authorization between different users.
+- Duplicate completion attempts.
+- API contract responses and HTTP status codes.
 
-```text
-download 10%
-decode    15%
-transform 50%
-encode    20%
-upload     5%
-```
-
-Store both:
-
-- `progress`: integer from 0 to 100
-- `stage`: human-readable machine value such as `transform` or `upload`
-
-Progress updates should be monotonic and throttled, for example no more than once every 250 ms or 1 percentage point.
-
-## Operational safeguards
-
-- Enforce per-tenant concurrency and image-size limits.
-- Validate dimensions, MIME type, and decompression limits before processing.
-- Run workers with CPU, memory, and execution-time limits.
-- Keep API instances stateless so they can scale independently.
-- Expose metrics for queue depth, job latency, retry count, failure rate, and processing duration.
-- Sign result URLs with short expiration times.
-- Authenticate every endpoint and scope jobs by tenant.
-
-This provides durable background processing, observable progress, crash recovery, bounded retries, and secure result retrieval without relying on the excluded task framework.
+Run an integration test with multiple workers, terminate one during processing, and verify that the job is reclaimed and either succeeds or reaches the configured failure state.

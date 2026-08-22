@@ -1,275 +1,541 @@
-## Modular Monolith Design
+# Modular Monolith Design
 
-Build one deployable application and one database, organized into four business modules with strict ownership boundaries:
-
-```text
-order-platform/
-  catalog/
-    api/
-    application/
-    domain/
-    persistence/
-  ordering/
-    api/
-    application/
-    domain/
-    persistence/
-  payment/
-    api/
-    application/
-    domain/
-    persistence/
-  fulfillment/
-    api/
-    application/
-    domain/
-    persistence/
-  shared/
-    transaction/
-    messaging/
-    identity/
-```
-
-Each module exposes an application-level API to other modules. Modules must not access another module’s tables, repositories, or domain objects directly.
-
-### Module Ownership
-
-| Module | Owns | Does not own |
-|---|---|---|
-| Catalog | Products, variants, prices, availability | Orders, payment state, shipment state |
-| Ordering | Carts, orders, order lines, order status, pricing snapshot | Product master data, payment authorization, shipment execution |
-| Payment | Payment attempts, authorization/capture/refund state, provider references | Order line contents, inventory, shipment state |
-| Fulfillment | Reservations, shipments, packages, delivery state | Product prices, payment credentials, order totals |
-
-Use separate database schemas or table prefixes to make ownership enforceable:
+Build one deployable application and one database, organized into four modules with enforced dependency and ownership boundaries:
 
 ```text
-catalog.products
-catalog.variants
-catalog.prices
-
-ordering.orders
-ordering.order_lines
-ordering.order_status_history
-
-payment.payment_attempts
-payment.payment_events
-
-fulfillment.reservations
-fulfillment.shipments
-fulfillment.shipment_items
+Catalog
+  ↑ queried by
+Ordering
+  ↔ Payment
+  ↔ Fulfillment
 ```
 
-Foreign keys across schemas should be avoided where they would create ownership leakage. Store external identifiers such as `order_id`, `variant_id`, and `customer_id`, and validate them through module APIs.
+Modules communicate through public application interfaces and internal domain events. They must not access another module’s tables or entities directly.
 
-## Module APIs
+## Module ownership
 
 ### Catalog
 
+Owns:
+
+- Products
+- Product variants/SKUs
+- Product descriptions and attributes
+- Active/inactive status
+- Sellable price
+- Tax category
+- Catalog-level availability metadata
+
+Does not own:
+
+- Orders
+- Order line items
+- Payments
+- Inventory reservations
+- Shipment state
+
+Public operations:
+
 ```text
-getProduct(productId)
-getSellableVariant(variantId)
-getCurrentPrice(variantId)
-checkAvailability(variantId, quantity)
+getSellableItem(sku) -> SellableItemSnapshot
+getCatalogItems(query) -> Page<CatalogItem>
+changePrice(sku, price)
+activateItem(sku)
+deactivateItem(sku)
 ```
 
-Catalog returns immutable snapshots for ordering:
+`SellableItemSnapshot` includes:
 
 ```text
-ProductSnapshot {
-  variantId
-  sku
-  name
-  unitPrice
-  currency
-  taxCategory
-}
+sku
+name
+unitPrice
+currency
+taxCategory
+catalogVersion
 ```
 
-Ordering stores this snapshot on each order line so later catalog changes cannot alter historical orders.
+Ordering copies this information into order lines. Historical orders must never depend on future catalog changes.
+
+---
 
 ### Ordering
 
+Owns:
+
+- Carts, if carts are supported
+- Orders
+- Order lines
+- Customer and shipping snapshots
+- Order totals
+- Order state
+- Idempotency keys for order commands
+
+Example order states:
+
 ```text
-createCart(customerId)
-addItem(cartId, variantId, quantity)
-placeOrder(cartId, paymentMethod)
-getOrder(orderId)
-cancelOrder(orderId)
+PENDING_RESERVATION
+PENDING_PAYMENT
+CONFIRMED
+FULFILLING
+SHIPPED
+COMPLETED
+CANCELLED
+PAYMENT_FAILED
+RESERVATION_FAILED
 ```
 
-Ordering is the owner of the order lifecycle:
+Ordering is the customer-facing workflow owner. It does not write payment or fulfillment records.
+
+Public operations:
 
 ```text
-Draft -> PendingPayment -> Paid -> Preparing -> Shipped -> Completed
-                     \-> PaymentFailed
-Paid -> Cancelled
+placeOrder(command, idempotencyKey) -> OrderResult
+getOrder(orderId) -> OrderView
+cancelOrder(orderId) -> void
 ```
 
-Only the ordering module may transition order status. Other modules report facts through commands or internal events.
+`placeOrder`:
+
+1. Validate the request.
+2. Ask Catalog for current sellable item snapshots.
+3. Calculate totals using the returned snapshots.
+4. Create the order and immutable order lines.
+5. Store the shipping and customer snapshots.
+6. Commit the order in `PENDING_RESERVATION`.
+7. Publish `OrderPlaced`.
+
+The order response may return immediately with a pending status. Payment and fulfillment progress through the workflow.
+
+---
 
 ### Payment
 
+Owns:
+
+- Payment attempts
+- Payment provider references
+- Authorization and capture state
+- Refunds
+- Provider webhook records
+- Payment idempotency keys
+
+Example payment states:
+
 ```text
-authorizePayment(orderId, amount, currency, paymentMethodToken)
-capturePayment(paymentAttemptId)
-voidAuthorization(paymentAttemptId)
+PENDING
+AUTHORIZED
+CAPTURED
+FAILED
+VOIDED
+REFUNDED
+```
+
+Public internal operations:
+
+```text
+authorizePayment(orderId, amount, currency, idempotencyKey)
+capturePayment(orderId)
+voidAuthorization(orderId)
 refundPayment(orderId, amount)
 handleProviderWebhook(payload)
 ```
 
-Payment stores provider tokens and references, never raw card data.
+Payment owns all interaction with the external payment provider. Other modules receive payment outcomes through events and must not call the provider.
+
+---
 
 ### Fulfillment
 
+Owns:
+
+- Inventory quantities
+- Inventory reservations
+- Reservation expiration
+- Shipment records
+- Carrier/tracking information
+- Fulfillment state
+
+Example reservation states:
+
 ```text
-reserveOrder(orderId, lines)
+PENDING
+RESERVED
+COMMITTED
+RELEASED
+EXPIRED
+```
+
+Example shipment states:
+
+```text
+NOT_READY
+READY
+SHIPPED
+DELIVERED
+CANCELLED
+```
+
+Public internal operations:
+
+```text
+reserveInventory(orderId, lines)
+commitReservation(orderId)
 releaseReservation(orderId)
 createShipment(orderId)
-markShipmentDispatched(shipmentId, trackingNumber)
-markShipmentDelivered(shipmentId)
+recordShipment(orderId, trackingDetails)
 ```
 
-Fulfillment creates shipment items from an order-line snapshot supplied by Ordering. It does not query Ordering tables directly.
+Fulfillment is the only module allowed to change inventory or reservation data.
 
-## Transactions
+## Database ownership
 
-Use local ACID transactions inside each module. A transaction may span multiple module-owned tables only when coordinated by an application service in the same process and database.
+A shared database is acceptable, but tables are logically module-private.
 
-### Place Order
-
-1. Ordering starts a transaction.
-2. Read the cart and lock it.
-3. Ask Catalog for current sellable variants and prices.
-4. Validate quantities and availability.
-5. Create the order and immutable order-line snapshots.
-6. Set status to `PendingPayment`.
-7. Write an `OrderPlaced` outbox message.
-8. Commit.
-
-The payment provider call must not occur inside this database transaction.
-
-### Payment Authorization
-
-1. Payment consumes `OrderPlaced`.
-2. Create a payment attempt with `Pending` state.
-3. Call the provider using an idempotency key derived from `orderId` and attempt number.
-4. In a short transaction, persist the provider result.
-5. Publish `PaymentAuthorized` or `PaymentFailed` through the outbox.
-6. Ordering consumes the result and transitions the order.
-
-### Reservation and Fulfillment
-
-After payment authorization:
-
-1. Ordering emits `OrderPaid`.
-2. Fulfillment creates reservations in a transaction using `(order_id, variant_id)` as a uniqueness key.
-3. If reservation succeeds, emit `InventoryReserved`.
-4. Ordering transitions to `Preparing`.
-5. Fulfillment creates the shipment and emits `ShipmentCreated`.
-
-If reservation fails, emit `InventoryReservationFailed`; Ordering transitions the order to a compensating state and requests payment void/refund.
-
-## Internal Messaging
-
-Use in-process commands/events rather than network calls:
+Example ownership:
 
 ```text
-Command: AuthorizePayment
-Event: OrderPlaced
-Event: PaymentAuthorized
-Event: PaymentFailed
-Event: OrderPaid
-Event: InventoryReserved
-Event: InventoryReservationFailed
-Event: ShipmentDispatched
-Event: ShipmentDelivered
+catalog_products              Catalog
+catalog_prices                Catalog
+orders                        Ordering
+order_lines                   Ordering
+order_idempotency_keys        Ordering
+payments                      Payment
+payment_attempts              Payment
+payment_webhooks              Payment
+inventory_items                Fulfillment
+inventory_reservations        Fulfillment
+shipments                     Fulfillment
+outbox_messages               Owning module
+inbox_messages                Owning module
 ```
 
-Events are integration facts, not shared domain models. Each event has a version and stable identifiers:
+Rules:
 
-```json
-{
-  "eventId": "uuid",
-  "type": "PaymentAuthorized",
-  "version": 1,
-  "occurredAt": "timestamp",
-  "orderId": "uuid",
-  "paymentAttemptId": "uuid",
-  "amount": 12500,
-  "currency": "USD"
-}
-```
+- A module may only write its own tables.
+- A module may not import another module’s persistence entities.
+- Cross-module reads use a public query interface or event-maintained projection.
+- Foreign keys across module-owned tables are avoided.
+- Database migrations are grouped by module.
+- Domain objects remain inside their owning module.
 
-Implement an outbox table per module or a shared outbox with module ownership metadata. Consumers maintain an inbox table keyed by `event_id` to guarantee idempotent processing.
+## Order workflow
 
-## Consistency Rules
+### 1. Place order
 
-- Order totals are calculated and owned by Ordering.
-- Catalog prices are copied into order lines at placement time.
-- Payment amount must equal the order’s authorized payable total.
-- A payment webhook may be delivered repeatedly; processing must be idempotent.
-- A reservation may be created only once for an order line.
-- Shipment creation requires successful payment and reservation.
-- Order cancellation must trigger payment void/refund and reservation release.
-- Every state transition is recorded in a status-history table.
-- Cross-module references are IDs, never object references or direct repository calls.
-
-## Testing Strategy
-
-### Unit Tests
-
-Each domain module tests its own invariants in isolation:
-
-- Catalog rejects inactive variants and invalid prices.
-- Ordering calculates totals, taxes, discounts, and rounding correctly.
-- Ordering rejects placing an empty or stale cart.
-- Payment disallows capture before authorization.
-- Payment prevents duplicate webhook effects.
-- Fulfillment prevents over-reservation.
-- Fulfillment disallows shipment creation without reservation.
-
-### Application Tests
-
-Use a real database or containerized database for transaction behavior:
-
-- Placing an order persists line snapshots and an outbox event atomically.
-- Failed order creation rolls back all ordering changes.
-- Concurrent checkout cannot oversell inventory.
-- Reprocessing an outbox event does not duplicate payments, reservations, or shipments.
-- Payment success transitions the order exactly once.
-- Payment failure leaves no fulfillment reservation.
-
-### Contract Tests
-
-Verify module APIs and event schemas:
-
-- Ordering can consume the current `PaymentAuthorized` event.
-- Payment rejects malformed authorization commands.
-- Fulfillment handles event versioning and unknown optional fields.
-- Catalog snapshot responses contain all fields required by Ordering.
-
-### End-to-End Tests
-
-Cover the primary workflows:
-
-1. Add product to cart, place order, authorize payment, reserve inventory, create shipment.
-2. Payment failure and retry.
-3. Inventory shortage causing compensation.
-4. Duplicate payment webhook delivery.
-5. Cancellation before capture.
-6. Refund after shipment failure.
-
-## Operational Structure
-
-Keep one deployment and one process, but expose module metrics separately:
+Ordering transaction:
 
 ```text
-orders.placed
-payments.authorization_success
-payments.authorization_failure
-fulfillment.reservation_failure
-shipments.dispatched
+BEGIN
+  insert order
+  insert order lines with catalog snapshots
+  insert order idempotency record
+  insert outbox OrderPlaced event
+COMMIT
 ```
 
-Use module-scoped logging fields such as `module`, `order_id`, `payment_attempt_id`, and `shipment_id`. This preserves independent ownership and testability while keeping deployment, transactions, and local communication simple.
+Initial state:
+
+```text
+PENDING_RESERVATION
+```
+
+If the same idempotency key is retried, return the original order result without creating another order.
+
+### 2. Reserve inventory
+
+Fulfillment consumes `OrderPlaced`.
+
+Fulfillment transaction:
+
+```text
+BEGIN
+  lock inventory rows for requested SKUs
+  verify available quantities
+  create reservation
+  decrement available quantity
+  insert outbox InventoryReserved or InventoryReservationFailed
+COMMIT
+```
+
+Inventory locking must prevent two concurrent orders from reserving the same units.
+
+If inventory is unavailable, publish `InventoryReservationFailed`. Ordering changes the order to `RESERVATION_FAILED`.
+
+### 3. Authorize payment
+
+Payment consumes `InventoryReserved`.
+
+The external provider call must not occur inside a database transaction:
+
+1. Create or load a payment attempt with a unique idempotency key.
+2. Commit `PENDING`.
+3. Call the provider using that idempotency key.
+4. Store the result in a new transaction.
+5. Publish `PaymentAuthorized` or `PaymentFailed`.
+
+On authorization failure:
+
+- Payment publishes `PaymentFailed`.
+- Ordering changes the order to `PAYMENT_FAILED`.
+- Fulfillment releases the reservation.
+
+On authorization success:
+
+- Payment publishes `PaymentAuthorized`.
+- Ordering changes the order to `CONFIRMED`.
+- Fulfillment commits the reservation and prepares fulfillment.
+
+### 4. Fulfill
+
+After `OrderConfirmed`:
+
+1. Fulfillment commits the reservation.
+2. Fulfillment creates a shipment.
+3. Warehouse or carrier updates shipment state.
+4. Fulfillment publishes `ShipmentCreated`, `ShipmentShipped`, and `ShipmentDelivered`.
+
+Ordering updates its customer-visible state to `FULFILLING`, `SHIPPED`, and `COMPLETED`.
+
+## Events and reliable delivery
+
+Use transactional outbox processing inside the monolith.
+
+Each module transaction writes its state change and its outgoing event to the same outbox table or module-owned outbox partition:
+
+```text
+eventId
+eventType
+aggregateType
+aggregateId
+payload
+occurredAt
+attemptCount
+publishedAt
+```
+
+A background dispatcher publishes committed outbox records to the in-process event bus.
+
+Consumers must be idempotent. Track consumed event IDs in an inbox table or equivalent consumer record:
+
+```text
+consumerName
+eventId
+processedAt
+```
+
+Required events:
+
+```text
+OrderPlaced
+InventoryReserved
+InventoryReservationFailed
+PaymentAuthorized
+PaymentFailed
+ReservationReleased
+OrderConfirmed
+OrderCancelled
+ShipmentCreated
+ShipmentShipped
+ShipmentDelivered
+```
+
+Events should contain facts and identifiers, not references to mutable domain objects.
+
+## Transaction rules
+
+Use local transactions only:
+
+- One command changes one module’s owned state.
+- One transaction may update multiple tables only if they belong to the same module.
+- Outbox insertion is part of the same transaction as the state change.
+- External calls occur outside database transactions.
+- Retries use idempotency keys.
+- Compensation handles cross-module failure.
+
+There is no distributed transaction between Ordering, Payment, and Fulfillment.
+
+## Consistency and failure handling
+
+### Duplicate commands
+
+Use unique idempotency keys for:
+
+- Place order
+- Payment authorization
+- Payment capture
+- Refund
+- Provider webhooks
+
+Repeated commands return the existing result or safely replay the same transition.
+
+### Event retry
+
+Failed event handlers remain retryable. The handler must be safe to execute more than once.
+
+After repeated failures, record the event for operational review without losing it.
+
+### Payment timeout
+
+If the provider response is lost:
+
+- Keep the payment attempt pending.
+- Query the provider using the same idempotency key.
+- Do not create a second payment attempt.
+- Do not release inventory until the payment outcome is known or a timeout policy is applied.
+
+### Cancellation
+
+Cancellation is allowed only in states where fulfillment has not committed the reservation.
+
+Cancellation flow:
+
+1. Ordering validates the state and marks the order cancellation-pending.
+2. Payment voids an authorization or refunds a capture.
+3. Fulfillment releases the reservation.
+4. Ordering marks the order `CANCELLED` after required compensations succeed.
+
+## Internal structure
+
+Each module should contain:
+
+```text
+api/
+application/
+domain/
+persistence/
+events/
+```
+
+Dependencies should point inward:
+
+```text
+api -> application -> domain
+application -> module-owned persistence
+events -> application handlers
+```
+
+Persistence implementations must not be exposed outside the module. Cross-module dependencies target interfaces such as:
+
+```text
+CatalogReader
+PaymentCommandHandler
+FulfillmentCommandHandler
+```
+
+The application layer coordinates use cases; domain entities enforce local invariants.
+
+## Key invariants
+
+Catalog:
+
+- SKU is unique.
+- Only active items can be sold.
+- Prices are valid for their currency.
+
+Ordering:
+
+- An order has at least one line.
+- Line prices are immutable after order creation.
+- Totals equal the sum of stored line snapshots and charges.
+- Terminal orders cannot transition to unrelated states.
+- An idempotency key maps to only one order.
+
+Payment:
+
+- A payment cannot be authorized twice.
+- Capture cannot exceed authorization.
+- Refund cannot exceed captured amount.
+- A webhook cannot move a payment backward.
+
+Fulfillment:
+
+- Available inventory cannot become negative.
+- A reservation cannot exceed available inventory.
+- A reservation is released or committed only once.
+- A shipment belongs to exactly one order.
+
+## Testing strategy
+
+### Unit tests
+
+Test each module’s domain rules independently:
+
+- Order total calculation and state transitions
+- Catalog sellability and pricing rules
+- Payment transition rules
+- Inventory reservation and release
+- Shipment transitions
+- Idempotency behavior
+
+### Module application tests
+
+Use the module’s public application API with an in-memory or test database:
+
+- Place an order snapshots catalog data.
+- Catalog price changes do not alter existing orders.
+- Repeated order commands return the same order.
+- Payment retries do not create duplicate provider charges.
+- Inventory reservations are released on payment failure.
+- Invalid state transitions are rejected.
+
+### Integration tests
+
+Run against the real database engine:
+
+- State and outbox record commit atomically.
+- A rollback leaves no order or event.
+- Concurrent orders cannot oversell inventory.
+- Event consumers safely process duplicate events.
+- Outbox dispatch retries failed publication.
+- Provider webhook processing is idempotent.
+
+### End-to-end workflow tests
+
+Cover:
+
+1. Successful order:
+   ```text
+   OrderPlaced
+   -> InventoryReserved
+   -> PaymentAuthorized
+   -> OrderConfirmed
+   -> ShipmentCreated
+   -> ShipmentDelivered
+   ```
+
+2. Inventory failure:
+   ```text
+   OrderPlaced
+   -> InventoryReservationFailed
+   -> RESERVATION_FAILED
+   ```
+
+3. Payment failure:
+   ```text
+   OrderPlaced
+   -> InventoryReserved
+   -> PaymentFailed
+   -> ReservationReleased
+   -> PAYMENT_FAILED
+   ```
+
+4. Provider timeout followed by successful status lookup.
+
+5. Duplicate commands and duplicate events.
+
+6. Cancellation before and after fulfillment commitment.
+
+### Architecture tests
+
+Verify that:
+
+- Ordering cannot import Payment or Fulfillment persistence classes.
+- Modules cannot query another module’s tables.
+- Only Catalog changes catalog tables.
+- Only Ordering changes order tables.
+- Only Payment changes payment tables.
+- Only Fulfillment changes inventory and shipment tables.
+- Cross-module communication uses declared interfaces or events.
+
+This produces one independently deployable modular monolith with clear ownership, local ACID transactions, reliable cross-module workflows, and tests that verify both business behavior and architectural boundaries.

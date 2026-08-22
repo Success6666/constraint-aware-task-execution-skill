@@ -1,303 +1,554 @@
-Design it as an instance-scoped service with durable queues and an outbox, so delivery is reliable and tenant configuration is isolated.
+# Notification Service Design
 
-## Architecture
+## Goals
 
-```text
-API
-  -> NotificationService
-      -> TenantRepository
-      -> NotificationRepository
-      -> OutboxRepository
-      -> ProviderRouter
-          -> EmailProvider(s)
-          -> SMSProvider(s)
-          -> PushProvider(s)
-      -> RetryPolicy
-      -> Clock
-      -> Metrics
-  -> Outbox Publisher
-  -> Delivery Workers
-      -> ProviderRouter
-      -> StatusUpdater
-```
+Support multi-tenant notification delivery through email, SMS, push, and webhooks with:
 
-Use dependency injection for every dependency. Keep configuration immutable and passed into service instances; avoid module-level caches, registries, counters, or mutable singletons.
+- Tenant-specific provider configuration and routing
+- Idempotent submission
+- Asynchronous delivery
+- Provider failover
+- Bounded retries with backoff and jitter
+- Delivery status tracking
+- Provider callbacks and polling where required
+- Per-tenant metrics, quotas, and isolation
+- Deterministic tests without global mutable state
 
-## Core interfaces
-
-```ts
-type Channel = "email" | "sms" | "push";
-
-type NotificationStatus =
-  | "queued"
-  | "sending"
-  | "delivered"
-  | "failed"
-  | "retrying"
-  | "cancelled";
-
-interface NotificationRequest {
-  tenantId: string;
-  idempotencyKey: string;
-  channel: Channel;
-  recipient: string;
-  templateId?: string;
-  payload: Record<string, unknown>;
-  metadata?: Record<string, string>;
-}
-
-interface Provider {
-  readonly name: string;
-  readonly channel: Channel;
-
-  send(input: {
-    tenantId: string;
-    recipient: string;
-    payload: Record<string, unknown>;
-    idempotencyKey: string;
-  }): Promise<{
-    providerMessageId?: string;
-    accepted: boolean;
-  }>;
-}
-
-interface ProviderRouter {
-  select(input: {
-    tenantId: string;
-    channel: Channel;
-    recipient: string;
-  }): Promise<Provider>;
-}
-```
-
-Routing should consider:
-
-- Tenant-specific provider preferences
-- Channel support
-- Provider health and circuit state
-- Cost or priority
-- Region/data-residency requirements
-- Per-provider and per-tenant rate limits
-- Fallback providers
-
-The router should return a deterministic choice for a given attempt and record the selected provider.
-
-## Persistence model
-
-`notifications`
-
-- `id`
-- `tenant_id`
-- `idempotency_key`
-- `channel`
-- `recipient`
-- `template_id`
-- `payload`
-- `status`
-- `attempt_count`
-- `next_attempt_at`
-- `provider`
-- `provider_message_id`
-- `last_error_code`
-- `last_error_message`
-- `created_at`
-- `updated_at`
-- `delivered_at`
-
-Constraints:
+## High-Level Architecture
 
 ```text
-UNIQUE (tenant_id, idempotency_key)
-INDEX (tenant_id, status, next_attempt_at)
+Client
+  |
+  v
+Notification API
+  |
+  +--> Tenant authentication and quota checks
+  +--> Idempotency validation
+  +--> Notification persistence
+  +--> Transactional outbox
+             |
+             v
+        Message broker
+             |
+             v
+       Delivery workers
+             |
+  +----------+----------+
+  |                     |
+Provider router     Status updater
+  |                     |
+  v                     v
+Provider adapters   Provider webhooks/pollers
 ```
 
-`notification_events`
+Recommended components:
 
-- `notification_id`
-- `tenant_id`
-- `type`
-- `provider`
-- `provider_message_id`
-- `attempt`
-- `details`
-- `created_at`
+- **API service**: validates and accepts notification requests.
+- **Notification database**: durable source of truth.
+- **Outbox publisher**: publishes pending work after database commit.
+- **Message broker**: distributes delivery attempts.
+- **Delivery workers**: perform provider calls and record outcomes.
+- **Provider adapters**: normalize provider-specific APIs and errors.
+- **Webhook receiver**: processes asynchronous provider status events.
+- **Metrics and tracing**: emit tenant- and provider-scoped telemetry.
 
-`outbox`
+## Notification API
 
-- `id`
-- `tenant_id`
-- `aggregate_id`
-- `event_type`
-- `payload`
-- `published_at`
-- `created_at`
+### Create notification
 
-Create the notification and outbox record in one database transaction. A publisher later sends the outbox event to the queue.
-
-## Delivery flow
-
-1. API validates the tenant, recipient, channel, template, and payload.
-2. Transaction inserts the notification as `queued`.
-3. The same transaction inserts a `notification.created` outbox event.
-4. Publisher sends the event to a durable queue.
-5. Worker atomically claims the notification and changes it to `sending`.
-6. Worker selects a provider and calls it with the tenant ID and idempotency key.
-7. On acceptance, mark it `delivered` or `queued_for_confirmation`, depending on provider semantics.
-8. Webhooks update final status when providers report delivery, bounce, rejection, or complaint.
-9. On retryable failure, mark `retrying` and set `next_attempt_at`.
-10. On permanent failure or exhausted retries, mark `failed`.
-
-Use compare-and-set updates when claiming work:
-
-```sql
-UPDATE notifications
-SET status = 'sending',
-    attempt_count = attempt_count + 1,
-    updated_at = :now
-WHERE id = :id
-  AND status IN ('queued', 'retrying')
-  AND next_attempt_at <= :now;
+```http
+POST /v1/notifications
+Authorization: Bearer <tenant-token>
+Idempotency-Key: <client-generated-key>
+Content-Type: application/json
 ```
 
-## Retries
+```json
+{
+  "channel": "email",
+  "recipient": {
+    "address": "user@example.com"
+  },
+  "template": {
+    "id": "invoice-ready",
+    "version": 3,
+    "variables": {
+      "invoice_id": "inv_123"
+    }
+  },
+  "routing": {
+    "preferred_provider": "provider-a",
+    "allow_failover": true
+  },
+  "metadata": {
+    "order_id": "order_456"
+  },
+  "expires_at": "2026-01-01T00:00:00Z"
+}
+```
 
-Classify errors explicitly:
+Response:
 
-- Retryable: timeout, connection failure, HTTP 429, HTTP 5xx
-- Permanent: invalid recipient, unsupported channel, authentication failure, policy rejection
-- Unknown: retry with a bounded policy, then fail
+```json
+{
+  "id": "ntf_123",
+  "tenant_id": "tenant_abc",
+  "status": "accepted",
+  "created_at": "2025-01-01T12:00:00Z"
+}
+```
 
-Use exponential backoff with jitter:
+The API returns `202 Accepted`. It does not wait for provider delivery.
+
+### Get status
+
+```http
+GET /v1/notifications/{notification_id}
+```
+
+```json
+{
+  "id": "ntf_123",
+  "status": "delivered",
+  "channel": "email",
+  "attempts": 2,
+  "provider": "provider-b",
+  "created_at": "...",
+  "updated_at": "...",
+  "delivered_at": "..."
+}
+```
+
+### Optional operations
+
+```http
+POST /v1/notifications/{id}/cancel
+GET  /v1/tenants/{tenant_id}/usage
+```
+
+Cancellation only prevents future attempts. It cannot reliably retract a provider request already accepted.
+
+## Tenant Isolation
+
+Every request and database operation must carry a validated `tenant_id`.
+
+Use:
+
+- Tenant-scoped authentication claims
+- Repository methods requiring `tenant_id`
+- Composite keys and indexes beginning with `tenant_id`
+- Row-level security where supported
+- Tenant-specific quotas and rate limits
+- Tenant-specific provider credentials encrypted at rest
+- Logs and metrics containing tenant identifiers only where permitted
+- No process-wide mutable tenant configuration
+
+Configuration should be provided through injected interfaces:
 
 ```text
-delay = min(maxDelay, baseDelay * 2^(attempt - 1)) + random(0, jitter)
+TenantConfigStore
+QuotaStore
+ProviderCredentialStore
+RoutingPolicyStore
 ```
+
+Use immutable configuration snapshots during a delivery attempt. Changes affect new attempts, while an existing attempt retains its selected provider unless failover policy explicitly allows re-routing.
+
+## Data Model
+
+### `notifications`
+
+```text
+id                 UUID primary key
+tenant_id          UUID not null
+idempotency_key    VARCHAR not null
+channel            VARCHAR not null
+recipient          JSON encrypted or tokenized
+template_id        VARCHAR nullable
+template_version   INTEGER nullable
+payload            JSON encrypted or minimized
+status             VARCHAR not null
+selected_provider  VARCHAR nullable
+attempt_count      INTEGER not null default 0
+max_attempts       INTEGER not null
+expires_at         TIMESTAMP nullable
+created_at         TIMESTAMP not null
+updated_at         TIMESTAMP not null
+delivered_at       TIMESTAMP nullable
+last_error_code    VARCHAR nullable
+last_error_message VARCHAR nullable
+```
+
+Unique constraint:
+
+```text
+(tenant_id, idempotency_key)
+```
+
+### `delivery_attempts`
+
+```text
+id                 UUID primary key
+tenant_id          UUID not null
+notification_id    UUID not null
+attempt_number     INTEGER not null
+provider           VARCHAR not null
+provider_message_id VARCHAR nullable
+status             VARCHAR not null
+error_code         VARCHAR nullable
+error_class        VARCHAR nullable
+started_at         TIMESTAMP not null
+completed_at       TIMESTAMP nullable
+next_retry_at      TIMESTAMP nullable
+```
+
+Unique constraint:
+
+```text
+(notification_id, attempt_number)
+```
+
+### `outbox_events`
+
+```text
+id                 UUID primary key
+tenant_id          UUID not null
+aggregate_id       UUID not null
+event_type         VARCHAR not null
+payload            JSON not null
+created_at         TIMESTAMP not null
+published_at       TIMESTAMP nullable
+attempts           INTEGER not null default 0
+```
+
+### `provider_events`
+
+```text
+provider           VARCHAR not null
+provider_event_id  VARCHAR not null
+tenant_id          UUID nullable
+notification_id    UUID nullable
+payload            JSON not null
+received_at        TIMESTAMP not null
+processed_at       TIMESTAMP nullable
+```
+
+Unique constraint:
+
+```text
+(provider, provider_event_id)
+```
+
+This makes webhook processing idempotent.
+
+## Status State Machine
+
+External statuses:
+
+```text
+accepted
+queued
+sending
+delivered
+failed
+expired
+cancelled
+```
+
+Internal attempt statuses:
+
+```text
+started
+succeeded
+retryable_failure
+permanent_failure
+timed_out
+```
+
+Allowed notification transitions:
+
+```text
+accepted -> queued
+queued   -> sending
+sending  -> delivered
+sending  -> queued
+sending  -> failed
+sending  -> expired
+accepted -> cancelled
+queued   -> cancelled
+```
+
+Terminal states:
+
+```text
+delivered, failed, expired, cancelled
+```
+
+Provider callbacks must never downgrade a terminal state. State updates should use conditional database updates or optimistic locking.
+
+## Provider Abstraction
+
+```text
+interface NotificationProvider {
+    send(context, DeliveryRequest) -> SendResult
+    classifyError(error) -> ErrorClassification
+    verifyWebhook(request) -> VerifiedEvent
+    parseWebhook(event) -> ProviderStatusEvent
+}
+```
+
+```text
+DeliveryRequest {
+    tenant_id
+    notification_id
+    channel
+    recipient
+    rendered_content
+    metadata
+}
+
+SendResult {
+    provider_message_id
+    accepted_at
+    initial_status
+}
+```
+
+Adapters translate provider-specific behavior into stable internal values:
+
+```text
+ErrorClassification:
+    success
+    retryable
+    permanent
+    rate_limited
+    unknown
+```
+
+Provider credentials must be resolved per tenant and injected into the adapter call. They must never appear in logs, events, or client responses.
+
+## Routing
+
+A routing policy evaluates:
+
+1. Requested channel
+2. Tenant-allowed providers
+3. Explicit preferred provider
+4. Provider health and circuit state
+5. Cost and priority
+6. Geographic or regulatory constraints
+7. Tenant-specific quotas
+8. Failover eligibility
 
 Example policy:
 
 ```text
-maxAttempts: 5
-baseDelay: 30 seconds
-maxDelay: 1 hour
-jitter: 20%
+providers:
+  email:
+    - provider-a priority 10
+    - provider-b priority 20
+  sms:
+    - provider-c priority 10
+    - provider-d priority 20
 ```
 
-Honor provider `Retry-After` values. Enforce tenant-level quotas and queue fairness so one tenant cannot starve others.
+Provider selection is recorded in each attempt. A retry normally uses the same provider. Failover occurs only when:
 
-Provider calls must be idempotent. Persist the provider idempotency key and treat duplicate responses as success when the provider confirms the original request.
+- The error is classified as provider-level retryable
+- The routing policy allows failover
+- The current provider circuit is open or unavailable
+- The notification has remaining attempts
 
-## Delivery status
+Recipient-invalid and content-invalid errors must not fail over.
 
-Expose:
+## Retry Policy
+
+Use bounded exponential backoff with jitter:
 
 ```text
-GET /v1/notifications/{id}
+delay = min(max_delay, base_delay * 2^(attempt_number - 1))
+delay = random_between(delay * 0.5, delay * 1.5)
 ```
 
-Return current status, attempt count, provider, timestamps, and a sanitized failure reason.
-
-Recommended state transitions:
+Example defaults:
 
 ```text
-queued -> sending
-sending -> delivered
-sending -> retrying
-sending -> failed
-retrying -> sending
-queued/retrying -> cancelled
+base_delay: 30 seconds
+max_delay: 1 hour
+max_attempts: 5
 ```
 
-Reject invalid transitions in the repository layer. Store all provider callbacks as events before applying them, making webhook handling replayable and deduplicated.
+Retry only for:
 
-Webhook handling should verify signatures, identify the tenant from stored provider metadata, and deduplicate by provider event ID.
+- Timeouts
+- Temporary network failures
+- Provider `5xx` responses
+- Provider rate limits
+- Explicit temporary-unavailable responses
+
+Do not retry:
+
+- Invalid recipient
+- Authentication failure
+- Invalid credentials
+- Rejected content
+- Unsupported channel
+- Policy or quota violations
+
+Every retry must be represented by a new `delivery_attempts` row. Workers must claim work with a lease or broker visibility timeout so a crashed worker can be recovered.
+
+## Delivery Workflow
+
+1. Validate tenant access, channel, recipient, template, and payload.
+2. Check tenant quota and rate limits.
+3. Insert notification and outbox event in one transaction.
+4. Return the notification ID.
+5. Publish the outbox event.
+6. Worker loads the notification with tenant scoping.
+7. Atomically claim the next attempt.
+8. Render content using the stored template version.
+9. Select provider using the tenant routing policy.
+10. Call the provider with a bounded timeout.
+11. Persist provider ID and normalized result.
+12. Schedule a retry or mark the notification terminal.
+13. Emit status events and metrics.
+
+The outbox publisher must safely support duplicate publication. Consumers must be idempotent.
+
+## Idempotency
+
+For `(tenant_id, idempotency_key)`:
+
+- Same key and equivalent request: return the original notification.
+- Same key and different request: return `409 Conflict`.
+- Concurrent submissions: rely on the database uniqueness constraint and re-read the existing record after conflict.
+- Idempotency records should be retained for a documented period, such as 24 hours or longer than the maximum retry window.
+
+Provider sends can still be duplicated after a worker crash between the provider call and database commit. Mitigate this by:
+
+- Passing a stable notification/attempt id as the provider idempotency key where supported.
+- Recording provider message IDs.
+- Designing duplicate sends as an explicit residual risk where providers lack idempotency support.
+
+## Webhooks and Asynchronous Status
+
+Webhook endpoint:
+
+```http
+POST /v1/providers/{provider}/events
+```
+
+Processing:
+
+1. Verify signature and timestamp.
+2. Parse the provider event.
+3. Deduplicate by `(provider, provider_event_id)`.
+4. Resolve the tenant and notification.
+5. Validate that the provider message ID matches the recorded attempt.
+6. Apply a monotonic status transition.
+7. Record processing time and emit metrics.
+8. Return success only after durable acceptance.
+
+Unknown or invalid events should be retained for investigation without changing delivery state.
+
+## Reliability Controls
+
+- Per-provider timeout and connection limits
+- Circuit breaker per provider and channel
+- Per-tenant and global rate limits
+- Dead-letter queue for malformed or exhausted messages
+- Lease expiration for stuck attempts
+- Scheduled reconciliation for provider statuses where supported
+- Alerting on queue age, retry spikes, provider failures, and webhook lag
+- Clock timestamps generated server-side
+- Payload encryption or tokenization for sensitive recipient data
+- Audit trail for routing and status changes
+
+At-least-once processing is the default. Exactly-once delivery cannot be guaranteed across an external provider boundary.
 
 ## Metrics
 
-Record metrics with bounded-cardinality labels:
+Emit counters, gauges, and histograms with bounded-cardinality labels.
 
-- `notifications_created_total{channel}`
-- `notifications_delivered_total{channel,provider}`
-- `notifications_failed_total{channel,reason}`
-- `notification_delivery_latency_seconds{channel}`
-- `notification_attempts_total{channel,provider}`
-- `notification_retries_total{channel,provider}`
-- `notification_queue_age_seconds{tenant_tier}`
-- `provider_requests_total{provider,channel,result}`
-- `provider_request_latency_seconds{provider,channel}`
-- `provider_rate_limit_total{provider}`
+Recommended metrics:
 
-Avoid tenant IDs, recipient addresses, notification IDs, or arbitrary error strings as metric labels. Put those details in logs/traces instead.
-
-Use structured logs containing `tenantId`, `notificationId`, `attempt`, `provider`, and correlation ID, with recipient data redacted or hashed.
-
-## Tenant isolation and security
-
-- Authorize every request against `tenantId`.
-- Encrypt sensitive payloads at rest.
-- Store provider credentials in a secrets manager, scoped by tenant/provider.
-- Apply per-tenant quotas, rate limits, and concurrency limits.
-- Prevent cross-tenant access in repository queries and cache keys.
-- Validate webhook ownership and signatures.
-- Make retention configurable per tenant and channel.
-
-## Avoiding global mutable state
-
-Use an application composition root:
-
-```ts
-const app = createNotificationApp({
-  clock: systemClock,
-  db,
-  queue,
-  metrics,
-  providers: [sendgridProvider, twilioProvider],
-  router: new RoutingProviderRouter({ tenantConfigRepo, healthRepo }),
-  retryPolicy: defaultRetryPolicy,
-});
+```text
+notifications_accepted_total{tenant,channel}
+notifications_completed_total{tenant,channel,status}
+delivery_attempts_total{tenant,channel,provider,result}
+delivery_latency_seconds{channel,provider}
+retry_scheduled_total{tenant,channel,provider,reason}
+provider_request_latency_seconds{provider,operation}
+provider_errors_total{provider,error_class}
+provider_circuit_state{provider,channel}
+queue_depth{channel}
+queue_oldest_age_seconds{channel}
+webhook_events_total{provider,result}
+tenant_quota_rejections_total{tenant,channel}
 ```
 
-Each service receives its dependencies through constructors. Health state, rate-limit buckets, and caches should be owned by explicit instances, preferably backed by Redis or another shared store when workers are distributed. Tests can inject fake clocks, repositories, queues, providers, and metrics collectors.
+Do not use notification IDs, recipient addresses, or unbounded provider error text as metric labels.
 
-## Tests
+## Testing Strategy
 
-Unit tests:
+### Unit tests
 
-- Routing preference and fallback behavior
-- Tenant isolation
-- Retry classification and backoff
-- State-transition validation
-- Idempotency handling
-- Webhook signature and deduplication
-- Rate-limit enforcement
-- Payload/template validation
+- Request validation and normalization
+- Tenant authorization and isolation
+- Idempotency behavior, including concurrent requests
+- Routing priority, preferred provider, health, quotas, and failover
+- Error classification
+- Retry delay calculation and attempt limits
+- State transition rules
+- Webhook signature verification and event parsing
+- Duplicate webhook handling
+- Template rendering with stored versions
+- Sensitive-data redaction
 
-Integration tests:
+### Integration tests
 
-- Transactional notification plus outbox creation
-- Publisher-to-worker delivery
-- Worker claim concurrency
-- Provider timeout, 429, 5xx, and permanent errors
-- Webhook-to-final-status updates
-- Retry exhaustion
+- API plus database transaction and outbox creation
+- Outbox publishing and duplicate delivery
+- Worker lease recovery
+- Provider adapter contract tests
+- Retry scheduling and dead-letter behavior
+- Provider callback updates
+- Row-level tenant isolation
+- Database uniqueness constraints
+- Metrics emission
 
-Contract tests:
+### End-to-end tests
 
-- Provider adapter request/response mapping
-- Provider idempotency behavior
-- Webhook event mapping
+- Accepted notification becomes delivered
+- Primary provider failure routes to fallback
+- Permanent failure stops retries
+- Rate limiting eventually succeeds
+- Duplicate client request returns one notification
+- Duplicate provider webhook changes state only once
+- Expired notifications are not sent
+- Cancellation prevents queued delivery
 
-Property-based tests:
+### Property and resilience tests
 
-- Retry delays are bounded and non-negative
-- Invalid state transitions never succeed
-- Reprocessing the same event is side-effect free
+- Randomized status events never produce illegal state transitions
+- Replaying any event sequence is idempotent
+- Worker crashes before and after provider calls
+- Broker duplicates messages
+- Database deadlocks and transient provider outages
+- Time advances deterministically for retry tests
 
-Operational tests:
+Inject clocks, random-number generators, UUID generators, repositories, broker clients, and provider adapters. Each test constructs its own service dependencies and state container; no global mutable registries are required.
 
-- Queue backlog recovery
-- Provider outage and failover
-- Worker restart during `sending`
-- Duplicate queue messages
-- Database transaction rollback
+## Verification Criteria
 
-This yields at-least-once processing with durable status tracking, deterministic tenant-aware routing, bounded retries, and no reliance on process-global mutable state.
+The implementation is ready when:
+
+- A tenant cannot read or mutate another tenant’s notifications.
+- Duplicate submissions do not create duplicate logical notifications.
+- Provider failures are classified and retried according to policy.
+- Failover occurs only for eligible errors.
+- Every attempt and status transition is durable and auditable.
+- Duplicate broker messages and webhooks are harmless.
+- Stuck workers are recoverable.
+- Metrics identify tenant, channel, and provider health without high-cardinality labels.
+- Tests cover successful delivery, retries, failover, permanent failures, isolation, idempotency, and crash recovery.

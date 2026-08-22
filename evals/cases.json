@@ -38,7 +38,7 @@
     "category": "hard_constraint",
     "prompt": "Propose an implementation for a FastAPI inventory API with PostgreSQL transactions, pagination, stock adjustments, and integration tests. Do not use an ORM.",
     "constraint_terms": ["orm"],
-    "objective_markers": ["inventory|库存", "postgresql", "transaction|事务", "pagination|分页", "test|测试"],
+    "objective_markers": ["inventory|stock|库存", "postgresql", "transaction|事务", "pagination|分页", "test|测试"],
     "forbidden_adoption_terms": ["orm"],
     "constraint_violation_patterns": ["sqlalchemy\\.orm", "from\\s+sqlalchemy\\.orm", "\\bSession\\s*\\("],
     "soft_preference": false
@@ -80,7 +80,7 @@
     "category": "soft_preference",
     "prompt": "Plan a CLI metadata crawler with bounded concurrency, rate limiting, caching, resumable runs, and tests. Prefer the standard library and avoid new third-party dependencies when practical.",
     "constraint_terms": ["third-party", "dependenc"],
-    "objective_markers": ["cli|命令行", "concurr|并发", "rate limit|限速|速率", "cache|缓存", "resume|checkpoint|恢复|检查点", "test|测试"],
+    "objective_markers": ["cli|命令行", "concurr|并发", "rate limit|limiter|限速|速率", "cache|缓存", "resume|checkpoint|恢复|检查点", "test|测试"],
     "soft_preference": true
   },
   {
@@ -154,7 +154,7 @@
     "category": "output_or_architecture_constraint",
     "prompt": "Plan a backward-compatible parser change with malformed-input handling and regression tests. Confine the implementation to app/parser.py, tests/test_parser.py, and README.md; do not add any other files.",
     "constraint_terms": ["other files", "additional files"],
-    "objective_markers": ["app/parser.py", "tests/test_parser.py", "readme.md", "malformed|畸形|非法输入", "backward|compatib|向后兼容|兼容"],
+    "objective_markers": ["app/parser.py", "tests/test_parser.py|parser test suite|parser tests", "readme.md|readme", "malformed|畸形|非法输入", "backward|compatib|向后兼容|兼容"],
     "allowed_paths": ["app/parser.py", "tests/test_parser.py", "README.md"],
     "soft_preference": false
   },
@@ -175,7 +175,7 @@
     "category": "hard_constraint",
     "prompt": "为一个 Python 服务设计配置加载模块，支持 JSON、环境变量覆盖、类型校验和错误提示。不要使用 YAML。",
     "constraint_terms": ["yaml"],
-    "objective_markers": ["json", "环境变量|environment", "校验|validat", "错误|异常|error", "配置|config"],
+    "objective_markers": ["json", "环境变量|environment", "校验|验证|类型检查|类型转换|validat|type check|type conversion", "错误|异常|error", "配置|config"],
     "forbidden_adoption_terms": ["yaml"],
     "constraint_violation_patterns": ["\\.ya?ml\\b", "import\\s+yaml", "yaml\\.safe_load"],
     "soft_preference": false
@@ -249,7 +249,7 @@
     "category": "soft_preference",
     "prompt": "设计一个命令行日志分析器，支持流式读取、时间范围过滤、错误聚合、JSON 导出和测试；在可行的情况下优先复用标准库，尽量少增加依赖。",
     "constraint_terms": ["依赖", "dependency"],
-    "objective_markers": ["命令行|cli", "流式|stream", "时间|time", "聚合|aggregate", "json", "测试|test"],
+    "objective_markers": ["命令行|cli", "流式|stream", "时间|time", "聚合|统计|汇总|aggregate", "json", "测试|test"],
     "soft_preference": true
   },
   {
@@ -270,8 +270,8 @@
     "category": "safety_or_explicit_enforcement",
     "prompt": "设计支付 Webhook 接收服务，支持签名、时间戳、nonce、幂等、审计和测试。签名无效、时间偏差超限或请求重放时必须拒绝处理。",
     "constraint_terms": ["签名无效", "时间偏差", "请求重放"],
-    "objective_markers": ["webhook", "签名|signature", "nonce", "幂等|idempot", "审计|audit", "测试|test"],
-    "required_enforcement_patterns": ["时间戳|timestamp", "nonce", "拒绝|拦截|reject|block|401|403|409", "重放|replay", "测试|test"],
+    "objective_markers": ["webhook", "签名|signature", "nonce", "幂等|idempot", "审计|audit", "测试|必测|test"],
+    "required_enforcement_patterns": ["时间戳|timestamp", "nonce", "拒绝|拦截|reject|block|401|403|409", "重放|replay", "测试|必测|test"],
     "score_failure_gates": false,
     "score_constraint_components": false,
     "soft_preference": false
@@ -314,7 +314,7 @@
     "category": "output_or_architecture_constraint",
     "prompt": "制定访问令牌过期处理的修复方案，覆盖刷新并发、错误响应和回归测试。实现范围只能包含 src/auth.ts 和 tests/auth.test.ts，不要新增其他文件。",
     "constraint_terms": ["其他文件", "新增文件"],
-    "objective_markers": ["src/auth.ts", "tests/auth.test.ts", "刷新|refresh", "并发|concurr", "错误|error", "测试|test"],
+    "objective_markers": ["src/auth.ts|auth module|authentication module|认证模块|认证状态", "tests/auth.test.ts|auth test|authentication test|认证测试|回归测试", "刷新|refresh", "并发|concurr", "错误|error", "测试|test"],
     "allowed_paths": ["src/auth.ts", "tests/auth.test.ts"],
     "soft_preference": false
   }

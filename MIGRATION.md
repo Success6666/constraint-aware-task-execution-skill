@@ -2,7 +2,7 @@
 
 ## Version status
 
-`0.4.0-rc.9` separates the compact single-call Skill from the optional structured Runtime. `v1-full` is the ordinary-use release candidate; `full-v2` remains an explicit plan/validate/repair mode whose additional token and latency costs are reported separately. Keep prior release results immutable and promote to `0.4.0` only after the complete model matrices and blinded semantic review satisfy all capability and efficiency gates.
+`0.4.0-rc.10` keeps the compact single-call Skill separate from the optional structured Runtime and adds direct Responses API A/B sampling with auditable per-request usage and latency. `v1-full` remains the ordinary-use release candidate; `full-v2` remains an explicit plan/validate/repair mode. Keep prior release results immutable and promote to `0.4.0` only after the complete model matrices and blinded semantic review satisfy all capability and efficiency gates.
 
 ## Skill rename
 

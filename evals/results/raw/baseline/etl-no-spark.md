@@ -1,342 +1,422 @@
-## Architecture
+# Hourly JSONL ETL Design
 
-Use a small Python service or containerized batch job, triggered at the start of every hour.
+## 1. Technology
 
-Suggested components:
+Use Python with:
 
-- Python 3.12
-- `pydantic` for strict schema validation
-- `orjson` for fast JSONL parsing
-- `pyarrow` for Parquet writing and partitioned datasets
-- DuckDB or SQLite for checkpoints, manifests, and the durable deduplication index
-- Cron, Airflow, Dagster, or a queue-based scheduler for hourly execution
+- `orjson` for JSONL parsing
+- `pydantic` or `fastjsonschema` for schema validation
+- `pyarrow` for Parquet writing and schema enforcement
+- `duckdb` or SQLite for checkpoint and dedup metadata
+- Object storage or a POSIX filesystem for input, output, and quarantine data
+
+No Spark is required.
+
+## 2. Event Contract
+
+Each input line must contain:
+
+```json
+{
+  "event_id": "evt_123",
+  "event_type": "purchase",
+  "event_time": "2025-01-15T10:23:14.123Z",
+  "ingest_time": "2025-01-15T10:23:20.456Z",
+  "source": "checkout",
+  "schema_version": 1,
+  "payload": {
+    "customer_id": "cus_42",
+    "amount": 19.95,
+    "currency": "USD"
+  }
+}
+```
+
+Required fields:
+
+- `event_id`: globally unique, non-empty string
+- `event_type`: controlled string
+- `event_time`: UTC timestamp
+- `ingest_time`: UTC timestamp
+- `source`: source identifier
+- `schema_version`: integer
+- `payload`: object
+
+Validation rules:
+
+- Reject malformed JSON.
+- Reject missing or incorrectly typed fields.
+- Reject timestamps that cannot be parsed as UTC.
+- Reject unsupported schema versions.
+- Enforce event-specific payload schemas.
+- Preserve the original line and validation error in quarantine output.
+
+A canonical payload hash should be computed from normalized JSON:
 
 ```text
-raw JSONL
-   |
-   v
-discover hour -> validate -> normalize -> deduplicate
-                                      |
-                                      v
-                           write Parquet staging files
-                                      |
-                                      v
-                         atomic commit + checkpoint update
-                                      |
-                                      v
-                         partitioned Parquet dataset
+payload_hash = SHA256(canonical_json(event))
 ```
 
-## Input Layout
+Conflicting records with the same `event_id` but different hashes must be quarantined for investigation.
 
-Use immutable, hour-scoped input paths:
+## 3. Processing Window
+
+Each run processes one logical UTC hour:
 
 ```text
-raw/
-  ingest_date=2026-08-22/
-    ingest_hour=13/
-      source-a-001.jsonl
-      source-a-002.jsonl
+window_start = 2025-01-15T10:00:00Z
+window_end   = 2025-01-15T11:00:00Z
 ```
 
-Each input file should have a stable identity, such as:
+Input selection should use:
 
 ```text
-(source_path, file_size, modification_time, sha256)
+window_start <= event_time < window_end
 ```
 
-The file hash prevents accidental reprocessing of changed input under the same name.
+The scheduler should start a window only after a configurable lateness delay, for example six hours. This provides a watermark:
 
-## Event Schema
-
-Example canonical event:
-
-```python
-from datetime import datetime
-from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field
-
-class Event(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    event_id: str = Field(min_length=1, max_length=256)
-    event_ts: datetime
-    event_type: str = Field(min_length=1, max_length=128)
-    schema_version: int = Field(ge=1)
-    payload: dict[str, Any]
-    source: str = Field(min_length=1, max_length=128)
+```text
+watermark = current_utc_time - 6 hours
 ```
 
-Normalize before writing:
+Events arriving after the watermark are handled by a late-data correction run.
+
+## 4. Pipeline Stages
+
+### Stage A: Discover Input
+
+The runner identifies all input JSONL objects covering the processing window and records:
+
+- object identifier
+- content length
+- checksum or version identifier
+- discovery timestamp
+
+The complete input set becomes part of the checkpoint. A retry must use the same input snapshot unless an explicit correction run is requested.
+
+### Stage B: Parse and Validate
+
+Read JSONL incrementally in batches to bound memory usage.
+
+For every record, produce one of:
+
+- valid event
+- malformed JSON quarantine record
+- schema validation quarantine record
+- unsupported-version quarantine record
+
+Validation should happen before any deduplication.
+
+### Stage C: Normalize
+
+Normalize valid records:
 
 - Convert timestamps to UTC.
 - Normalize field names and types.
-- Add `ingest_ts`.
-- Derive `event_date` and `event_hour`.
-- Store the original source path and input file hash for traceability.
+- Canonicalize decimal amounts.
+- Serialize the complete normalized event deterministically.
+- Calculate `payload_hash`.
+- Add processing metadata:
+  - `processing_window_start`
+  - `processing_run_id`
+  - `schema_version`
 
-Invalid records go to a quarantine dataset:
+### Stage D: Deduplicate
 
-```text
-quarantine/
-  ingest_date=2026-08-22/
-    ingest_hour=13/
-      invalid.jsonl
-```
-
-Each quarantined row should include the raw line, validation error, source path, and line number.
-
-## Deduplication
-
-Use `event_id` as the primary deduplication key. If producers cannot guarantee globally unique IDs, use a deterministic fingerprint:
-
-```python
-fingerprint = sha256(
-    canonical_json({
-        "source": event["source"],
-        "event_ts": event["event_ts"],
-        "event_type": event["event_type"],
-        "payload": event["payload"],
-    })
-).hexdigest()
-```
-
-Maintain a durable index in DuckDB or SQLite:
-
-```sql
-CREATE TABLE processed_events (
-    event_id VARCHAR PRIMARY KEY,
-    event_ts TIMESTAMP NOT NULL,
-    output_file VARCHAR NOT NULL,
-    committed_at TIMESTAMP NOT NULL
-);
-```
-
-Deduplication happens at two levels:
-
-1. In-memory set for duplicates within the current hour.
-2. Database lookup for IDs already committed by earlier runs.
-
-For large volumes, process IDs in batches and use a temporary table:
-
-```sql
-CREATE TEMP TABLE incoming_ids(event_id VARCHAR PRIMARY KEY);
-
-INSERT INTO incoming_ids VALUES (...);
-
-SELECT e.*
-FROM normalized_events e
-LEFT JOIN processed_events p USING (event_id)
-WHERE p.event_id IS NULL;
-```
-
-## Partitioned Parquet Output
-
-Partition by fields commonly used for filtering:
+Deduplication key:
 
 ```text
-events/
-  event_date=2026-08-22/
-    event_hour=13/
-      part-00001.parquet
-      part-00002.parquet
+event_id
 ```
 
-Optionally add `event_type` if cardinality is small and queries frequently filter by it.
+Within the current run:
 
-Use PyArrow:
-
-```python
-import pyarrow as pa
-import pyarrow.dataset as ds
-import pyarrow.parquet as pq
-
-table = pa.Table.from_pylist(records)
-
-ds.write_dataset(
-    table,
-    base_dir="events",
-    format="parquet",
-    partitioning=["event_date", "event_hour"],
-    basename_template="part-{i}.parquet",
-    existing_data_behavior="overwrite_or_ignore",
-)
-```
-
-Avoid writing directly to the final directory. Write to a run-specific staging directory first:
+1. Group by `event_id`.
+2. If all hashes match, retain one record.
+3. If hashes differ, quarantine all conflicting records.
+4. Select the deterministic winner using:
 
 ```text
-_events_staging/
-  run_id=20260822T130000Z/
-    event_date=2026-08-22/
-      event_hour=13/
-        part-00000.parquet
+lowest ingest_time,
+then lowest source,
+then lowest payload_hash
 ```
 
-After successful validation, rename staging files atomically into the final dataset.
+Across runs and hourly windows, consult a durable deduplication index containing:
 
-## Checkpoint and Recovery
-
-Store one row per hourly run:
-
-```sql
-CREATE TABLE checkpoints (
-    ingest_date DATE NOT NULL,
-    ingest_hour INTEGER NOT NULL,
-    run_id VARCHAR NOT NULL,
-    status VARCHAR NOT NULL, -- RUNNING, COMMITTED, FAILED
-    input_manifest_json VARCHAR NOT NULL,
-    output_manifest_json VARCHAR,
-    row_count BIGINT,
-    started_at TIMESTAMP NOT NULL,
-    committed_at TIMESTAMP,
-    PRIMARY KEY (ingest_date, ingest_hour)
-);
+```text
+event_id
+payload_hash
+event_time
+first_seen_at
+output_partition
+status
 ```
 
-The input manifest contains source paths and hashes. A run is skipped only when:
+Rules:
 
-- The checkpoint status is `COMMITTED`.
-- The current input manifest matches the stored manifest.
-- All output files listed in the output manifest still exist.
+- Existing `event_id` with the same hash: skip as a duplicate.
+- Existing `event_id` with a different hash: quarantine as a conflict.
+- New `event_id`: insert into the dedup index as part of the commit transaction.
 
-### Commit protocol
+The dedup index must be retained for the maximum possible replay and late-arrival period, or indefinitely if event IDs are globally reusable.
 
-1. Acquire an hourly lock.
-2. Build and persist the input manifest.
-3. Mark checkpoint `RUNNING`.
-4. Read JSONL and validate records.
-5. Deduplicate against the durable index.
-6. Write Parquet to staging.
-7. Validate staged Parquet by reopening it and checking schema and row count.
-8. Atomically rename staged files to their final paths.
-9. In one database transaction:
-   - Insert IDs into `processed_events`.
-   - Store the output manifest.
-   - Mark the checkpoint `COMMITTED`.
-10. Release the lock.
+## 5. Output Dataset
 
-### Crash recovery
+Write Parquet using a stable physical schema:
 
-On startup:
-
-- Find `RUNNING` checkpoints.
-- Verify staged and final files against their manifests.
-- If files are complete, finish the metadata transaction.
-- If files are incomplete, remove only that run’s staging directory and retry.
-- Never mark a run complete based solely on the presence of a directory.
-
-Use deterministic output names based on `run_id` or file hash so retries do not create ambiguous files.
-
-## Processing Skeleton
-
-```python
-def process_hour(ingest_date, ingest_hour):
-    lock_hour(ingest_date, ingest_hour)
-
-    manifest = discover_inputs(ingest_date, ingest_hour)
-    checkpoint = load_checkpoint(ingest_date, ingest_hour)
-
-    if checkpoint and checkpoint.is_committed(manifest):
-        return checkpoint.output_manifest
-
-    run_id = new_run_id()
-    save_checkpoint_running(ingest_date, ingest_hour, run_id, manifest)
-
-    valid = []
-    invalid = []
-
-    for source in manifest.sources:
-        for line_number, raw_line in enumerate(read_jsonl(source.path), 1):
-            try:
-                event = Event.model_validate_json(raw_line)
-                valid.append(normalize(event, source, line_number))
-            except Exception as exc:
-                invalid.append(quarantine_row(source, line_number, raw_line, exc))
-
-    write_quarantine(invalid)
-
-    deduped = remove_intra_batch_duplicates(valid)
-    deduped = remove_committed_ids(deduped)
-
-    staged = write_staged_parquet(deduped, run_id)
-    validate_parquet(staged)
-
-    output_manifest = atomic_commit_files(staged)
-
-    with db.transaction():
-        insert_processed_event_ids(deduped, output_manifest)
-        mark_checkpoint_committed(
-            ingest_date,
-            ingest_hour,
-            run_id,
-            output_manifest,
-            len(deduped),
-        )
-
-    return output_manifest
+```text
+event_id                 string
+event_type               string
+event_time               timestamp[us, UTC]
+ingest_time              timestamp[us, UTC]
+source                   string
+schema_version           int32
+payload                  struct or normalized columns
+payload_json             string
+payload_hash             string
+processing_window_start  timestamp[us, UTC]
+processing_run_id        string
 ```
 
-## Operational Checks
+Partition by event time:
+
+```text
+event_date=YYYY-MM-DD/event_hour=HH
+```
+
+This supports hourly reads and avoids partitioning by high-cardinality fields such as `event_id`.
+
+Recommended file properties:
+
+- Snappy compression
+- Row groups sized around 64-256 MB
+- Stable column ordering
+- One or more Parquet objects per partition
+- Explicit Arrow schema, never inferred independently per batch
+
+For highly variable payloads, use both:
+
+- typed columns for frequently queried fields
+- `payload_json` for the complete normalized payload
+
+## 6. Exactly-Once Output Commit
+
+Use immutable run staging and an atomic commit protocol.
+
+For each run:
+
+1. Create a unique `run_id`.
+2. Write validated output to a staging location.
+3. Write quarantine records separately.
+4. Validate row counts, schema, and checksums.
+5. Write a manifest containing:
+   - run ID
+   - logical window
+   - input snapshot
+   - output object identifiers
+   - row counts
+   - duplicate counts
+   - quarantine counts
+   - schema version
+   - content checksums
+6. Commit the checkpoint only after output and manifest publication succeeds.
+
+A retry first checks the checkpoint:
+
+- `COMMITTED`: return success without writing again.
+- `RUNNING`: resume or mark stale and retry safely.
+- `FAILED`: retry using the same input snapshot.
+- absent: create a new run.
+
+Output publication must be idempotent. The manifest is the authoritative list of active output objects. Consumers should read committed manifests rather than partially written staging data.
+
+## 7. Late Data and Corrections
+
+Late events should be processed by a correction run associated with the original event-time hour.
+
+Two acceptable approaches:
+
+### Preferred: Versioned Partition Replacement
+
+For an affected partition:
+
+1. Read the currently committed partition.
+2. Merge late events.
+3. Deduplicate against the durable index.
+4. Write a new partition version.
+5. Publish a new manifest superseding the previous version.
+6. Mark the old version inactive.
+
+Readers use the latest committed partition version.
+
+### Alternative: Append-Only Delta Objects
+
+Write late events as additional Parquet objects and require readers to deduplicate by `event_id`. This is simpler operationally but moves complexity to every consumer.
+
+Use versioned replacement when downstream users expect a clean, unique dataset.
+
+## 8. Checkpoint State
+
+Checkpoint records should include:
+
+```text
+window_start
+window_end
+run_id
+status
+input_snapshot
+watermark
+started_at
+completed_at
+output_manifest_id
+valid_row_count
+duplicate_row_count
+conflict_count
+quarantine_row_count
+error_message
+```
+
+State transitions:
+
+```text
+NEW -> RUNNING -> VALIDATED -> COMMITTED
+                         -> FAILED
+```
+
+Only `COMMITTED` is terminal success.
+
+Checkpoint updates must be transactional. A run cannot become `COMMITTED` unless:
+
+- all expected input objects were processed
+- Parquet schema validation passed
+- output checksums were recorded
+- the output manifest was published
+- deduplication state was persisted
+
+## 9. Recovery Behavior
+
+The runner must tolerate:
+
+- process termination during parsing
+- termination during Parquet writing
+- duplicate scheduler invocations
+- partial staging output
+- checkpoint database failure
+- input object becoming unavailable
+- malformed records
+- late events
+- conflicting duplicate IDs
+
+Recovery procedure:
+
+1. Acquire a lease for the logical window.
+2. Inspect checkpoint state.
+3. Reuse the recorded input snapshot.
+4. Ignore or clean uncommitted staging data using the run ID.
+5. Resume from the last completed batch if batch-level progress is recorded.
+6. Rebuild staged output if progress metadata is unavailable.
+7. Publish output and checkpoint atomically.
+8. Release the lease.
+
+Batch-level progress can include:
+
+```text
+run_id
+input_object_id
+byte_offset
+batch_number
+batch_checksum
+status
+```
+
+The pipeline must not rely on process memory for recovery.
+
+## 10. Metrics and Alerts
 
 Emit metrics for:
 
-- Files discovered and processed
-- Input lines
-- Valid records
-- Invalid records
-- Duplicate records
-- Output rows
-- Processing duration
-- Input and output byte counts
-- Recovery attempts
-- Checkpoint age
+- input objects and bytes
+- parsed records
+- valid records
+- malformed records
+- schema failures
+- unsupported versions
+- duplicates
+- duplicate conflicts
+- late events
+- output rows and bytes
+- processing duration
+- checkpoint age
+- retry count
+- watermark lag
 
 Alert on:
 
-- Missing hourly input
-- Validation rate below a threshold
-- Duplicate rate spikes
-- Failed or stale `RUNNING` checkpoints
-- Output row count mismatch
-- Corrupt or missing Parquet files
+- missing expected input
+- repeated checkpoint failures
+- conflict rate above threshold
+- quarantine rate above threshold
+- schema drift
+- output row count unexpectedly zero
+- processing time approaching the hourly schedule interval
+- stalled windows
 
-## Tests
+## 11. Verification Strategy
 
-### Unit tests
+### Unit Tests
 
-- Valid event parses successfully.
-- Missing required fields fail validation.
-- Unknown fields fail validation.
-- Invalid timestamp and schema version fail validation.
-- Timestamp normalization always produces UTC.
-- Deterministic fingerprint is stable.
-- Duplicate IDs within a batch are removed.
-- IDs already in `processed_events` are removed.
-- Partition columns are derived correctly.
-- Invalid rows contain source and line metadata.
+Test:
 
-### Integration tests
+- valid event acceptance
+- missing and invalid fields
+- malformed JSON
+- unsupported schema versions
+- timestamp normalization
+- canonical hashing
+- same-ID identical duplicates
+- same-ID conflicting duplicates
+- deterministic winner selection
+- partition derivation
+- late-event classification
+- schema-to-Arrow conversion
 
-Use a temporary directory and temporary DuckDB database:
+### Integration Tests
 
-1. Process one hourly input.
-2. Verify Parquet schema and partition paths.
-3. Run the same hour again and verify no additional rows.
-4. Add a duplicate event in a later hour and verify it is ignored.
-5. Add a malformed line and verify quarantine output.
-6. Simulate a crash after Parquet rename but before checkpoint commit.
-7. Restart and verify recovery produces one committed result.
-8. Simulate incomplete staging output and verify retry behavior.
-9. Change the input manifest and verify the hour is reprocessed or rejected according to policy.
+Run against a temporary object store or local filesystem and checkpoint database.
 
-### Property tests
+Verify:
 
-With Hypothesis, verify that:
+- one hourly input produces the expected Parquet partition
+- Parquet schema is stable across batches
+- rerunning a committed hour produces no duplicate output
+- a failed run can resume
+- process termination before commit leaves no visible partial output
+- duplicate scheduler executions serialize correctly
+- quarantine output contains original records and reasons
+- late events replace or correctly extend the target partition
+- conflicting IDs never enter the clean dataset
 
-- Processing is idempotent.
-- Reordering input lines does not change the final event set.
-- Repeated retries never increase the committed count for the same `event_id`.
-- Partition assignment depends only on event data, not input order.
+### Property Tests
 
-This design avoids Apache Spark while providing strict validation, durable deduplication, partitioned Parquet storage, restartable hourly execution, and testable recovery behavior.
+Generate arbitrary valid and invalid records and verify:
+
+- deduplication is idempotent
+- processing the same input twice yields the same logical dataset
+- output row uniqueness holds for `event_id`
+- partition assignment is deterministic
+- record ordering does not change the selected winner
+
+### End-to-End Acceptance Criteria
+
+The design is acceptable when:
+
+1. Every committed output row conforms to the declared schema.
+2. No clean output contains two records with the same `event_id`.
+3. Conflicting duplicate IDs are quarantined.
+4. A retry after any pre-commit failure produces the same result as a first successful run.
+5. A committed run is never published twice.
+6. Late data is visible in the correct event-time partition.
+7. Consumers can discover complete output exclusively through committed manifests.
+8. All invalid input remains traceable through quarantine records and run metadata.

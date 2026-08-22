@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0-rc.10 - 2026-08-22
+
+- Added direct Responses API A/B execution with one response object per sample and persisted usage and elapsed-time evidence.
+- Disabled plugin discovery and provider-internal retries in the Codex CLI fallback to reduce hidden evaluation variance.
+- Changed aggregate efficiency gates to compare total token and latency cost rather than averaging per-case ratios.
+- Tightened semantic marker coverage for equivalent configuration, inventory, parser-scope, authentication-scope, and test evidence.
+- Shortened the ordinary Skill while preserving objective, constraint, enforcement, and concise-completion rules.
+- Published a 30-pair `gpt-5.6-sol` run with full objective/constraint retention and aggregate token cost reduced by 61.1%.
+
 ## 0.4.0-rc.9 - 2026-08-21
 
 - Reduced the ordinary Skill entrypoint to the decision rules that materially affect constraint handling.

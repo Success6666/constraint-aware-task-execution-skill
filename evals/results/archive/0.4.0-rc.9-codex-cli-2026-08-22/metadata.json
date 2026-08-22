@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "experiment": "external-endpoint-ab-2026-08-22",
+  "generated_at": "2026-08-22T03:50:00+00:00",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "base_url": "https://gpt.eacase.de5.net/v1",
+  "variants": [
+    "baseline",
+    "skill"
+  ],
+  "cases": {
+    "total": 30,
+    "english": 15,
+    "chinese": 15
+  },
+  "completed_rows": 60,
+  "failed_rows": 0,
+  "missing_rows": 0,
+  "raw_response_root": "evals/results/raw",
+  "aggregate_results": [
+    "evals/results/scores.json",
+    "evals/results/summary.json",
+    "evals/results/REPORT.md"
+  ],
+  "credential_handling": "temporary local authentication file; no API key stored in repository"
+}

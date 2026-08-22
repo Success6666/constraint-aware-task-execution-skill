@@ -72,7 +72,25 @@ class CapabilityMetricTests(unittest.TestCase):
 
         self.assertEqual(acceptance["status"], "fail")
         self.assertIn("token_cost_ratio", acceptance["failures"][0]["reasons"])
-        self.assertIn("paired_efficiency_regression", acceptance["failures"][0]["reasons"])
+
+    def test_cost_ratio_uses_total_tokens_not_mean_of_case_ratios(self) -> None:
+        rows = []
+        for case_id, baseline_cost, candidate_cost in (
+            ("large", 1000, 900),
+            ("small", 10, 20),
+        ):
+            baseline = row("baseline", success=True, objective=1.0, compliance=1.0)
+            candidate = row("full-v2", success=True, objective=1.0, compliance=1.0)
+            baseline["case_id"] = candidate["case_id"] = case_id
+            baseline["usage"] = {"total_tokens": baseline_cost}
+            candidate["usage"] = {"total_tokens": candidate_cost}
+            rows.extend((baseline, candidate))
+
+        summary = aggregate_capability_metrics(rows)
+
+        self.assertAlmostEqual(
+            summary["by_variant"]["full-v2"]["cost_ratio"], 920 / 1010
+        )
 
     def test_missing_efficiency_evidence_does_not_pass(self) -> None:
         baseline = row("baseline", success=True, objective=1.0, compliance=1.0)

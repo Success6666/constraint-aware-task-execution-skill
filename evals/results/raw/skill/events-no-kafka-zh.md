@@ -1,348 +1,235 @@
-下面是一套不依赖 Kafka 的订单事件处理服务设计，核心采用 **PostgreSQL 持久化队列 + Worker**。适合中等吞吐、要求可靠投递和可追踪性的订单系统；后续可将队列表替换为 RabbitMQ、SQS 等消息系统，而不改变消费协议。
+# 订单事件处理服务设计
 
-## 1. 总体架构
+## 1. 目标与边界
 
-```text
-订单服务
-   │
-   ├─ 本地事务写入 orders
-   └─ 同事务写入 outbox_events
-                  │
-          Outbox Relay
-                  │
-                  ▼
-          event_queue（持久化队列）
-                  │
-          多个 Consumer Worker
-             │          │
-             │          ├─ 成功：标记完成
-             │          ├─ 可重试失败：延期重试
-             │          └─ 不可恢复/超限：写入 dead_letter_events
-             │
-        processed_events（幂等记录）
-```
+服务负责接收订单领域事件、可靠持久化、异步投递、失败重试、死信管理和幂等消费。采用 **PostgreSQL 持久化队列**，不依赖 Kafka。
 
-推荐使用 **Transactional Outbox**，避免“订单已提交但事件未发布”的双写问题。
-
-## 2. 核心数据表
-
-### outbox_events
-
-```sql
-CREATE TABLE outbox_events (
-    id             UUID PRIMARY KEY,
-    aggregate_type TEXT NOT NULL,
-    aggregate_id   TEXT NOT NULL,
-    event_type     TEXT NOT NULL,
-    payload        JSONB NOT NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    published_at   TIMESTAMPTZ
-);
-
-CREATE INDEX idx_outbox_unpublished
-ON outbox_events (created_at)
-WHERE published_at IS NULL;
-```
-
-订单创建、支付成功等业务事务中，同时插入订单数据和 Outbox 事件。
-
-### event_queue
-
-```sql
-CREATE TABLE event_queue (
-    id              UUID PRIMARY KEY,
-    event_id        UUID NOT NULL UNIQUE,
-    event_type      TEXT NOT NULL,
-    payload         JSONB NOT NULL,
-
-    status          TEXT NOT NULL DEFAULT 'pending',
-    available_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    attempt_count   INT NOT NULL DEFAULT 0,
-    locked_until    TIMESTAMPTZ,
-    locked_by       TEXT,
-
-    last_error      TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    processed_at    TIMESTAMPTZ
-);
-
-CREATE INDEX idx_queue_ready
-ON event_queue (available_at, created_at)
-WHERE status = 'pending';
-```
-
-状态建议：
-
-- `pending`
-- `processing`
-- `succeeded`
-- `dead`
-
-### processed_events
-
-用于消费端幂等。
-
-```sql
-CREATE TABLE processed_events (
-    consumer_name TEXT NOT NULL,
-    event_id      UUID NOT NULL,
-    processed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    result_hash   TEXT,
-    PRIMARY KEY (consumer_name, event_id)
-);
-```
-
-如果同一个事件被多个业务消费者处理，应按 `consumer_name + event_id` 去重，而不是只按 `event_id`。
-
-### dead_letter_events
-
-```sql
-CREATE TABLE dead_letter_events (
-    id             UUID PRIMARY KEY,
-    event_id       UUID NOT NULL,
-    event_type     TEXT NOT NULL,
-    payload        JSONB NOT NULL,
-    attempt_count  INT NOT NULL,
-    error_message  TEXT,
-    failed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    replayed_at    TIMESTAMPTZ
-);
-```
-
-## 3. 投递流程
-
-### Outbox Relay
-
-Relay 周期性读取未发布事件：
-
-```sql
-SELECT id
-FROM outbox_events
-WHERE published_at IS NULL
-ORDER BY created_at
-LIMIT 100
-FOR UPDATE SKIP LOCKED;
-```
-
-在同一事务中插入 `event_queue`，然后标记 `published_at`。插入使用 `ON CONFLICT (event_id) DO NOTHING`，因此 Relay 重启不会产生重复队列消息。
-
-Relay 可以每 200～500 ms 执行一次，也可以使用 PostgreSQL `LISTEN/NOTIFY` 做低延迟唤醒，但 `NOTIFY` 只作为提示，不能作为可靠消息本身。
-
-### Worker 获取任务
-
-```sql
-WITH jobs AS (
-    SELECT id
-    FROM event_queue
-    WHERE status = 'pending'
-      AND available_at <= now()
-    ORDER BY created_at
-    LIMIT 20
-    FOR UPDATE SKIP LOCKED
-)
-UPDATE event_queue q
-SET status = 'processing',
-    locked_by = :worker_id,
-    locked_until = now() + interval '60 seconds',
-    attempt_count = attempt_count + 1
-FROM jobs
-WHERE q.id = jobs.id
-RETURNING q.*;
-```
-
-这样可以支持多个 Worker 并发消费，避免同一任务被同时领取。
-
-### 崩溃恢复
-
-定时任务将超时任务重新放回队列：
-
-```sql
-UPDATE event_queue
-SET status = 'pending',
-    locked_by = NULL,
-    locked_until = NULL
-WHERE status = 'processing'
-  AND locked_until < now();
-```
-
-`locked_until` 应覆盖正常处理时间，并配合 heartbeat 延长租约。
-
-## 4. 重试和死信策略
-
-将错误分为两类：
-
-- **可重试**：数据库暂时不可用、网络超时、下游 5xx、限流。
-- **不可重试**：数据校验失败、未知事件类型、业务状态非法。
-
-指数退避示例：
-
-```text
-delay = min(60s * 2^(attempt_count - 1), 1h) + random(0, 30s)
-```
-
-建议配置：
-
-```yaml
-retry:
-  max_attempts: 8
-  initial_delay: 60s
-  max_delay: 1h
-```
-
-处理规则：
-
-1. 成功：`status = succeeded`，写入 `processed_events`。
-2. 可重试且未超过次数：更新 `available_at`，状态改回 `pending`。
-3. 超过最大次数或不可重试：事务内写入 `dead_letter_events`，队列状态改为 `dead`。
-4. 死信支持人工修复后 replay，replay 时生成新的队列记录或重置原记录，并保留审计信息。
-
-## 5. 幂等消费
-
-消费业务逻辑和幂等记录必须在同一个数据库事务中完成：
-
-```sql
-BEGIN;
-
-INSERT INTO processed_events (consumer_name, event_id, result_hash)
-VALUES (:consumer, :event_id, :hash)
-ON CONFLICT DO NOTHING;
-```
-
-如果插入影响行数为 0，说明该消费者已处理过，直接提交并将队列标记成功。
-
-首次处理时：
-
-```sql
--- 业务更新
-UPDATE inventory
-SET reserved = reserved + :quantity
-WHERE order_id = :order_id;
-
--- 幂等记录已在本事务中插入
-COMMIT;
-```
-
-如果业务更新失败，整个事务回滚，幂等记录不会残留，任务可以安全重试。
-
-对于调用外部系统的场景，仅依赖本地幂等表不够，应：
-
-- 使用下游支持的幂等键，例如 `event_id`；
-- 保存请求状态和响应；
-- 对超时采用查询确认，而不是盲目重复扣款或发货。
-
-## 6. 事件契约
-
-事件至少包含：
+建议事件至少包含：
 
 ```json
 {
   "event_id": "uuid",
   "event_type": "OrderPaid",
   "aggregate_id": "order-123",
-  "occurred_at": "2026-08-22T10:00:00Z",
-  "schema_version": 1,
-  "trace_id": "trace-456",
-  "payload": {}
+  "aggregate_version": 7,
+  "occurred_at": "2025-01-01T10:00:00Z",
+  "payload": {},
+  "trace_id": "..."
 }
 ```
 
-要求：
-
-- `event_id` 全局唯一；
-- `schema_version` 用于向后兼容；
-- 消费者必须忽略未知字段；
-- 事件不可修改，只能追加新版本。
-
-## 7. 指标和可观测性
-
-### 指标
-
-- `events_published_total`
-- `events_consumed_total{consumer,event_type,result}`
-- `events_retry_total{reason}`
-- `events_dead_total{event_type}`
-- `queue_depth{status}`
-- `queue_oldest_age_seconds`
-- `event_processing_duration_seconds`
-- `event_attempts`
-- `outbox_unpublished_count`
-- `lock_timeout_total`
-
-重点告警：
-
-- 队列最老消息年龄持续超过阈值；
-- 死信数量突增；
-- Outbox 未发布数量持续增长；
-- 消费成功率下降；
-- 重试比例异常升高。
-
-### 日志和链路
-
-每条日志包含：
+## 2. 核心架构
 
 ```text
-event_id, event_type, order_id, consumer_name,
-attempt_count, trace_id, worker_id
+订单服务
+   │ 本地事务写入订单 + outbox_event
+   ▼
+PostgreSQL
+   │ Relay/Worker 使用 FOR UPDATE SKIP LOCKED 抢占
+   ▼
+事件处理器
+   ├─ 成功：标记完成
+   ├─ 临时失败：按退避策略重试
+   └─ 永久失败/超限：写入 dead_letter
 ```
 
-使用 OpenTelemetry 将订单请求、Outbox Relay、Worker 消费串联起来。
+### 事务性发布
 
-## 8. API 和运维能力
+订单状态变更与 `outbox_event` 必须在同一个数据库事务中提交，避免“订单已更新但事件丢失”。事件处理服务扫描 outbox，或直接由统一 worker 投递。
 
-建议提供内部管理接口：
+若订单服务与处理服务共用数据库，可直接消费 outbox；若跨库，增加 relay，将 outbox 复制到处理服务自己的队列表。复制过程通过 `event_id` 去重。
+
+## 3. 数据模型
+
+### `event_queue`
+
+```sql
+CREATE TABLE event_queue (
+  id              BIGSERIAL PRIMARY KEY,
+  event_id        UUID NOT NULL UNIQUE,
+  event_type      TEXT NOT NULL,
+  aggregate_id    TEXT NOT NULL,
+  aggregate_version BIGINT,
+  payload         JSONB NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'READY',
+  attempts        INT NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked_until    TIMESTAMPTZ,
+  last_error      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX idx_event_queue_ready
+ON event_queue (next_attempt_at, id)
+WHERE status = 'READY';
+```
+
+### `dead_letter`
+
+保存原始事件、最终错误、尝试次数、首次失败时间、最后失败时间、处理器版本和人工备注。`event_id` 唯一，防止重复转入死信。
+
+### `consumer_inbox`
+
+```sql
+CREATE TABLE consumer_inbox (
+  consumer_name TEXT NOT NULL,
+  event_id      UUID NOT NULL,
+  processed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (consumer_name, event_id)
+);
+```
+
+用于每个消费者独立实现幂等。
+
+## 4. 投递与并发控制
+
+worker 每次批量领取事件：
+
+```sql
+UPDATE event_queue
+SET status = 'PROCESSING',
+    locked_until = now() + interval '2 minutes',
+    attempts = attempts + 1
+WHERE id IN (
+  SELECT id
+  FROM event_queue
+  WHERE status = 'READY'
+    AND next_attempt_at <= now()
+  ORDER BY id
+  FOR UPDATE SKIP LOCKED
+  LIMIT 100
+)
+RETURNING *;
+```
+
+处理完成后更新为 `DONE`。worker 崩溃或超时后，定时恢复任务将 `locked_until < now()` 的 `PROCESSING` 事件改回 `READY`。
+
+注意：数据库队列只能提供 **至少一次投递**，不能依赖“只处理一次”；正确性必须由消费者幂等保证。
+
+## 5. 幂等消费
+
+每个消费者处理事件时，在同一个本地事务中完成：
+
+1. 插入 `consumer_inbox(consumer_name, event_id)`。
+2. 若主键冲突，说明已处理，直接返回成功。
+3. 执行业务更新，并提交事务。
+4. 事务提交成功后，队列事件才标记为 `DONE`。
+
+对于向外部系统发送请求的消费者，使用业务幂等键（通常为 `event_id`），并在本地记录发送状态；外部系统也应支持幂等键或状态查询，避免业务提交成功但确认响应丢失时重复产生副作用。
+
+同一订单需要顺序处理时，按 `aggregate_id` 做分片或使用租约锁；更简单的实现是消费者在事务中校验 `aggregate_version`，拒绝过期事件并记录异常。
+
+## 6. 重试与死信
+
+错误分为两类：
+
+- **临时错误**：数据库连接失败、超时、限流、网络错误，自动重试。
+- **永久错误**：数据格式错误、业务规则不满足、未知事件类型，直接进入死信；也可按配置重试少量次数。
+
+建议策略：
 
 ```text
-GET  /internal/events/{event_id}
-GET  /internal/queue/stats
-GET  /internal/dead-letters
-POST /internal/dead-letters/{id}/replay
-POST /internal/events/{id}/retry
+第 1 次：10 秒
+第 2 次：30 秒
+第 3 次：2 分钟
+第 4 次：10 分钟
+第 5 次：1 小时
 ```
 
-Replay 需要权限控制、操作人、原因和审计记录，并限制批量重放速率。
+加入随机抖动，避免大量事件同时重试。超过最大次数后：
 
-## 9. 测试策略
+1. 在事务中写入 `dead_letter`。
+2. 将 `event_queue.status` 设为 `DEAD`。
+3. 发送告警。
+
+死信管理必须支持查询、查看错误上下文、修复后重新入队和手动确认丢弃；重新入队应保留原 `event_id`，依靠幂等机制避免重复副作用，或生成新的投递记录并关联原事件。
+
+## 7. 可靠性细节
+
+- 队列写入使用唯一 `event_id`，生产者重试不会产生重复事件。
+- 处理器版本、配置版本和错误堆栈写入日志/死信。
+- 大 payload 不放入日志，必要时放对象存储并在事件中保存引用。
+- 设置队列保留期限、死信保留期限和归档策略。
+- worker 数量、批量大小、并发度可配置，并受数据库连接池限制。
+- 对单个异常事件设置熔断或限流，防止持续失败拖垮消费者。
+- 事件 schema 使用版本字段，消费者向后兼容；不兼容变更发布新事件类型或版本。
+
+## 8. 指标、日志与告警
+
+指标至少包括：
+
+- `queue_ready_count`：待处理数量
+- `queue_oldest_age_seconds`：最老事件年龄
+- `event_process_total{event_type,status}`
+- `event_process_duration_seconds`
+- `event_retry_total{reason}`
+- `event_dead_total{event_type,reason}`
+- `event_inbox_duplicate_total`
+- `worker_claim_total`
+- `worker_lock_timeout_total`
+- `outbox_publish_lag_seconds`
+
+告警条件：
+
+- 待处理数量或最老事件年龄持续超阈值
+- 死信新增或增长异常
+- 重试率、处理错误率、处理延迟异常
+- 锁超时、数据库连接池耗尽
+- outbox 长时间未发布
+
+日志使用结构化格式，包含 `event_id`、`event_type`、`aggregate_id`、`attempts`、`consumer_name`、`trace_id` 和错误分类。禁止记录敏感订单数据。
+
+## 9. API 与运维接口
+
+提供内部接口：
+
+- `POST /events`：写入事件，按 `event_id` 幂等。
+- `GET /events/{event_id}`：查询状态和尝试信息。
+- `GET /dead-letters`：分页查询死信。
+- `POST /dead-letters/{event_id}/requeue`：修复后重新入队。
+- `POST /dead-letters/{event_id}/discard`：人工确认丢弃。
+- `GET /health/live`、`GET /health/ready`：进程和数据库健康检查。
+
+所有管理接口需要鉴权、审计和权限隔离。
+
+## 10. 测试方案
 
 ### 单元测试
 
-覆盖：
-
-- 重试退避计算；
-- 可重试/不可重试错误分类；
-- 事件 schema 校验；
-- 幂等判断；
-- 最大重试次数；
-- 死信转换逻辑。
+- 退避时间和最大重试次数。
+- 临时错误与永久错误分类。
+- 事件 schema 校验和版本兼容。
+- 幂等键、重复事件和过期版本处理。
 
 ### 集成测试
 
-使用真实 PostgreSQL 容器验证：
+使用真实 PostgreSQL 验证：
 
-- 订单事务和 Outbox 同步提交；
-- Relay 重启不会重复插入；
-- 多 Worker `SKIP LOCKED` 不重复领取；
-- Worker 崩溃后任务自动恢复；
-- 业务事务失败时幂等记录回滚；
-- 并发重复事件只执行一次；
-- 死信 replay 后可再次处理。
+- 订单更新与 outbox 同事务提交/回滚。
+- 多 worker 使用 `SKIP LOCKED` 不重复领取。
+- worker 崩溃后锁超时恢复。
+- 成功、重试、死信和重新入队状态转换。
+- `consumer_inbox` 与业务更新原子提交。
+- 并发重复事件只产生一次业务结果。
 
-### 端到端测试
+### 故障与压力测试
 
-验证完整链路：
+- 数据库短暂不可用、处理器超时、外部服务限流。
+- 处理成功但响应丢失，确认幂等无重复副作用。
+- 大量事件积压、重试风暴和死信激增。
+- 测量吞吐量、端到端延迟、恢复时间和数据库资源占用。
+
+## 11. 推荐状态机
 
 ```text
-创建订单
- → 生成 OrderCreated
- → Relay 入队
- → Consumer 处理
- → 业务状态更新
- → 指标、日志和链路可见
+READY → PROCESSING → DONE
+  ↑         │
+  └─────────┘  临时失败且未超限
+
+PROCESSING → DEAD  永久失败或超过最大重试次数
+READY/PROCESSING → READY  锁超时恢复
+DEAD → READY  人工重新入队
 ```
 
-同时测试下游超时、数据库断开、进程重启、重复投递和毒性消息。
-
-## 10. 关键取舍
-
-PostgreSQL 队列的优点是部署简单、事务一致性强、易于审计和回放；缺点是吞吐受数据库容量和锁竞争限制。可以通过分区表、批量领取、合理索引和按事件类型拆分消费者改善性能。
-
-当吞吐或跨团队订阅规模显著增长时，可把 `event_queue` 替换为其他持久化消息系统，但保留 Outbox、幂等表、重试策略、死信协议和指标定义。
+该方案以数据库事务保证事件不丢失，以租约和至少一次投递保证可恢复，以 inbox、业务唯一约束和外部幂等键保证重复消费安全，并通过死信和指标支持生产运维。

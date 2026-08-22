@@ -1,190 +1,226 @@
-## Architecture
+**Design**
 
-Expose a small service:
-
-```text
-fetchMetadata(url, options) -> {
-  finalUrl,
-  status,
-  contentType,
-  title,
-  description,
-  fetchedAt,
-  cache: "hit" | "miss" | "stale"
-}
-```
-
-Components:
-
-- URL parser and canonicalizer
-- SSRF policy checker
-- DNS resolver
-- HTTP client with a pinned-IP dialer
-- redirect handler
-- bounded metadata parser
-- TTL cache
-- metrics, logs, and tracing
-
-## Request Flow
-
-1. Parse and canonicalize the URL.
-   - Permit only `http` and `https`.
-   - Reject credentials, malformed ports, fragments, and unsupported schemes.
-   - Normalize hostname casing, trailing dots, and IDNs.
-
-2. Check the cache using the canonical URL.
-
-3. Resolve the hostname explicitly.
-
-4. Reject the target if any resolved address is unsafe.
-
-5. Connect only to the approved resolved address.
-   - Use a custom dialer so the HTTP client cannot perform a second unrestricted DNS lookup.
-   - Preserve the original hostname for the `Host` header and TLS SNI.
-   - Apply the same policy to every address returned by DNS.
-
-6. Send the request with bounded headers and a strict response body limit.
-
-7. On redirect:
-   - Resolve the `Location` against the current URL.
-   - Re-run URL validation and DNS resolution.
-   - Re-run the IP policy check.
-   - Pin the new approved address before connecting.
-   - Enforce a small redirect limit, such as five.
-   - Do not automatically downgrade HTTPS to HTTP unless explicitly allowed.
-
-8. Parse only the required metadata (`title`, description, canonical URL, Open Graph fields) with a maximum document size and parser timeout.
-
-9. Store the result in the cache and emit observability data.
-
-## SSRF Policy
-
-Reject any resolved IP in:
-
-- IPv4 loopback: `127.0.0.0/8`
-- IPv4 private: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
-- IPv4 link-local: `169.254.0.0/16`
-- IPv4 unspecified/current network: `0.0.0.0/8`
-- IPv4 multicast/reserved ranges
-- IPv6 loopback: `::1/128`
-- IPv6 unspecified: `::/128`
-- IPv6 link-local: `fe80::/10`
-- IPv6 unique-local/private: `fc00::/7`
-- IPv6 multicast/reserved ranges
-- Explicit cloud metadata targets, including:
-  - `169.254.169.254`
-  - `169.254.170.2`
-  - `168.63.129.16`
-
-Also reject hostnames that resolve to any mixture of public and blocked addresses. A hostname is allowed only when every candidate address is approved.
-
-Do not rely on string checks such as “starts with `192.168`”. Parse IP literals structurally, including bracketed IPv6 URLs and IPv4-mapped IPv6 addresses.
-
-Conceptually:
+Build a single-purpose `UrlMetadataFetcher` service with this contract:
 
 ```text
-validateTarget(url):
-  scheme = validateScheme(url)
-  host = normalizeHostname(url.host)
-
-  if host is an IP literal:
-      addresses = [parseIP(host)]
-  else:
-      addresses = dns.resolveAll(host)
-
-  if addresses is empty:
-      reject("no DNS answers")
-
-  if any(isBlocked(address) for address in addresses):
-      reject("unsafe destination")
-
-  return connectUsingPinnedAddresses(url, addresses)
+fetch(url, options) -> Result<Metadata, FetchError>
 ```
 
-For DNS rebinding resistance, resolve immediately before each connection and bind the socket to the validated address. Never validate one lookup and then let a separate resolver choose the connection address.
-
-## Timeouts and Limits
-
-Use independent limits:
-
-- DNS timeout: 1–2 seconds
-- TCP connect timeout: 2–3 seconds
-- TLS handshake timeout: 3 seconds
-- Response-header timeout: 3–5 seconds
-- Total request deadline: 10 seconds
-- Maximum redirects: 5
-- Maximum response body: 1–2 MB
-- Maximum metadata field length
-- Maximum concurrent fetches per caller
-- Optional rate limit per hostname
-
-Cancel all operations when the request deadline expires.
-
-## Cache
-
-Use a bounded LRU or distributed cache keyed by:
+`Metadata` should contain:
 
 ```text
-sha256(canonicalUrl + fetchProfileVersion)
+canonicalUrl
+finalUrl
+title
+description
+imageUrl
+siteName
+contentType
+statusCode
+fetchedAt
+cacheStatus
 ```
 
-Store:
+Only `http` and `https` URLs are accepted. Reject credentials, fragments, unsupported ports, malformed URLs, and URLs exceeding a fixed length.
 
-- Parsed metadata
-- Final URL
-- HTTP status
-- Fetch timestamp
-- Expiration timestamp
-- Content hash
-- Error classification, where appropriate
+**Request policy**
 
-Recommended behavior:
+Use conservative defaults:
 
-- Fresh hit: return immediately.
-- Expired entry: fetch synchronously.
-- Optional stale-while-revalidate: return stale data while one background refresh runs.
-- Request coalescing: only one in-flight fetch per cache key.
-- Never cache credentials or full response bodies unless required.
+```text
+maxRedirects: 5
+connectTimeout: 2s
+tlsHandshakeTimeout: 3s
+responseHeaderTimeout: 5s
+totalTimeout: 10s
+maxResponseBytes: 2 MiB
+maxBodyReadTime: 5s
+allowedPorts: 80, 443
+```
 
-## Observability
+Do not send a request body. Set a fixed, identifiable `User-Agent`. Disable proxy environment variables and application-configured proxies unless explicitly controlled and separately validated.
 
-Emit structured events and metrics:
+**SSRF protection**
 
-- `fetch_started`, `fetch_completed`, `fetch_blocked`
-- Cache hit/miss/stale counts
-- DNS duration, connect duration, TLS duration, total duration
-- Redirect count and final scheme
-- Status-code distribution
-- Body-size-limit and timeout counts
-- SSRF rejection reason and resolved address family
+Validate the destination before every network connection.
 
-Redact query strings, authorization headers, cookies, and response contents. Include a correlation ID and a stable hostname hash where privacy matters.
+1. Parse the URL with a standards-compliant URL parser.
+2. Reject IP literals that are not globally routable.
+3. Resolve the hostname for both A and AAAA records.
+4. Reject the request if any resolved address is:
+   - Loopback
+   - Unspecified
+   - Link-local
+   - Multicast
+   - RFC1918 private IPv4
+   - RFC6598 shared address space
+   - IPv6 unique-local
+   - IPv4-mapped IPv6 containing a blocked IPv4 address
+   - Documentation, benchmarking, reserved, or otherwise non-global
+   - A known cloud metadata address
+5. Explicitly block common cloud metadata endpoints, including:
+   - `169.254.169.254`
+   - `169.254.170.2`
+   - `100.100.100.200`
+   - IPv6 link-local metadata targets such as `fe80::/10`
+6. Treat DNS resolution failure, empty answers, malformed addresses, and ambiguous address families as failures.
+7. Reject hostnames that resolve to any blocked address rather than selecting another answer.
 
-## Tests
+The resolver and dialer must be integrated. Resolve once, validate the returned addresses, and connect directly to one of those validated addresses. Do not allow the HTTP library to independently resolve the hostname afterward, which prevents DNS rebinding between validation and connection. Preserve the original hostname for TLS SNI and the HTTP `Host` header while dialing the approved IP.
 
-Test the policy independently with table-driven cases:
+For every redirect, repeat the complete URL parsing, hostname resolution, address classification, port validation, and connection pinning process. Do not trust redirect destinations merely because the initial host was trusted. Reject redirects to different schemes, credentials, unsupported ports, or blocked destinations. Relative redirects are resolved against the current URL and then validated normally.
 
-- Public IPv4 and IPv6: allowed
-- RFC1918, loopback, link-local, multicast, unspecified, and ULA: blocked
-- IPv4-mapped IPv6 private address: blocked
-- Decimal, hexadecimal, and unusual IPv4 representations: blocked
-- Explicit metadata IPs: blocked
-- Hostname with both public and private DNS answers: blocked
-- DNS failure and empty answers: classified correctly
+Disable automatic redirect handling in the underlying client and implement a redirect loop explicitly so each hop is observable and validated.
 
-Integration tests should use a controllable DNS resolver and local HTTP server to verify:
+**Caching**
 
-- Initial private target is blocked
-- Public URL redirecting to a private IP is blocked
-- Public URL redirecting to a hostname resolving privately is blocked
-- Redirect chains are revalidated at every hop
-- DNS rebinding between validation and connection cannot bypass the policy
-- HTTPS SNI and `Host` remain correct when dialing a pinned IP
-- Redirect loops and excessive redirects terminate
-- DNS, connect, TLS, header, total, and body-size timeouts work
-- Cache hits avoid network calls
-- Concurrent identical requests are coalesced
-- Malformed or oversized HTML is safely handled
-- Metrics and redaction behavior are correct
+Use a bounded cache keyed by the canonical URL:
 
-A useful security invariant is: **no socket is opened until the exact destination IP has been resolved, classified as public, and pinned for that connection.**
+```text
+scheme://lowercase-host[:effective-port]/normalized-path?query
+```
+
+Fragments are excluded. Preserve query parameter semantics unless the URL canonicalizer can normalize them without changing meaning.
+
+Cache entries should include:
+
+```text
+metadata
+storedAt
+expiresAt
+etag
+lastModified
+finalUrl
+```
+
+Use a configurable positive TTL, such as 10 minutes, and a short negative TTL, such as 30 seconds, for deterministic failures. Do not cache SSRF-policy failures for long periods because DNS and policy data can change.
+
+Prevent cache stampedes with per-key request coalescing. Enforce maximum entry count and total cache size. Never cache credentials, response bodies, or sensitive response headers.
+
+When an entry is stale, use conditional requests with `If-None-Match` and `If-Modified-Since` where available. On `304`, refresh the timestamp without reparsing the body. Optionally serve stale metadata for a short bounded window only for transient upstream failures, never for policy or validation failures.
+
+**Response handling**
+
+Accept only successful responses and selected redirects. Reject responses whose declared or observed body exceeds the limit. Stop reading immediately when the byte limit is reached.
+
+Parse metadata from HTML using a bounded parser. Prefer:
+
+1. `og:title`, `og:description`, `og:image`, `og:site_name`
+2. Twitter card equivalents
+3. `<title>` and relevant standard metadata
+
+Resolve relative metadata URLs against the final response URL. Normalize whitespace, cap field lengths, and ignore malformed markup. Do not execute JavaScript, load subresources, follow embedded URLs, or fetch the declared image.
+
+Validate the response `Content-Type` before parsing. Treat charset declarations defensively and normalize output to UTF-8. Do not log response bodies.
+
+**Error model**
+
+Expose stable error categories:
+
+```text
+invalid_url
+unsupported_scheme
+unsupported_port
+blocked_address
+dns_failure
+connection_timeout
+tls_failure
+redirect_limit
+redirect_rejected
+response_timeout
+body_too_large
+unsupported_content_type
+upstream_status
+parse_failure
+cache_failure
+```
+
+Include a safe human-readable message and internal diagnostic fields. Never include authorization headers, cookies, full query strings, response bodies, or sensitive DNS details in externally visible errors.
+
+**Observability**
+
+Emit structured logs containing:
+
+```text
+requestId
+urlHost
+scheme
+redirectCount
+cacheStatus
+resultCategory
+httpStatus
+durationMs
+bytesRead
+resolvedAddressFamily
+```
+
+Log the host and a redacted URL path; omit or hash query values. Never log full headers or bodies.
+
+Provide metrics for:
+
+```text
+fetch_requests_total{result,scheme,cache_status}
+fetch_duration_seconds{result}
+fetch_dns_duration_seconds
+fetch_connect_duration_seconds
+fetch_tls_duration_seconds
+fetch_bytes_read_total
+fetch_redirects_total
+fetch_blocked_targets_total{reason}
+fetch_cache_hits_total
+fetch_cache_misses_total
+fetch_inflight_requests
+```
+
+Create traces or spans for cache lookup, DNS resolution, connection, TLS, each redirect, response reading, and parsing. Record destination host and policy decision, but not sensitive URL components.
+
+**Test plan**
+
+Unit-test URL handling and address classification for:
+
+- IPv4 and IPv6 literals
+- IPv4-mapped IPv6
+- Decimal, hexadecimal, and unusual IP representations
+- `localhost` and equivalent hostnames
+- RFC1918, RFC6598, loopback, link-local, multicast, unspecified, ULA, reserved, and metadata ranges
+- Mixed DNS answers containing both public and blocked addresses
+- DNS failures and empty answers
+- Allowed public addresses on ports 80 and 443
+- Credentials, fragments, unsupported schemes, and unsupported ports
+
+Test the resolver/dialer integration to prove that:
+
+- Validation occurs after DNS resolution.
+- The dialer connects only to an approved resolved address.
+- The hostname remains available for TLS SNI and `Host`.
+- A DNS answer changing between calls cannot bypass validation.
+
+Test redirect behavior with an in-memory HTTP server:
+
+- Public to public redirect succeeds.
+- Redirect to a private IP is rejected.
+- Redirect to a hostname resolving privately is rejected.
+- Redirect through multiple hops revalidates every hop.
+- Redirect loops and redirect-limit exhaustion fail.
+- Scheme, credential, and port changes are enforced.
+
+Test timeouts, oversized bodies, malformed HTML, invalid encodings, unsupported content types, non-success statuses, conditional requests, `304` responses, stale fallback, cache expiry, cache eviction, and concurrent identical requests.
+
+Add integration tests using a controllable DNS resolver and custom dialer. Avoid relying solely on public DNS or external cloud metadata services.
+
+**Verification criteria**
+
+The implementation is complete only when tests demonstrate that no request can be made to a blocked address through:
+
+- Direct IP literals
+- Hostnames resolving to blocked addresses
+- Mixed A/AAAA results
+- IPv4-mapped IPv6
+- DNS rebinding
+- Relative redirects
+- Cross-host redirects
+- Alternate numeric IP spellings
+- Proxy configuration
+- Automatic client-side redirect handling
+
+Also verify that cache hits avoid network access, timeouts bound total work, response memory is capped, concurrent misses are coalesced, and observability data does not expose secrets or full query strings.

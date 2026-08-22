@@ -1,14 +1,26 @@
 {
-  "generated_at": "2026-08-22T03:32:02.027829+00:00",
+  "generated_at": "2026-08-22T08:18:36.073458+00:00",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "medium",
+  "verbosity": "low",
+  "transport": "responses",
   "results": [
     {
       "case_id": "fastapi-no-redis",
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "0def311e220593e8b6b071f6314c37e56ee9280ad1f8b1caaeec3c581e2819e1",
+      "signature": "f52b0035b1973c086951851bebeb6257b4a396a7923143c418d89585c0b6d766",
+      "usage": {
+        "input_tokens": 4492,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3950,
+        "reasoning_output_tokens": 1034,
+        "total_tokens": 8442
+      },
+      "timing": {
+        "elapsed_seconds": 78.632463
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -44,7 +56,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "57e750ec7f51b155e55e0ee142394eb2a3be230f18b26bfe603cac8ec510ebf6",
+      "signature": "bb5bb9e341685f50fdc9aee2f32de29ac7f5b79bb3125fce5e55da8dfbe66100",
+      "usage": {
+        "input_tokens": 283,
+        "cached_input_tokens": 0,
+        "output_tokens": 3424,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 3707
+      },
+      "timing": {
+        "elapsed_seconds": 70.180162
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -70,9 +92,9 @@
         "semantic_capability_status": "unsupported",
         "failure_gate_hits": 0,
         "constraint_component_hits": 0,
-        "constraint_echo": 0,
+        "constraint_echo": 1,
         "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
+        "overoptimization_score": 1.0
       }
     },
     {
@@ -80,7 +102,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "f86cdc17fb186d59c01da44457367f36c97824245304ba9dfb4adb6edf3d25ee",
+      "signature": "155135d7d89056c5d8b9741d04e3e71a22a8bb21576f875355e27072ca67a173",
+      "usage": {
+        "input_tokens": 4484,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2299,
+        "reasoning_output_tokens": 326,
+        "total_tokens": 6783
+      },
+      "timing": {
+        "elapsed_seconds": 232.986413
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -116,7 +148,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "9db403a8e849addd88d78cb0b11c8adb87c487a2971040073ab55200440a7308",
+      "signature": "40499af1d097c126bed8d1577576623d831aa242da53ddff086b485f9e8f6de9",
+      "usage": {
+        "input_tokens": 275,
+        "cached_input_tokens": 0,
+        "output_tokens": 2538,
+        "reasoning_output_tokens": 774,
+        "total_tokens": 2813
+      },
+      "timing": {
+        "elapsed_seconds": 49.208062
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -152,7 +194,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "e3f7d28ab3a0fe4e42277c971c85c1500e91fe68394cda43ad9d17a778d79368",
+      "signature": "3420518f9459093b6020fcca2bd97946a3ef6b876dea543355fb5314f085bd74",
+      "usage": {
+        "input_tokens": 4490,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1376,
+        "reasoning_output_tokens": 122,
+        "total_tokens": 5866
+      },
+      "timing": {
+        "elapsed_seconds": 28.164757
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -188,7 +240,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "9baeb5523f2c9b6d0abaa784d12fca3de7a8728d02b59c5f50875d48c3dfd17a",
+      "signature": "c018d35ce6c7dead695b3f32e518d9a9118656bc2496c4bd038d784d5faf51b6",
+      "usage": {
+        "input_tokens": 281,
+        "cached_input_tokens": 0,
+        "output_tokens": 1696,
+        "reasoning_output_tokens": 359,
+        "total_tokens": 1977
+      },
+      "timing": {
+        "elapsed_seconds": 38.826685
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -224,1303 +286,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "c7d02b3a48c2118579d26c7e3b30a3c092acff8437feb27d45d49a6c5d9208ff",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 4,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 4.0
-      }
-    },
-    {
-      "case_id": "inventory-no-orm",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "4c687fd48b7636c149f59d1e97488313c4eed773d7e1234a48c5351e8c3d54bd",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 1,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 1.0
-      }
-    },
-    {
-      "case_id": "qa-no-langchain",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "3f50ab527df4bb256ff894256b9a24ce49f4ebce3d660f98350a5edbbc9a2507",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "qa-no-langchain",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "40ab34b4311967969b9fbd4fafac1454d4f0276725e0e70b65055e355fb08b5c",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "etl-no-spark",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "3b1476e40d64c55a0c11da514d77ba66e951497aee456f1293c888b7f72bc306",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "etl-no-spark",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "fe359b14099f970ed6d2534e8cf46b05b553121b7fc42973cd6c669b66f81c67",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "webhook-fewer-dependencies",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "431e1d72bda7cd36000bb4f97b4f6a69ec0a643e7ced3e0f27000daad8c206e6",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 2,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 2.0
-      }
-    },
-    {
-      "case_id": "webhook-fewer-dependencies",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "55fe12ddb2f9406740977ca9d2c7f663a25d7a499bd88cbeee59da8b23803ce6",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 1,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 1.0
-      }
-    },
-    {
-      "case_id": "crawler-prefer-stdlib",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "ecf16995aa9382177b3270f9b85408e0590c2a3be721cf8445927160b7475b94",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "crawler-prefer-stdlib",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "84481ab8c7835631de88706295c49607c79d4e74300be47687feebc90daca77a",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "notifications-avoid-global-state",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "fdc7ec2e22883979c9edd761c4c85617e86dba174406426cdbee52b8e1392648",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 2,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 2.0
-      }
-    },
-    {
-      "case_id": "notifications-avoid-global-state",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "3437b125eacdd945a2713598c8dd823d86a6151de62dae1212ea98638eb2b3fb",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "upload-block-executables",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "a6c1f4a6b544fdbd33189167f26b1480e107936d8511a824dd9f624bd23b5a28",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "upload-block-executables",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "e61337cd86aed91a7b9f9bd24cec0f1cf753f7f92509d70bc01c7f8cacd294dd",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "url-fetcher-ssrf",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "2b9e2f7b40e08342f301ee00b4fca4673cb297d6c78cc06a787cee59a9ff1c9c",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "url-fetcher-ssrf",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "a97889e94bef40d031e8b20daeafbc67f6136a9b6fb2cbcba164910ff5372a59",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "license-ci-enforcement",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "99ad84d7739d9ea78705c0f486b4a2127c7a106bed5917d9845581580ce5cc2c",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "license-ci-enforcement",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "13b1c2d5f88bb5f8e05b5b6f74f29fdf2d15ddfcc20ff86ca73655ed33b97a90",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "json-output-only-en",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "f9bd5690b95e9127d5642b8440278eb528b5e2eb561808f463d1fa5360aa257e",
-      "score": {
-        "evaluation_pass": false,
-        "required_pass": false,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 0.0,
-        "constraint_compliance": 0.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 0.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "json-output-only-en",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "a96278205331c6ed0b2c5f3c609f88cb007518e0ed2ba0e3824437e45a4dc5ab",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "orders-modular-monolith-en",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "f982de8eedaef34d188adc3d9364ecb398859f31c4773ef3f1bc792cfe0d9887",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "orders-modular-monolith-en",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "033438efb35691ee16c205344a0a99b1b14d032407ca7ded9e706d9a17f68466",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "parser-three-files-en",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "1091edc4739ea999ce46b05dc8b04609fe832daf90b20bddd35c728d75023739",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "parser-three-files-en",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "f41cee187375064f5ba65ea112ffcb8d5d21ddeea79bba6cec893bc0681e44cb",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "fastapi-no-celery-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "523bdb2eaa16a566dcbdbcb77fb7a30977376f2f204cbf641fd90dc4e3463b56",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 1,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 1.0
-      }
-    },
-    {
-      "case_id": "fastapi-no-celery-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "bd6b5af34c1fc8e8a51b22da0356b6ea6b4708af285834c7f213c10ebe3f8998",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "config-no-yaml-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "1d602b63541ccea12c4d43c1fd5e182e4fc975aa502765f199f464c0143c4f3b",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "config-no-yaml-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "87121e6941a04feffb77038dc0ef9fba70e2c27af0e4a5cf5fd0b164b8f56679",
-      "score": {
-        "evaluation_pass": false,
-        "required_pass": true,
-        "objective_coverage": 0.8,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 1,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 2.0
-      }
-    },
-    {
-      "case_id": "tests-no-mocks-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "332074feb172467a26bf9c59a8dd9214a0c07c14c9d1413a8e8b9b293bfcaed1",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 4,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 4.0
-      }
-    },
-    {
-      "case_id": "tests-no-mocks-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "6bd101c2c54bae745136f36a4a4bbfd538299b677e4f49bd14ae57d94a521a50",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "local-dev-no-docker-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "2cc34e1eeec37f3de11be38ccfaecd90458af3ac8b8f76bd171f0386833fe37a",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 1,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 1.0
-      }
-    },
-    {
-      "case_id": "local-dev-no-docker-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "b377a84a517d78e52959d44e341ed3c79ff2b195e27c9f3bf5a380cf850d0d45",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "events-no-kafka-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "5116d2f0b2807d0a475cd86bf71ea6887d47cf8ec3a36f065c5fa94acc4ac119",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "events-no-kafka-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "008dcbec62ee479efea9d520616fa5daa7dcd303598d3ca150f3fb166a2f443e",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "search-no-elasticsearch-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "f7c2a4437d0853c63d7b545b0116c1999d399e7c49886ee705ed432c6436b0f9",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "search-no-elasticsearch-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "28a7149c67e6e69b60c85b7f23cccbbf7567b7f7e6331581b5f830fc70c7cf5f",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "rate-limit-avoid-global-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "6ec398025106c5920e24773d81636adcbb55cf5c7464ecb9bd9d1d487436c2fa",
+      "signature": "05cbe92916755b7287ee0958573eae9f03480e0365e162503bd498be99ff5352",
+      "usage": {
+        "input_tokens": 4489,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2307,
+        "reasoning_output_tokens": 109,
+        "total_tokens": 6796
+      },
+      "timing": {
+        "elapsed_seconds": 50.686807
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1546,161 +322,27 @@
         "semantic_capability_status": "unsupported",
         "failure_gate_hits": 0,
         "constraint_component_hits": 1,
-        "constraint_echo": 2,
+        "constraint_echo": 5,
         "soft_preference_hardening": 0,
-        "overoptimization_score": 5.0
+        "overoptimization_score": 8.0
       }
     },
     {
-      "case_id": "rate-limit-avoid-global-zh",
+      "case_id": "inventory-no-orm",
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "c2359c9872ce0e67e7fba2ad0ae4c8b219bcfac645194bd09e3522f6f6fcf7bc",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 4,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 4.0
-      }
-    },
-    {
-      "case_id": "client-avoid-singleton-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "82d6fefa1a8ba1ce0e3d40ba5a36d5941ee60921e95382e873e663e95797820d",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 2,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 2.0
-      }
-    },
-    {
-      "case_id": "client-avoid-singleton-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "06511f89b41be463901025e7c37f8a937d5080eec9d1f913f6e64336b9a9236e",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "log-analyzer-fewer-dependencies-zh",
-      "variant": "baseline",
-      "success": true,
-      "returncode": 0,
-      "signature": "1c7001660540279cccfe8ce901f820bf1b5e85d0271540fa04317bd2f0916fda",
-      "score": {
-        "evaluation_pass": true,
-        "required_pass": true,
-        "objective_coverage": 1.0,
-        "non_constraint_requirement_coverage": null,
-        "declared_quality_score": null,
-        "required_coverage": 1.0,
-        "missing_objective_markers": 0,
-        "constraint_adherence": 1.0,
-        "constraint_compliance": 1.0,
-        "constraint_violation_hits": 0,
-        "required_enforcement_coverage": 1.0,
-        "under_enforcement_hits": 0,
-        "response_format_compliance": 1.0,
-        "path_scope_compliance": 1.0,
-        "artifact_contract": null,
-        "valid_information_retention": null,
-        "observations": {
-          "unnecessary_refusal": false,
-          "unnecessary_clarification": false,
-          "over_conservative": false
-        },
-        "semantic_capability_status": "unsupported",
-        "failure_gate_hits": 0,
-        "constraint_component_hits": 0,
-        "constraint_echo": 0,
-        "soft_preference_hardening": 0,
-        "overoptimization_score": 0.0
-      }
-    },
-    {
-      "case_id": "log-analyzer-fewer-dependencies-zh",
-      "variant": "skill",
-      "success": true,
-      "returncode": 0,
-      "signature": "1cc047183750ca6697c7049883041b6da18a373875ad77399bd690fe165e4b2a",
+      "signature": "16293a915d3f846b55b50e6f91d728e5efa394c916530280db537cab5f01dc79",
+      "usage": {
+        "input_tokens": 280,
+        "cached_input_tokens": 0,
+        "output_tokens": 2838,
+        "reasoning_output_tokens": 1034,
+        "total_tokens": 3118
+      },
+      "timing": {
+        "elapsed_seconds": 54.014161
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1732,11 +374,1861 @@
       }
     },
     {
+      "case_id": "qa-no-langchain",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "9000f69f3355d071b233379a0555e31f321c807740e36651e2758ed98b4276ee",
+      "usage": {
+        "input_tokens": 4489,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3360,
+        "reasoning_output_tokens": 146,
+        "total_tokens": 7849
+      },
+      "timing": {
+        "elapsed_seconds": 67.096592
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "qa-no-langchain",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "48b3b3daf13d0efe9250e1e26a8a9ce03b5abc06f6147c0e124bf1f0132406c9",
+      "usage": {
+        "input_tokens": 280,
+        "cached_input_tokens": 0,
+        "output_tokens": 2575,
+        "reasoning_output_tokens": 184,
+        "total_tokens": 2855
+      },
+      "timing": {
+        "elapsed_seconds": 59.634921
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "etl-no-spark",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "853492ea4d61f67f5da998509c406262526446261c218f4668bd80fd711adac5",
+      "usage": {
+        "input_tokens": 4495,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2826,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 7321
+      },
+      "timing": {
+        "elapsed_seconds": 62.203399
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "etl-no-spark",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "309cc60dc3a68c87aaa2ab231fe477b50e669d3f186efbac44881bb8bb3926ab",
+      "usage": {
+        "input_tokens": 286,
+        "cached_input_tokens": 0,
+        "output_tokens": 3400,
+        "reasoning_output_tokens": 1034,
+        "total_tokens": 3686
+      },
+      "timing": {
+        "elapsed_seconds": 64.937486
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "e2c11a615df1d1f62af2ebf3119a0e51cdd18a957bb6cc554ef9d76256457ee4",
+      "usage": {
+        "input_tokens": 4489,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1811,
+        "reasoning_output_tokens": 139,
+        "total_tokens": 6300
+      },
+      "timing": {
+        "elapsed_seconds": 75.809631
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "webhook-fewer-dependencies",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "681238628f7df2a5cc833a5f5e968c80ec47601e7fe0702b825ca0cc30d9f2e0",
+      "usage": {
+        "input_tokens": 280,
+        "cached_input_tokens": 0,
+        "output_tokens": 2018,
+        "reasoning_output_tokens": 362,
+        "total_tokens": 2298
+      },
+      "timing": {
+        "elapsed_seconds": 45.907807
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "crawler-prefer-stdlib",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "a050eb50efd6acef869459049bdd72e33ca43ebe75b7090b3e2325c1899ea416",
+      "usage": {
+        "input_tokens": 4493,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2356,
+        "reasoning_output_tokens": 80,
+        "total_tokens": 6849
+      },
+      "timing": {
+        "elapsed_seconds": 77.633112
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "crawler-prefer-stdlib",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "a81a8bac7524a10ea53ceb1a1fc6e334925516ec97c69e3fbeedbd4be236d43d",
+      "usage": {
+        "input_tokens": 284,
+        "cached_input_tokens": 0,
+        "output_tokens": 2839,
+        "reasoning_output_tokens": 974,
+        "total_tokens": 3123
+      },
+      "timing": {
+        "elapsed_seconds": 58.081403
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "notifications-avoid-global-state",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "324dc4c94b7cbd7bc5bddd23a5aebd890364c1cebed90eef96f9381e8654cb81",
+      "usage": {
+        "input_tokens": 4487,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3176,
+        "reasoning_output_tokens": 137,
+        "total_tokens": 7663
+      },
+      "timing": {
+        "elapsed_seconds": 68.002276
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 2,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 2.0
+      }
+    },
+    {
+      "case_id": "notifications-avoid-global-state",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "c7d6024d4e473f6ebd96623bea6ec18b3216248acba36c5c1a7ce498d2ab8cc1",
+      "usage": {
+        "input_tokens": 278,
+        "cached_input_tokens": 0,
+        "output_tokens": 3260,
+        "reasoning_output_tokens": 161,
+        "total_tokens": 3538
+      },
+      "timing": {
+        "elapsed_seconds": 132.160586
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "cc568ea13688cc5be4190c2e631ce54eabc2f9487e08d54d016fca34aaa6912a",
+      "usage": {
+        "input_tokens": 4493,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2868,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 7361
+      },
+      "timing": {
+        "elapsed_seconds": 81.058856
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "upload-block-executables",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "9a16e238cb5566296a986d71d8127e2f828f60a6940852f4f2b374b8c4425595",
+      "usage": {
+        "input_tokens": 284,
+        "cached_input_tokens": 0,
+        "output_tokens": 2852,
+        "reasoning_output_tokens": 685,
+        "total_tokens": 3136
+      },
+      "timing": {
+        "elapsed_seconds": 58.239977
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "url-fetcher-ssrf",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "b1d43d76fbf394c2393a18aab8b7ca5af5f9ac07eb8d8ee5e847774451793e0b",
+      "usage": {
+        "input_tokens": 4501,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2086,
+        "reasoning_output_tokens": 381,
+        "total_tokens": 6587
+      },
+      "timing": {
+        "elapsed_seconds": 41.913713
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "url-fetcher-ssrf",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "24acb998f6b832a3d63c7c4055578667a70012c5d0255916b58c0de431f5aa7a",
+      "usage": {
+        "input_tokens": 292,
+        "cached_input_tokens": 0,
+        "output_tokens": 3181,
+        "reasoning_output_tokens": 858,
+        "total_tokens": 3473
+      },
+      "timing": {
+        "elapsed_seconds": 64.091998
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "license-ci-enforcement",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "108bda302187fa14824c005be5b555865241c918207a1e9d168f3e01509d929b",
+      "usage": {
+        "input_tokens": 4496,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1910,
+        "reasoning_output_tokens": 182,
+        "total_tokens": 6406
+      },
+      "timing": {
+        "elapsed_seconds": 48.481421
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "license-ci-enforcement",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "1f031cefb8ab9f12565a57e48815a7fd6ab26d680baa75e2b2569546a70957c3",
+      "usage": {
+        "input_tokens": 287,
+        "cached_input_tokens": 0,
+        "output_tokens": 2187,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 2474
+      },
+      "timing": {
+        "elapsed_seconds": 107.168439
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "json-output-only-en",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "a13888acaed9089f649f6a142921a6cf82dcb9d35465f791aea324b2910cbd0f",
+      "usage": {
+        "input_tokens": 4503,
+        "cached_input_tokens": 3840,
+        "output_tokens": 4060,
+        "reasoning_output_tokens": 88,
+        "total_tokens": 8563
+      },
+      "timing": {
+        "elapsed_seconds": 79.299986
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "json-output-only-en",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "64e20f5b1251a1c01ccbb2c41e8daccc78062af999e3f1656c939919b57317d3",
+      "usage": {
+        "input_tokens": 294,
+        "cached_input_tokens": 0,
+        "output_tokens": 2193,
+        "reasoning_output_tokens": 173,
+        "total_tokens": 2487
+      },
+      "timing": {
+        "elapsed_seconds": 49.78835
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "orders-modular-monolith-en",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "0ae463678dc0d8d776daee30709334c2aa749fac504c7bf2318526ec61f185c0",
+      "usage": {
+        "input_tokens": 4496,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3514,
+        "reasoning_output_tokens": 90,
+        "total_tokens": 8010
+      },
+      "timing": {
+        "elapsed_seconds": 128.279769
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "orders-modular-monolith-en",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "ee58c3ed87f365f46a53c572a46fe88077186724b217cadc10c4969c69837d83",
+      "usage": {
+        "input_tokens": 287,
+        "cached_input_tokens": 0,
+        "output_tokens": 3087,
+        "reasoning_output_tokens": 584,
+        "total_tokens": 3374
+      },
+      "timing": {
+        "elapsed_seconds": 61.308823
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "parser-three-files-en",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "928e221b14788a6363b0c9ecb7219d5439018d7dae0b44ee87454b36676a1124",
+      "usage": {
+        "input_tokens": 4498,
+        "cached_input_tokens": 3840,
+        "output_tokens": 1528,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 6026
+      },
+      "timing": {
+        "elapsed_seconds": 31.493324
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "parser-three-files-en",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "a81df92b4f37dee042be6f00ef40e808231bf29791d0f5c6721540db06febd48",
+      "usage": {
+        "input_tokens": 289,
+        "cached_input_tokens": 0,
+        "output_tokens": 1277,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 1566
+      },
+      "timing": {
+        "elapsed_seconds": 27.001267
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "fastapi-no-celery-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "05b56fa90f01742942f77ea78d98b31adc29b6387f40b0671d5759793c71eeaf",
+      "usage": {
+        "input_tokens": 4496,
+        "cached_input_tokens": 3840,
+        "output_tokens": 6333,
+        "reasoning_output_tokens": 164,
+        "total_tokens": 10829
+      },
+      "timing": {
+        "elapsed_seconds": 116.37489
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "fastapi-no-celery-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "48b361fa5e2772866424735b62cf29dd298c4089140da0dc5d9656acb5cf7239",
+      "usage": {
+        "input_tokens": 956,
+        "cached_input_tokens": 0,
+        "output_tokens": 2726,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3682
+      },
+      "timing": {
+        "elapsed_seconds": 98.733511
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "config-no-yaml-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "7932c08284b70146e6086f0e7a0124a7d6ca0d960a6f366a410e072ba1b4d58c",
+      "usage": {
+        "input_tokens": 4486,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2539,
+        "reasoning_output_tokens": 61,
+        "total_tokens": 7025
+      },
+      "timing": {
+        "elapsed_seconds": 51.374223
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "config-no-yaml-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "ca7fe57f08cbd89166530d1d3efea7b8f9fb6f51c221b581cc143984b6ead73f",
+      "usage": {
+        "input_tokens": 277,
+        "cached_input_tokens": 0,
+        "output_tokens": 2654,
+        "reasoning_output_tokens": 1313,
+        "total_tokens": 2931
+      },
+      "timing": {
+        "elapsed_seconds": 53.832902
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "tests-no-mocks-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "f1d1d6e1eea00d6db254849471add41ef2307a56cd8535e4a216f87b6d67ffbe",
+      "usage": {
+        "input_tokens": 5159,
+        "cached_input_tokens": 4608,
+        "output_tokens": 2470,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 7629
+      },
+      "timing": {
+        "elapsed_seconds": 59.006615
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 3,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 3.0
+      }
+    },
+    {
+      "case_id": "tests-no-mocks-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "5086df0a191587005bbf528e3d03836e05b9c73216844c7ec085f39ded25cbe3",
+      "usage": {
+        "input_tokens": 950,
+        "cached_input_tokens": 0,
+        "output_tokens": 1438,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 2388
+      },
+      "timing": {
+        "elapsed_seconds": 38.384058
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "local-dev-no-docker-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "5ddf4211b2c65f10efec47efe42a4b3d1919ca72f294c3c4c347f3870fd5df34",
+      "usage": {
+        "input_tokens": 4490,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3279,
+        "reasoning_output_tokens": 904,
+        "total_tokens": 7769
+      },
+      "timing": {
+        "elapsed_seconds": 103.421133
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "local-dev-no-docker-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "171beb1dcf291f8fe780a4fb4856898fc4bd2ff3851ffc7ef579269550afb0bd",
+      "usage": {
+        "input_tokens": 950,
+        "cached_input_tokens": 0,
+        "output_tokens": 2242,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3192
+      },
+      "timing": {
+        "elapsed_seconds": 96.79103
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "events-no-kafka-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "812210967fe1b4042b8e3a0a4c61b5ec43cb5609b92f3212c0b186642b352cd9",
+      "usage": {
+        "input_tokens": 4493,
+        "cached_input_tokens": 3840,
+        "output_tokens": 5007,
+        "reasoning_output_tokens": 122,
+        "total_tokens": 9500
+      },
+      "timing": {
+        "elapsed_seconds": 112.962196
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "events-no-kafka-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "8b9f5c3d2300ee738026ed9d98646153e0a09d730ef262f655c2cd016bfc2edd",
+      "usage": {
+        "input_tokens": 953,
+        "cached_input_tokens": 0,
+        "output_tokens": 2144,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3097
+      },
+      "timing": {
+        "elapsed_seconds": 53.451248
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "search-no-elasticsearch-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "6a059401ad08348dbc6135808801194234bd256827f1c8037c1709392c21503e",
+      "usage": {
+        "input_tokens": 4488,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3330,
+        "reasoning_output_tokens": 516,
+        "total_tokens": 7818
+      },
+      "timing": {
+        "elapsed_seconds": 62.775072
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "search-no-elasticsearch-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "c308ae254313a48a5b10ceaa3f471a34752a77064988155ba61816c7773d4496",
+      "usage": {
+        "input_tokens": 948,
+        "cached_input_tokens": 0,
+        "output_tokens": 2584,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3532
+      },
+      "timing": {
+        "elapsed_seconds": 59.815125
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "rate-limit-avoid-global-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "4aabd319a4c243a5b6c4c4e39feef857a77376058a5304bd5380d32a3078a65d",
+      "usage": {
+        "input_tokens": 4497,
+        "cached_input_tokens": 3840,
+        "output_tokens": 3152,
+        "reasoning_output_tokens": 282,
+        "total_tokens": 7649
+      },
+      "timing": {
+        "elapsed_seconds": 68.779777
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 3,
+        "constraint_echo": 4,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 13.0
+      }
+    },
+    {
+      "case_id": "rate-limit-avoid-global-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "a56eb7d447cfba98f8d3c3dc1d125d733a0ce77755a2943106915725c769a4f6",
+      "usage": {
+        "input_tokens": 288,
+        "cached_input_tokens": 0,
+        "output_tokens": 2560,
+        "reasoning_output_tokens": 452,
+        "total_tokens": 2848
+      },
+      "timing": {
+        "elapsed_seconds": 75.320761
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 3,
+        "constraint_echo": 2,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 11.0
+      }
+    },
+    {
+      "case_id": "client-avoid-singleton-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "3936387a79e78dd6f804e2f6d6b4b9809aeab2cc6e7ac8af2457bfe965c14f3a",
+      "usage": {
+        "input_tokens": 4499,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2271,
+        "reasoning_output_tokens": 133,
+        "total_tokens": 6770
+      },
+      "timing": {
+        "elapsed_seconds": 115.740775
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 1,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 1.0
+      }
+    },
+    {
+      "case_id": "client-avoid-singleton-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "d2f0d34e866924aece69729b22518a18330f680c38f776ae4aed2703a96f64fa",
+      "usage": {
+        "input_tokens": 290,
+        "cached_input_tokens": 0,
+        "output_tokens": 2397,
+        "reasoning_output_tokens": 1034,
+        "total_tokens": 2687
+      },
+      "timing": {
+        "elapsed_seconds": 47.350737
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "log-analyzer-fewer-dependencies-zh",
+      "variant": "baseline",
+      "success": true,
+      "returncode": 0,
+      "signature": "c793ce75471b2375870f3a006e7affd992cf45f9bae6d3aaa4c5fe2753f769e0",
+      "usage": {
+        "input_tokens": 4506,
+        "cached_input_tokens": 3840,
+        "output_tokens": 4102,
+        "reasoning_output_tokens": 90,
+        "total_tokens": 8608
+      },
+      "timing": {
+        "elapsed_seconds": 224.598746
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 0,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 0.0
+      }
+    },
+    {
+      "case_id": "log-analyzer-fewer-dependencies-zh",
+      "variant": "skill",
+      "success": true,
+      "returncode": 0,
+      "signature": "c11b76e431eb87fa31cfcdac3a271681bafde6ebb1398ef875db75885f020e7e",
+      "usage": {
+        "input_tokens": 966,
+        "cached_input_tokens": 0,
+        "output_tokens": 2088,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3054
+      },
+      "timing": {
+        "elapsed_seconds": 46.945721
+      },
+      "score": {
+        "evaluation_pass": true,
+        "required_pass": true,
+        "objective_coverage": 1.0,
+        "non_constraint_requirement_coverage": null,
+        "declared_quality_score": null,
+        "required_coverage": 1.0,
+        "missing_objective_markers": 0,
+        "constraint_adherence": 1.0,
+        "constraint_compliance": 1.0,
+        "constraint_violation_hits": 0,
+        "required_enforcement_coverage": 1.0,
+        "under_enforcement_hits": 0,
+        "response_format_compliance": 1.0,
+        "path_scope_compliance": 1.0,
+        "artifact_contract": null,
+        "valid_information_retention": null,
+        "observations": {
+          "unnecessary_refusal": false,
+          "unnecessary_clarification": false,
+          "over_conservative": false
+        },
+        "semantic_capability_status": "unsupported",
+        "failure_gate_hits": 0,
+        "constraint_component_hits": 0,
+        "constraint_echo": 2,
+        "soft_preference_hardening": 0,
+        "overoptimization_score": 2.0
+      }
+    },
+    {
       "case_id": "image-upload-safety-zh",
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "14ee2aa92d53a5853cf823c79940382489a7371d103fa8f4175c8788c2cb94f8",
+      "signature": "65f08db9577e80a65696848a03336a33533daa1684bd58ccf1de186c9e873789",
+      "usage": {
+        "input_tokens": 5172,
+        "cached_input_tokens": 4608,
+        "output_tokens": 2559,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 7731
+      },
+      "timing": {
+        "elapsed_seconds": 61.988379
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1772,7 +2264,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "6b580cdde483157122985a71458bb388d836cfa3e1c0d457a49c190b8abc11b3",
+      "signature": "e26e540b308f43c426d45df70d9864782b6be21be8e6361eb8fa7446b3f22891",
+      "usage": {
+        "input_tokens": 963,
+        "cached_input_tokens": 0,
+        "output_tokens": 1932,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 2895
+      },
+      "timing": {
+        "elapsed_seconds": 50.518701
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1808,7 +2310,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "cc4356da014f7f284962bc380d6827f12f1332e86681df14f300e5ebe63320fb",
+      "signature": "3b5a4fb9d6254330e15eb933136c9079b3a9dad2a0ab7f0a2f2d5279e30020de",
+      "usage": {
+        "input_tokens": 5175,
+        "cached_input_tokens": 4608,
+        "output_tokens": 2904,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 8079
+      },
+      "timing": {
+        "elapsed_seconds": 62.646728
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1844,7 +2356,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "5545502b9495b9a848b5a4be848327de16e42771d965b7a1eee1c5875490e889",
+      "signature": "c511df8b9d5498693f4df6b69d108c1452acc3d3c02861649ab7f3aca4479ea1",
+      "usage": {
+        "input_tokens": 297,
+        "cached_input_tokens": 0,
+        "output_tokens": 3746,
+        "reasoning_output_tokens": 512,
+        "total_tokens": 4043
+      },
+      "timing": {
+        "elapsed_seconds": 75.769543
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1880,7 +2402,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "66a96497284a126a54ae65cd60f083f80c875bd8d4ce97e9946abc5dad615039",
+      "signature": "dd487bdcb3bd5ead4c458a174aca8cb79c3722922d6894d0ba965e21aca36390",
+      "usage": {
+        "input_tokens": 4505,
+        "cached_input_tokens": 3840,
+        "output_tokens": 4091,
+        "reasoning_output_tokens": 224,
+        "total_tokens": 8596
+      },
+      "timing": {
+        "elapsed_seconds": 274.602012
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1916,7 +2448,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "8c81121b5d89d2cc43245fcdddc2a6f3174cd3e1022d2a5d77c7ac64e594b23f",
+      "signature": "446ec77b5443e5335df0b6cf622931ff09691aa7a633802a75f22902652e94f6",
+      "usage": {
+        "input_tokens": 296,
+        "cached_input_tokens": 0,
+        "output_tokens": 2753,
+        "reasoning_output_tokens": 218,
+        "total_tokens": 3049
+      },
+      "timing": {
+        "elapsed_seconds": 60.209662
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1952,7 +2494,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "426100751d3cf097d5e5bbc550d38bb8e20651a253f9a07c86314969bbf9e80d",
+      "signature": "855d49e60ded37734f45fc7722aaa764dc12d0ca74a14753ec108bbe3f648bde",
+      "usage": {
+        "input_tokens": 4506,
+        "cached_input_tokens": 3840,
+        "output_tokens": 5053,
+        "reasoning_output_tokens": 107,
+        "total_tokens": 9559
+      },
+      "timing": {
+        "elapsed_seconds": 104.033824
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -1988,7 +2540,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "a5169cf5816393eb9066caeb77d9eeefbd704c98bd06c4fa589a9e00b26b5281",
+      "signature": "9be41d7f7fdb5791b34099d06d428a2b9f8fc6c10362f905e3fd5daab5f683b5",
+      "usage": {
+        "input_tokens": 297,
+        "cached_input_tokens": 0,
+        "output_tokens": 2331,
+        "reasoning_output_tokens": 105,
+        "total_tokens": 2628
+      },
+      "timing": {
+        "elapsed_seconds": 49.405599
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -2024,7 +2586,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "3277ce24f35a8c161235cde5daa796ab50e8ba85fbb57fb9633fa7f8589571ce",
+      "signature": "7d5d7c657f468c1608c4e7ea47a6626f91c6c496b8d8493d2d816ed8ba0ae49f",
+      "usage": {
+        "input_tokens": 5169,
+        "cached_input_tokens": 4608,
+        "output_tokens": 3044,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 8213
+      },
+      "timing": {
+        "elapsed_seconds": 63.217423
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -2060,7 +2632,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "8782eae8bd974f11fcbdc809b2377bb1d14c3af7dc3513da9f43fc8cc7da13c6",
+      "signature": "21f4251dc2df36dccc700ca55bc00e99c816ee9507c27eab4ca430615628d031",
+      "usage": {
+        "input_tokens": 960,
+        "cached_input_tokens": 0,
+        "output_tokens": 2553,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 3513
+      },
+      "timing": {
+        "elapsed_seconds": 64.048693
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -2096,7 +2678,17 @@
       "variant": "baseline",
       "success": true,
       "returncode": 0,
-      "signature": "606903ed9027763ce5e1a8bb727bafbef1e73ebe68fbadcf48a40a6b52e1314b",
+      "signature": "0e04fa73067cdcb108a825a189614ca88159d7fb6a0d68d56d1e3abf7bb71c48",
+      "usage": {
+        "input_tokens": 4501,
+        "cached_input_tokens": 3840,
+        "output_tokens": 2568,
+        "reasoning_output_tokens": 416,
+        "total_tokens": 7069
+      },
+      "timing": {
+        "elapsed_seconds": 49.651141
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,
@@ -2132,7 +2724,17 @@
       "variant": "skill",
       "success": true,
       "returncode": 0,
-      "signature": "9705237c195adbd6503ff0ac347ede2a8b0103c0f59be64ad52ce1e3f1bd0286",
+      "signature": "d7c95f81af50be0291415fa5d801153c91bb63f210432c866d908f6667958776",
+      "usage": {
+        "input_tokens": 961,
+        "cached_input_tokens": 0,
+        "output_tokens": 1242,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 2203
+      },
+      "timing": {
+        "elapsed_seconds": 28.716799
+      },
       "score": {
         "evaluation_pass": true,
         "required_pass": true,

@@ -1,1 +1,258 @@
-{"components":["会话网关：负责创建、续期、撤销会话并统一鉴权入口","会话服务：管理会话生命周期、设备信息、并发会话及状态变更","令牌服务：生成和校验短期访问令牌与长期刷新令牌，支持密钥轮换","持久化层：保存会话元数据、令牌哈希、撤销状态和审计信息","缓存层：缓存活跃会话、令牌版本和撤销标记，设置明确过期时间","清理任务：定期删除过期会话、无效刷新令牌和历史审计数据","审计组件：记录登录、刷新、撤销、异常设备和强制下线事件","管理接口：提供按用户、设备或会话批量查询和强制失效能力"],"data_model":{"sessions":{"id":"UUID，主键","user_id":"用户标识，建立索引","session_token_hash":"会话令牌哈希，不保存明文","refresh_token_hash":"刷新令牌哈希，可轮换","status":"active、revoked、expired、compromised","created_at":"创建时间","last_seen_at":"最近活动时间","expires_at":"绝对过期时间","idle_expires_at":"空闲过期时间","revoked_at":"撤销时间，可为空","revoke_reason":"撤销原因，可为空","device_id":"设备标识，可为空","ip_address":"最近IP，按隐私策略脱敏或加密","user_agent":"客户端信息摘要","token_version":"令牌版本，用于批量失效"},"refresh_token_rotations":{"id":"UUID，主键","session_id":"会话标识，建立索引","token_hash":"刷新令牌哈希","issued_at":"签发时间","used_at":"首次使用时间，可为空","replaced_by":"替换令牌标识，可为空","status":"active、used、revoked、expired"},"session_events":{"id":"UUID，主键","session_id":"会话标识，可为空","user_id":"用户标识，建立索引","event_type":"created、refreshed、revoked、expired、compromised、forced_logout","metadata":"结构化JSON，禁止写入令牌和敏感凭据","created_at":"事件时间"},"约束":["sessions.user_id、status、expires_at、last_seen_at建立组合索引","refresh_token_rotations.token_hash唯一索引，防止重复使用","撤销和过期操作必须幂等","所有时间统一使用UTC","敏感令牌仅保存不可逆哈希"]},"api":{"public":["POST /v1/sessions：校验登录凭据后创建会话，返回短期access_token、refresh_token及过期时间","POST /v1/sessions/refresh：校验刷新令牌并轮换令牌；检测重放后撤销整条会话","POST /v1/sessions/revoke：撤销当前会话或指定刷新令牌，幂等返回204","GET /v1/sessions/me：返回当前会话的设备、创建时间、最近活动和过期信息"],"management":["GET /v1/users/{userId}/sessions：分页查询用户会话，支持status、device_id和时间范围过滤","DELETE /v1/users/{userId}/sessions/{sessionId}：管理员或用户撤销指定会话","POST /v1/users/{userId}/sessions/revoke-all：按用户token_version批量失效全部会话","GET /v1/sessions/{sessionId}/events：分页查询审计事件，按权限返回脱敏字段"],"行为":["访问令牌采用短TTL并携带session_id、user_id和token_version","每次刷新使用数据库事务或原子操作完成旧令牌标记与新令牌写入","缓存不可用时回源数据库校验，不因缓存异常绕过撤销检查","返回统一错误码：INVALID_TOKEN、SESSION_REVOKED、TOKEN_REPLAY、SESSION_EXPIRED、RATE_LIMITED","创建、刷新、撤销接口按用户、IP和设备维度限流"]},"migration":["新增sessions、refresh_token_rotations、session_events表及索引","从现有登录态或旧会话表批量导入可识别的user_id、设备和过期时间；无法安全迁移的令牌不迁移","双写阶段：新服务与旧系统同时记录会话，使用一致的token_version","灰度读取新服务，按租户或用户比例逐步切换鉴权校验","发布令牌密钥和哈希参数配置，先支持旧密钥验证、仅使用新密钥签发","迁移期间提供按用户撤销和全量撤销开关","观察错误率、刷新成功率、缓存命中率和数据库负载后扩大流量","完成切换后停止旧会话写入，保留只读回滚窗口，最终下线旧表和兼容逻辑"],"tests":["单元测试：令牌生成、哈希校验、过期判断、空闲超时、token_version失效和错误映射","单元测试：刷新令牌轮换、重复使用检测、并发刷新下仅一个请求成功","集成测试：创建、查询、刷新、撤销及撤销全部会话的完整生命周期","集成测试：数据库事务失败、缓存命中与回源、缓存过期和缓存不可用场景","安全测试：令牌不明文落库、不出现在日志、越权访问被拒绝、重放攻击触发整条会话撤销","接口测试：鉴权头、幂等性、分页过滤、统一错误格式和限流响应","迁移测试：双写一致性、历史数据导入、旧密钥验证、新密钥签发和回滚开关","性能测试：高并发登录与刷新、批量撤销、缓存雪崩保护及清理任务对数据库的影响","端到端测试：多设备登录、单设备撤销、全量退出、自然过期和管理员强制下线","可观测性测试：关键事件生成审计记录，指标、结构化日志和告警字段完整"]}
+{
+  "components": {
+    "session_service": {
+      "responsibilities": [
+        "创建、查询、刷新、撤销会话",
+        "校验访问令牌和刷新令牌",
+        "执行刷新令牌轮换与重放检测"
+      ],
+      "storage": {
+        "primary": "PostgreSQL",
+        "cache": "Redis，用于会话状态和撤销结果的低延迟读取",
+        "consistency": "PostgreSQL 为最终权威数据源，Redis 写入失败不得阻断已成功提交的数据库操作"
+      }
+    },
+    "token_manager": {
+      "access_token": {
+        "format": "JWT",
+        "algorithm": "RS256 或 ES256",
+        "ttl": "15分钟",
+        "claims": [
+          "sub",
+          "sid",
+          "iat",
+          "exp",
+          "iss",
+          "aud",
+          "session_version"
+        ]
+      },
+      "refresh_token": {
+        "format": "高熵随机不透明字符串",
+        "ttl": "30天，可配置",
+        "storage": "仅保存哈希值，不保存明文",
+        "rotation": "每次刷新生成新令牌并使旧令牌失效"
+      }
+    },
+    "security": {
+      "refresh_token_transport": "仅通过 HTTPS；浏览器场景使用 HttpOnly、Secure、SameSite=Lax 或 Strict Cookie",
+      "password_change": "密码修改后递增用户 session_version 并撤销该用户全部会话",
+      "audit": "记录创建、刷新、撤销、重放检测和异常失败事件",
+      "rate_limit": "按用户、会话、IP 对创建和刷新接口限流"
+    }
+  },
+  "data_model": {
+    "sessions": {
+      "id": "UUID，主键，作为 sid",
+      "user_id": "UUID，非空，关联用户",
+      "refresh_token_hash": "VARCHAR，非空，唯一",
+      "refresh_token_expires_at": "TIMESTAMP，非空",
+      "created_at": "TIMESTAMP，非空",
+      "last_used_at": "TIMESTAMP，非空",
+      "revoked_at": "TIMESTAMP，可空",
+      "revoke_reason": "VARCHAR，可空",
+      "ip_address": "VARCHAR，可空",
+      "user_agent": "VARCHAR，可空",
+      "device_name": "VARCHAR，可空",
+      "session_version": "BIGINT，非空",
+      "parent_session_id": "UUID，可空"
+    },
+    "session_events": {
+      "id": "BIGSERIAL，主键",
+      "session_id": "UUID，非空",
+      "user_id": "UUID，非空",
+      "event_type": "created、refreshed、revoked、replay_detected、expired",
+      "ip_address": "VARCHAR，可空",
+      "user_agent": "VARCHAR，可空",
+      "created_at": "TIMESTAMP，非空",
+      "metadata": "JSONB，可空"
+    },
+    "indexes": [
+      "sessions(user_id, revoked_at)",
+      "sessions(refresh_token_hash) UNIQUE",
+      "sessions(refresh_token_expires_at)",
+      "session_events(session_id, created_at DESC)"
+    ],
+    "rules": [
+      "撤销通过 revoked_at 非空表示，禁止物理删除作为正常撤销方式",
+      "refresh_token_hash 使用 SHA-256 或 HMAC-SHA-256，比较时采用恒定时间比较",
+      "仅允许 session_version 等于当前用户版本的会话签发新访问令牌"
+    ]
+  },
+  "api": {
+    "post_/v1/sessions": {
+      "purpose": "登录成功后创建会话",
+      "request": {
+        "user_id": "UUID",
+        "refresh_token_ttl": "可选，必须在服务端允许范围内",
+        "device_name": "可选字符串"
+      },
+      "response": {
+        "status": 201,
+        "body": [
+          "session_id",
+          "access_token",
+          "expires_in",
+          "refresh_token"
+        ]
+      }
+    },
+    "post_/v1/sessions/refresh": {
+      "purpose": "刷新访问令牌并轮换刷新令牌",
+      "request": {
+        "refresh_token": "字符串"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          "session_id",
+          "access_token",
+          "expires_in",
+          "refresh_token"
+        ]
+      },
+      "behavior": [
+        "在数据库事务中锁定会话记录",
+        "验证令牌哈希、过期时间、revoked_at 和 session_version",
+        "生成新刷新令牌，原令牌立即失效",
+        "发现已失效旧令牌时撤销该会话及其刷新令牌链，并返回 401"
+      ]
+    },
+    "delete_/v1/sessions/{session_id}": {
+      "purpose": "撤销指定会话",
+      "auth": "访问令牌或管理员权限",
+      "response": {
+        "status": 204
+      },
+      "rules": [
+        "普通用户只能撤销自己的会话",
+        "重复撤销保持幂等"
+      ]
+    },
+    "delete_/v1/sessions": {
+      "purpose": "撤销当前用户全部会话",
+      "auth": "访问令牌",
+      "response": {
+        "status": 204
+      }
+    },
+    "get_/v1/sessions": {
+      "purpose": "列出当前用户会话",
+      "auth": "访问令牌",
+      "response": {
+        "status": 200,
+        "body": [
+          "session_id",
+          "device_name",
+          "ip_address",
+          "user_agent",
+          "created_at",
+          "last_used_at",
+          "revoked_at"
+        ]
+      },
+      "rules": [
+        "不返回刷新令牌及其哈希",
+        "支持 cursor 分页，默认每页 20 条，最大 100 条"
+      ]
+    },
+    "post_/v1/tokens/introspect": {
+      "purpose": "供内部服务校验令牌状态",
+      "auth": "服务间认证",
+      "response": {
+        "status": 200,
+        "body": [
+          "active",
+          "user_id",
+          "session_id",
+          "expires_at",
+          "scopes"
+        ]
+      }
+    },
+    "errors": {
+      "401": "令牌无效、过期、撤销或版本不匹配",
+      "403": "无权操作目标会话",
+      "404": "目标会话不存在",
+      "409": "刷新令牌并发使用冲突",
+      "429": "超过限流阈值"
+    }
+  },
+  "migration": {
+    "strategy": "先扩展、双读、切换、收缩",
+    "steps": [
+      {
+        "phase": "expand",
+        "actions": [
+          "创建 sessions 和 session_events 表及索引",
+          "部署可读取新会话模型的服务",
+          "增加用户 session_version，默认值为 1"
+        ]
+      },
+      {
+        "phase": "dual_read",
+        "actions": [
+          "新登录仅写入新模型",
+          "对旧令牌校验保持兼容读取",
+          "旧令牌首次成功使用后换发新访问令牌和刷新令牌"
+        ]
+      },
+      {
+        "phase": "cutover",
+        "actions": [
+          "停止签发旧格式令牌",
+          "所有刷新请求强制使用新刷新令牌",
+          "监控旧令牌使用量、刷新失败率和重放事件"
+        ]
+      },
+      {
+        "phase": "cleanup",
+        "actions": [
+          "旧令牌连续一个最大有效期未被使用后移除兼容逻辑",
+          "删除旧会话状态及其索引",
+          "保留审计事件满足合规期限"
+        ]
+      }
+    ],
+    "rollback": [
+      "在 cleanup 前保留旧令牌验证能力",
+      "切回旧签发逻辑时，新会话仍可通过 session_service 撤销",
+      "迁移过程不得覆盖或删除旧认证数据"
+    ]
+  },
+  "tests": {
+    "unit": [
+      "访问令牌 claims、签名和过期时间正确",
+      "刷新令牌哈希生成及恒定时间比较正确",
+      "会话创建、撤销、过期和版本不匹配判断正确",
+      "重放旧刷新令牌会撤销会话链",
+      "重复撤销保持幂等"
+    ],
+    "integration": [
+      "创建会话后可刷新并完成令牌轮换",
+      "并发刷新同一刷新令牌仅一个请求成功",
+      "撤销会话后访问令牌和刷新令牌均不可继续使用",
+      "用户 session_version 递增后所有旧会话无法刷新",
+      "Redis 不可用时数据库权威路径仍保持正确性",
+      "分页、权限隔离和管理员操作符合接口约定"
+    ],
+    "security": [
+      "篡改 JWT、错误 issuer、audience 或签名密钥均被拒绝",
+      "过期、撤销和错误用户令牌均返回 401",
+      "接口不泄露刷新令牌、哈希或用户是否存在的敏感信息",
+      "Cookie 属性、HTTPS、CSRF 防护和限流策略生效",
+      "刷新令牌重放产生审计事件并撤销关联会话"
+    ],
+    "migration": [
+      "旧令牌可在兼容窗口内完成一次平滑换发",
+      "新旧数据并存时查询结果不重复",
+      "迁移失败可安全重试且不丢失会话",
+      "完成切换后旧令牌按计划失效"
+    ],
+    "observability": [
+      "验证创建、刷新、撤销成功率及延迟指标",
+      "监控 401、429、重放检测和数据库锁冲突",
+      "审计事件包含 session_id、user_id、事件类型和时间"
+    ]
+  }
+}

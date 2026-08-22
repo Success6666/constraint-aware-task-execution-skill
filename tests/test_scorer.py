@@ -145,6 +145,24 @@ class ScorerTests(unittest.TestCase):
         score = score_response(case, "Set the datasource in application.yml.")
         self.assertEqual(score.objective_coverage, 1.0)
 
+    def test_config_type_conversion_is_validation_evidence(self) -> None:
+        cases = json.loads((ROOT / "evals" / "cases.json").read_text(encoding="utf-8"))
+        case = next(item for item in cases if item["id"] == "config-no-yaml-zh")
+        response = (
+            "读取 JSON 配置，使用环境变量覆盖字段，通过类型转换处理整数和布尔值，"
+            "非法值抛出 ConfigError，并返回清晰的配置错误。"
+        )
+        score = score_response(case, response)
+        self.assertEqual(score.objective_coverage, 1.0)
+        self.assertTrue(score.evaluation_pass)
+
+    def test_config_without_type_handling_still_fails_objective_gate(self) -> None:
+        cases = json.loads((ROOT / "evals" / "cases.json").read_text(encoding="utf-8"))
+        case = next(item for item in cases if item["id"] == "config-no-yaml-zh")
+        score = score_response(case, "读取 JSON 配置，允许环境变量覆盖，并返回清晰错误。")
+        self.assertEqual(score.objective_coverage, 0.8)
+        self.assertFalse(score.evaluation_pass)
+
     def test_failure_gate_scoring_can_be_disabled_for_gate_objectives(self) -> None:
         case = dict(self.case, score_failure_gates=False)
         score = score_response(case, "Reject a request after the Redis-backed rate limit is exceeded.")

@@ -1,89 +1,110 @@
-## 方案概览
+# 商品搜索 API 设计
 
-使用 PostgreSQL 内置能力实现：
+## 1. 技术方案
 
-- `tsvector` + `websearch_to_tsquery`：全文检索
-- `ts_rank_cd`：相关性排序
-- `pg_trgm`：商品名、品牌的模糊匹配和拼写容错
-- GIN/B-tree 索引：高效过滤与检索
-- Keyset Cursor：稳定分页
-- Outbox + Worker：可靠索引更新
+使用 **PostgreSQL** 作为商品数据与搜索引擎：
 
-## 数据模型
+- `tsvector` + `GIN`：中文分词后的全文检索
+- `pg_trgm` + `GIN/GiST`：前缀、模糊匹配和拼写相近查询
+- SQL 组合计算相关性、业务权重和过滤条件
+- Redis 可选作热点查询缓存，但不作为搜索数据源
+- 通过 Outbox + 异步 Worker 更新搜索索引，避免商品写入与索引更新强耦合
+
+中文分词建议使用 PostgreSQL 中文分词扩展，或在应用层使用统一分词器生成 token 后写入 `search_vector`。生产环境必须固定分词器版本，避免同一商品在不同节点生成不同索引。
+
+## 2. 数据模型
+
+### 商品表
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
 CREATE TABLE products (
-  id           BIGSERIAL PRIMARY KEY,
-  sku          TEXT NOT NULL UNIQUE,
-  name         TEXT NOT NULL,
-  brand        TEXT,
-  description  TEXT,
-  category_id  BIGINT,
-  price        NUMERIC(12, 2) NOT NULL,
-  stock        INTEGER NOT NULL DEFAULT 0,
-  status       TEXT NOT NULL DEFAULT 'active',
-  sales_count  INTEGER NOT NULL DEFAULT 0,
-  rating       NUMERIC(3, 2) NOT NULL DEFAULT 0,
-  attributes   JSONB NOT NULL DEFAULT '{}',
-  search_doc   TSVECTOR NOT NULL,
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              BIGINT PRIMARY KEY,
+  title           TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  category_id     BIGINT,
+  brand_id        BIGINT,
+  price           NUMERIC(12,2) NOT NULL,
+  stock           INTEGER NOT NULL DEFAULT 0,
+  status          SMALLINT NOT NULL, -- 1=上架，0=下架
+  sales_count     BIGINT NOT NULL DEFAULT 0,
+  rating          NUMERIC(3,2) NOT NULL DEFAULT 0,
+  updated_at      TIMESTAMPTZ NOT NULL,
+  search_vector   TSVECTOR NOT NULL
 );
 
-CREATE INDEX products_search_gin_idx
-  ON products USING GIN(search_doc);
-
-CREATE INDEX products_name_trgm_idx
-  ON products USING GIN(name gin_trgm_ops);
-
-CREATE INDEX products_filter_idx
-  ON products(status, category_id, price, id);
-
-CREATE INDEX products_cursor_idx
-  ON products (updated_at DESC, id DESC);
+CREATE INDEX products_search_vector_gin
+  ON products USING GIN (search_vector);
+CREATE INDEX products_title_trgm_gin
+  ON products USING GIN (title gin_trgm_ops);
+CREATE INDEX products_category_idx ON products(category_id);
+CREATE INDEX products_brand_idx ON products(brand_id);
+CREATE INDEX products_price_idx ON products(price);
+CREATE INDEX products_status_idx ON products(status);
 ```
 
-通过触发器或应用层生成 `search_doc`，并设置字段权重：
+### Outbox 表
 
 ```sql
-UPDATE products
-SET search_doc =
-    setweight(to_tsvector('simple', coalesce(name, '')), 'A') ||
-    setweight(to_tsvector('simple', coalesce(brand, '')), 'B') ||
-    setweight(to_tsvector('simple', coalesce(description, '')), 'C');
+CREATE TABLE product_search_outbox (
+  id           BIGSERIAL PRIMARY KEY,
+  product_id   BIGINT NOT NULL,
+  event_type   VARCHAR(32) NOT NULL, -- upsert/delete
+  version      BIGINT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at TIMESTAMPTZ
+);
+CREATE INDEX outbox_pending_idx
+  ON product_search_outbox(created_at)
+  WHERE processed_at IS NULL;
 ```
 
-中文分词要求较高时，可在写入前使用应用层分词器，将分词结果以空格连接后写入 `search_doc`。
+商品变更和 Outbox 事件在同一个事务中提交，保证不会出现商品已更新但没有索引任务的情况。
 
-## API
+## 3. 索引内容与权重
 
-### 搜索商品
+将字段按重要性映射不同权重：
 
-```http
-GET /v1/products/search
+```sql
+setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+setweight(to_tsvector('simple', coalesce(brand_name, '')), 'A') ||
+setweight(to_tsvector('simple', coalesce(category_name, '')), 'B') ||
+setweight(to_tsvector('simple', coalesce(description, '')), 'C')
 ```
 
-参数：
+实际中文项目中，`simple` 应替换为确定的中文分词配置或预分词 token。
 
-| 参数 | 类型 | 说明 |
-|---|---|---|
-| `q` | string | 搜索关键词 |
-| `category_id` | integer | 分类过滤 |
-| `brand` | string[] | 品牌过滤 |
-| `min_price` | number | 最低价格 |
-| `max_price` | number | 最高价格 |
-| `in_stock` | boolean | 仅返回有库存商品 |
-| `attributes` | object | JSON 属性过滤 |
-| `sort` | string | `relevance`、`price_asc`、`price_desc`、`sales` |
-| `limit` | integer | 1 至 100，默认 20 |
-| `cursor` | string | 下一页游标 |
+建议相关性由以下部分组成：
 
-示例：
-
-```http
-GET /v1/products/search?q=无线耳机&brand=Acme&min_price=100&max_price=800&in_stock=true&limit=20
+```text
+score =
+  0.60 * text_rank
++ 0.15 * title_exact_or_prefix
++ 0.10 * popularity_score
++ 0.10 * sales_score
++ 0.05 * rating_score
 ```
+
+其中业务分数先归一化到 `[0,1]`，避免销量或价格量纲影响全文相关性。无关键词时使用业务排序，不计算全文 rank。
+
+## 4. API
+
+### 搜索
+
+`GET /v1/products/search`
+
+请求参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `q` | string | 否 | 搜索词，长度 1–100 |
+| `category_id` | long | 否 | 分类过滤 |
+| `brand_ids` | array | 否 | 品牌过滤 |
+| `min_price` / `max_price` | decimal | 否 | 价格区间 |
+| `in_stock` | boolean | 否 | 是否仅库存大于 0 |
+| `status` | string | 否 | 默认只返回上架商品 |
+| `sort` | enum | 否 | `relevance`、`price_asc`、`price_desc`、`sales`、`newest` |
+| `cursor` | string | 否 | 游标分页位置 |
+| `limit` | int | 否 | 默认 20，最大 100 |
 
 响应：
 
@@ -91,191 +112,166 @@ GET /v1/products/search?q=无线耳机&brand=Acme&min_price=100&max_price=800&in
 {
   "items": [
     {
-      "id": 101,
-      "sku": "A-1001",
-      "name": "Acme 无线降噪耳机",
-      "brand": "Acme",
-      "price": 599.00,
-      "stock": 42,
-      "rating": 4.8,
-      "score": 0.927
+      "id": 1001,
+      "title": "无线降噪耳机",
+      "price": 399.00,
+      "brand_id": 20,
+      "category_id": 8,
+      "stock": 12,
+      "score": 0.932
     }
   ],
-  "page": {
-    "limit": 20,
-    "next_cursor": "eyJzY29yZSI6MC45MjcsImlkIjoxMDF9"
-  }
+  "next_cursor": "eyJzY29yZSI6MC45...",
+  "has_more": true,
+  "total": null
 }
 ```
 
-### 更新商品索引
+`total` 默认不返回精确值，避免大结果集 `COUNT(*)` 造成额外开销；如业务确实需要，可增加 `include_total=true`，并限制其使用频率。
 
-商品写入与索引事件放在同一事务中：
+### 商品索引更新
 
-```sql
-CREATE TABLE search_outbox (
-  id           BIGSERIAL PRIMARY KEY,
-  product_id   BIGINT NOT NULL,
-  event_type   TEXT NOT NULL,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  processed_at TIMESTAMPTZ
-);
+内部接口：
 
-CREATE INDEX search_outbox_pending_idx
-  ON search_outbox(processed_at, id);
-```
+- `PUT /internal/v1/search/products/{id}`：重新索引单个商品
+- `DELETE /internal/v1/search/products/{id}`：删除商品索引
+- `POST /internal/v1/search/rebuild`：按批次重建索引
+- `GET /internal/v1/search/tasks/{id}`：查询重建任务状态
 
-更新流程：
+内部接口要求服务鉴权、幂等和操作审计，不能直接暴露给公网。
 
-1. 修改 `products`。
-2. 同事务写入 `search_outbox`。
-3. Worker 批量消费事件。
-4. 重新生成 `search_doc`。
-5. 失败重试，超过次数进入死信表。
-6. 定时任务执行全量校验和重建。
+## 5. 查询实现
 
-管理员接口：
-
-```http
-POST /v1/admin/search/reindex
-```
-
-```json
-{
-  "scope": "products",
-  "product_ids": [101, 102]
-}
-```
-
-返回：
-
-```json
-{
-  "job_id": "reindex-20260822-001",
-  "status": "queued"
-}
-```
-
-## 查询与相关性排序
+### 有关键词
 
 ```sql
 WITH query AS (
   SELECT websearch_to_tsquery('simple', :q) AS tsq
 )
 SELECT
-  p.*,
+  p.id, p.title, p.price, p.brand_id, p.category_id, p.stock,
+  ts_rank_cd(p.search_vector, query.tsq) AS text_rank,
   (
-    0.65 * ts_rank_cd(p.search_doc, query.tsq) +
-    0.20 * similarity(p.name, :q) +
-    0.10 * LEAST(p.rating / 5.0, 1) +
-    0.05 * LN(1 + p.sales_count)
+    0.60 * ts_rank_cd(p.search_vector, query.tsq)
+    + 0.15 * CASE
+        WHEN lower(p.title) = lower(:q) THEN 1
+        WHEN lower(p.title) LIKE lower(:q) || '%' THEN 0.7
+        ELSE 0
+      END
+    + 0.10 * normalized_sales
+    + 0.10 * normalized_rating
   ) AS score
 FROM products p, query
-WHERE p.status = 'active'
-  AND (:q = '' OR p.search_doc @@ query.tsq OR p.name % :q)
+WHERE p.status = 1
+  AND p.search_vector @@ query.tsq
   AND (:category_id IS NULL OR p.category_id = :category_id)
+  AND (:in_stock = false OR p.stock > 0)
   AND (:min_price IS NULL OR p.price >= :min_price)
   AND (:max_price IS NULL OR p.price <= :max_price)
-  AND (:in_stock = false OR p.stock > 0)
 ORDER BY score DESC, p.id DESC
 LIMIT :limit;
 ```
 
-过滤条件应在排序前应用。相关性排序时使用唯一的 `id` 作为并列排序键，保证分页稳定。
-
-## 分页策略
-
-优先使用 Cursor 分页，避免深页 `OFFSET` 性能下降。
-
-游标内容至少包含：
-
-```json
-{
-  "score": 0.927,
-  "id": 101
-}
-```
-
-下一页条件：
+对只有模糊词、拼写错误或全文查询无结果的请求，可使用 `pg_trgm` 进行降级匹配：
 
 ```sql
-AND (
-  score < :cursor_score
-  OR (score = :cursor_score AND p.id < :cursor_id)
-)
+WHERE similarity(title, :q) >= 0.25
+ORDER BY similarity(title, :q) DESC, id DESC
 ```
 
-价格、销量排序同样使用对应排序字段加 `id` 作为游标。
+降级阈值应通过测试数据调优，且必须继续应用上架状态和所有过滤条件。
 
-## 错误响应
+### 无关键词
 
-```json
-{
-  "error": {
-    "code": "INVALID_PARAMETER",
-    "message": "limit 必须介于 1 和 100 之间",
-    "details": {
-      "field": "limit"
-    }
-  }
-}
-```
+跳过全文条件，使用 `newest`、`sales` 或业务默认排序，并保留全部过滤条件。
 
-建议错误码：
+## 6. 分页
 
-- `INVALID_PARAMETER`
-- `QUERY_TOO_LONG`
-- `REINDEX_ALREADY_RUNNING`
-- `INTERNAL_ERROR`
+采用 **keyset/cursor pagination**，不使用深页 `OFFSET`：
 
-## 测试设计
+- 相关性排序：游标包含 `score` 和 `id`
+- 价格排序：游标包含 `price` 和 `id`
+- 时间排序：游标包含 `updated_at` 和 `id`
+- 游标使用 Base64 编码并签名，客户端不可修改
+- 排序必须有唯一的 `id` 作为最终 tie-breaker
+
+这样可避免数据变化导致重复或漏项，并保持深分页性能稳定。
+
+## 7. 索引更新流程
+
+1. 商品服务在商品新增、修改、上下架、库存影响搜索条件时写入 Outbox。
+2. Worker 批量读取未处理事件，按 `product_id` 合并重复事件。
+3. Worker 读取最新商品数据，生成 `search_vector` 并更新商品记录。
+4. 使用 `version` 或 `updated_at` 防止旧事件覆盖新数据。
+5. 成功后标记 Outbox；失败则指数退避重试。
+6. 删除商品时执行软删除或从可搜索状态移除。
+7. 提供全量重建：新建临时索引/表，批量导入并校验数量后切换；重建期间继续消费增量事件。
+
+索引更新应具备：
+
+- 至少一次投递、幂等消费
+- 延迟指标：事件创建到可搜索的 P50/P95
+- 待处理数量、失败数量、重试次数监控
+- 定期抽样校验数据库商品与可搜索结果
+
+## 8. 错误与限制
+
+- `q` 为空时执行无关键词搜索。
+- 参数非法返回 `400`；游标失效返回 `400`。
+- 结果为空返回空数组，不返回错误。
+- 查询超时返回 `503`，并记录慢查询日志。
+- 限制单次 `limit <= 100`、关键词长度、过滤数组大小和请求频率。
+- 对 SQL 全部使用参数绑定，禁止拼接用户输入。
+
+## 9. 测试方案
 
 ### 单元测试
 
-- 查询参数解析与默认值
-- 价格、库存、品牌过滤组合
-- 排序字段白名单
-- Cursor 编解码与非法游标
-- 相关性分数计算
-- 空关键词行为
+- 分词、字段权重和相关性计算
+- 精确词、前缀词、多个词、特殊字符和空关键词
+- 价格、分类、品牌、库存、上下架过滤
+- 每种排序及相同排序值时的 `id` 稳定排序
+- 游标编码、解码、过期和篡改检测
+- Outbox 合并、重复消费、乱序事件和版本控制
 
 ### 集成测试
 
-使用真实 PostgreSQL 测试容器验证：
+使用真实 PostgreSQL 测试实例验证：
 
-- GIN 和 trigram 查询结果
-- 关键词相关性排序
-- 多条件过滤
-- Cursor 翻页无重复、无遗漏
-- 商品更新后索引最终一致
-- Worker 重试与幂等
-- 全量重建任务
+- GIN/Trigram 索引被使用
+- 全文匹配和模糊降级
+- 过滤条件组合
+- 索引更新最终可见
+- 删除和重新上架
+- 重建期间增量更新不丢失
+
+使用 `EXPLAIN (ANALYZE, BUFFERS)` 检查典型查询没有全表扫描，并为商品规模增长建立性能基线。
 
 ### API 契约测试
 
 验证：
 
-- HTTP 状态码
-- 响应 JSON Schema
-- 分页字段
-- 错误格式
-- `limit > 100`、超长关键词等边界输入
+- 请求参数和错误码
+- 响应字段、游标分页和无重复结果
+- 默认只返回上架商品
+- `sort`、过滤条件和关键词组合
+- 权限、限流和内部索引接口不可公网访问
 
-### 性能测试
+### 相关性测试
 
-建立以下基线：
+准备带人工标注的查询集，计算 `Precision@10`、`Recall@10`、`MRR@10` 或 `NDCG@10`，对比：
 
-- 10 万、100 万、1000 万商品数据集
-- 常见关键词与高频关键词
-- 深分页请求
-- 高并发读与持续索引更新并行
+1. 仅全文 rank
+2. 全文 rank + 字段权重
+3. 全文 rank + 业务排序
+4. 模糊降级结果
 
-重点监控：
+上线前设置最低指标和回归样本，任何分词器、权重或排序公式变更都必须重新评估。
 
-- P95/P99 延迟
-- PostgreSQL CPU、IO、锁等待
-- Outbox 积压量
-- 索引更新延迟
-- 慢查询比例
+## 10. 推荐交付顺序
 
-该设计只依赖 PostgreSQL，搜索、过滤、排序、分页和索引维护均可独立扩展。
+1. 商品表、`search_vector`、全文查询和基础过滤。
+2. 游标分页及稳定排序。
+3. Outbox、增量 Worker 和重试机制。
+4. 模糊匹配、业务相关性和缓存。
+5. 全量重建、监控、相关性评测和压力测试。

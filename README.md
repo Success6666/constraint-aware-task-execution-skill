@@ -2,24 +2,25 @@
 
 An Agent Skill that keeps the user's primary objective ahead of negative constraints and soft preferences. It reduces the tendency to replace useful work with extra guards, scanners, policy layers, rejection paths, or repeated compliance commentary.
 
-Current repository version: `0.4.0-rc.9`. This prerelease makes the compact, single-call `v1-full` Skill the release candidate, keeps structured planning as an explicit Runtime mode, and blocks release on capability, token-cost, latency, or evidence regressions. Final promotion remains gated by the complete model matrix and blinded semantic review.
+Current repository version: `0.4.0-rc.10`. This prerelease makes one-shot A/B usage and latency auditable, uses direct Responses API sampling for exact single-request evidence, and keeps release blocked on capability or efficiency regressions. Final promotion remains gated by the complete model matrix and blinded semantic review.
 
 ## Measured Result
 
-The latest A/B run was executed on August 22, 2026 with `gpt-5.6-sol`, medium reasoning effort, and the OpenAI-compatible endpoint `https://gpt.eacase.de5.net/v1`. It covers 30 matched prompts: 15 English and 15 Chinese. The suite contains 12 hard-constraint cases, 6 soft-preference cases, 6 safety or explicit-enforcement cases, and 6 output or architecture-constraint cases. The API key was supplied only through a temporary local authentication file and is not part of the repository or evidence.
+The latest A/B run was executed on August 22, 2026 with `gpt-5.6-sol`, medium reasoning effort, low verbosity, and direct Responses API requests to the OpenAI-compatible endpoint. It covers 30 matched prompts: 15 English and 15 Chinese. The suite contains 12 hard-constraint cases, 6 soft-preference cases, 6 safety or explicit-enforcement cases, and 6 output or architecture-constraint cases. The API key was supplied only through a temporary local authentication file and is not part of the repository or evidence.
 
 | Metric | Baseline | Skill | Change |
 | --- | ---: | ---: | ---: |
-| Evaluation pass rate | 96.67% | 96.67% | unchanged |
-| Objective coverage | 1.0000 | 0.9933 | -0.0067 |
-| Constraint adherence | 0.9667 | 1.0000 | +0.0333 |
-| Over-optimization score | 0.7500 | 0.2500 | **66.7% lower** |
-| Unnecessary constraint echo | 0.6000 | 0.2333 | **61.1% lower** |
-| Constraint-only components | 0.0333 | 0.0000 | **100% lower** |
+| Evaluation pass rate | 100.00% | 100.00% | unchanged |
+| Objective coverage | 1.0000 | 1.0000 | unchanged |
+| Constraint adherence | 1.0000 | 1.0000 | unchanged |
+| Over-optimization score | 0.9333 | 0.6333 | **32.1% lower** |
+| Unnecessary constraint echo | 0.5333 | 0.3333 | **37.5% lower** |
+| Constraint-only components | 0.1333 | 0.1000 | **25.0% lower** |
+| Total token cost | 229,666 | 89,367 | **61.1% lower** |
 
-Per case, 9 improved, 2 worsened, and 19 tied. The scorer compares only the 28 pairs that pass both objective and constraint gates. Required safety enforcement is measured for compliance but is not counted as unnecessary constraint repetition. The capability-retention gate **fails** this run: `config-no-yaml-zh` loses objective coverage, producing a 3.33% machine-detected capability regression. Semantic review coverage is 0%, and token/latency ratios are unavailable, so this run is evidence for regression analysis rather than a release-promotion claim.
+All 30 pairs pass objective and constraint gates. Per case, 5 improved, 5 worsened, and 20 tied on the deterministic over-optimization score. Required safety enforcement is measured for compliance but is not counted as unnecessary constraint repetition. Quality and non-constraint requirement retention are both `1.0000`, the machine-detected capability regression rate is `0.0000`, aggregate token cost ratio is `0.3891`, latency ratio is `0.6858`, and the published A/B capability gate passes.
 
-See [`evals/results/REPORT.md`](evals/results/REPORT.md), [`evals/results/summary.json`](evals/results/summary.json), [`evals/results/scores.json`](evals/results/scores.json), [`evals/results/metadata.json`](evals/results/metadata.json), and the 60 committed raw responses for the full evidence. The previous `0.4.0-rc.9` A/B evidence remains in [`evals/results/archive/0.4.0-rc.9/`](evals/results/archive/0.4.0-rc.9/). This is a deterministic, single-model regression experiment, not a universal performance claim or a statistical significance test.
+See [`evals/results/REPORT.md`](evals/results/REPORT.md), [`evals/results/summary.json`](evals/results/summary.json), [`evals/results/scores.json`](evals/results/scores.json), [`evals/results/metadata.json`](evals/results/metadata.json), and the 60 committed raw responses for the full evidence. Earlier rc.9 evidence remains in [`evals/results/archive/0.4.0-rc.9/`](evals/results/archive/0.4.0-rc.9/) and [`evals/results/archive/0.4.0-rc.9-codex-cli-2026-08-22/`](evals/results/archive/0.4.0-rc.9-codex-cli-2026-08-22/). This is a deterministic, single-model regression experiment, not a universal performance claim or a statistical significance test.
 
 ## V1.5/V2 execution protocol
 
@@ -121,11 +122,11 @@ python -m compileall -q evals scripts tests
 python scripts/verify-install.py
 ```
 
-Run or resume the A/B evaluation with an authenticated Codex CLI:
+Run or resume the A/B evaluation with an authenticated Responses-compatible endpoint:
 
 ```bash
-python evals/run_ab.py --variant both --model gpt-5.6-sol --reasoning-effort medium --jobs 3
-python evals/run_ab.py --variant both --resume --model gpt-5.6-sol --reasoning-effort medium --jobs 3
+python evals/run_ab.py --transport responses --variant both --model gpt-5.6-sol --base-url BASE_URL --reasoning-effort medium --verbosity low --jobs 1
+python evals/run_ab.py --transport responses --variant both --resume --model gpt-5.6-sol --base-url BASE_URL --reasoning-effort medium --verbosity low --jobs 1
 python evals/rescore.py
 python evals/build_report.py
 python evals/evaluate_validators.py --output evals/experiments/validator-v1/results.json

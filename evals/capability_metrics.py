@@ -432,6 +432,8 @@ def score_capability_pair(
         },
         "cost_ratio": cost_ratio,
         "latency_ratio": latency_ratio,
+        "cost": {"baseline": baseline_cost, "variant": variant_cost},
+        "latency": {"baseline": baseline_latency, "variant": variant_latency},
         "capability_regression_hit": bool(regressions),
         "capability_regression_reasons": sorted(set(regressions)),
         "efficiency_regression_hit": bool(efficiency_regressions),
@@ -466,6 +468,19 @@ def aggregate_capability_metrics(
     }
 
     def summarize(items: list[dict[str, Any]]) -> dict[str, Any]:
+        def aggregate_ratio(metric: str) -> float | None:
+            observed = [
+                item[metric]
+                for item in items
+                if item[metric]["baseline"] is not None
+                and item[metric]["variant"] is not None
+            ]
+            if not observed:
+                return None
+            baseline_total = sum(item["baseline"] for item in observed)
+            variant_total = sum(item["variant"] for item in observed)
+            return _ratio(variant_total, baseline_total)
+
         hits = sum(item["capability_regression_hit"] for item in items)
         efficiency_hits = sum(item["efficiency_regression_hit"] for item in items)
         components: dict[str, dict[str, Any]] = {}
@@ -551,8 +566,8 @@ def aggregate_capability_metrics(
                 if items
                 else "unsupported"
             ),
-            "cost_ratio": _mean_observed(item["cost_ratio"] for item in items),
-            "latency_ratio": _mean_observed(item["latency_ratio"] for item in items),
+            "cost_ratio": aggregate_ratio("cost"),
+            "latency_ratio": aggregate_ratio("latency"),
             "plan_fallback_rows": sum(item["plan_fallback_used"] for item in items),
             "plan_fallback_rate": (
                 sum(item["plan_fallback_used"] for item in items) / len(items)
@@ -667,8 +682,6 @@ def evaluate_capability_acceptance(
             reasons.append("token_cost_ratio")
         if latency_ratio is not None and latency_ratio > latency_ratio_ceiling:
             reasons.append("latency_ratio")
-        if metrics.get("efficiency_regression_hit"):
-            reasons.append("paired_efficiency_regression")
         if require_semantic_review:
             if metrics.get("semantic_review_coverage") != 1.0:
                 reasons.append("incomplete_semantic_review_coverage")

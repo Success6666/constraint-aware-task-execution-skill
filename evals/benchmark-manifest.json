@@ -3,7 +3,7 @@
   "schema_version": "1.0",
   "benchmark_id": "constraint-exec",
   "benchmark_version": "1.1.0",
-  "repository_version": "0.4.0-rc.9",
+  "repository_version": "0.4.0-rc.10",
   "protocols": {
     "execution": "constraint-exec/v1",
     "generation": "constraint-exec-generation/v1"
@@ -24,7 +24,7 @@
     "release_experiment": "schemas/release-experiment.schema.json"
   },
   "datasets": [
-    {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30, "sha256": "c07ef057bef0d9fe912c91285b6c39e49c99253e27fd0e37f181f961840e5471"},
+    {"id": "answer-bilingual-v1", "path": "cases.json", "kind": "answer", "declared_cases": 30, "sha256": "a3c6670c8a0949cb34cc498c15b8353ed5d2767fa4c0da87594aaec7959451b1"},
     {"id": "gate-adversarial-v1", "path": "gate_cases.json", "kind": "classification", "declared_cases": 32, "sha256": "01a3564c2a6da6dc7ef262fa5b9dd3364deb4ddbbc995d619a0d4a1cd8f0c4c9"},
     {"id": "constraint-adversarial-v1", "path": "adversarial_cases.json", "kind": "answer", "declared_cases": 6, "sha256": "d8109d557304aef779c9051d85bf0a0400b94002d10ea66928b172e87f0bb871"},
     {"id": "workspace-runtime-v1", "path": "runtime_cases.json", "kind": "artifact", "declared_cases": 6, "sha256": "a955b47797a62eaad36389f9decc66db01a372965ebd39c3839bb063a3c66507"}

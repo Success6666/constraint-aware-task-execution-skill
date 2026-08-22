@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from collections import Counter, defaultdict
 import json
 from pathlib import Path
@@ -17,6 +18,12 @@ CASES_PATH = ROOT / "evals" / "cases.json"
 MANIFEST_PATH = ROOT / "evals" / "benchmark-manifest.json"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build the saved A/B evaluation report.")
+    parser.add_argument("--output-root", type=Path, default=RESULTS_PATH)
+    return parser.parse_args()
+
+
 def average(rows: list[dict], key: str) -> float:
     return round(mean(row["score"][key] for row in rows), 4) if rows else 0.0
 
@@ -25,14 +32,27 @@ def reduction(before: float, after: float) -> float | None:
     return round((before - after) / before * 100, 1) if before else None
 
 
+def usage_totals(rows: list[dict]) -> dict[str, int]:
+    keys = (
+        "input_tokens", "cached_input_tokens", "output_tokens",
+        "reasoning_output_tokens", "total_tokens",
+    )
+    return {
+        key: sum(int(row.get("usage", {}).get(key, 0) or 0) for row in rows)
+        for key in keys
+    }
+
+
 def main() -> None:
+    args = parse_args()
+    results_path = args.output_root.resolve()
     cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     gates = manifest.get("release_gates", {})
     semantic_review = manifest.get("semantic_review", {})
     language_counts = Counter(case["language"] for case in cases)
     category_counts = Counter(case["category"] for case in cases)
-    payload = json.loads((RESULTS_PATH / "scores.json").read_text(encoding="utf-8"))
+    payload = json.loads((results_path / "scores.json").read_text(encoding="utf-8"))
     by_case: dict[str, dict[str, dict]] = defaultdict(dict)
     for row in payload["results"]:
         by_case[row["case_id"]][row["variant"]] = row
@@ -79,6 +99,14 @@ def main() -> None:
         "languages": dict(sorted(language_counts.items())),
         "categories": dict(sorted(category_counts.items())),
     }
+    efficiency = {variant: usage_totals(rows) for variant, rows in grouped.items()}
+    baseline_total = efficiency.get("baseline", {}).get("total_tokens", 0)
+    skill_total = efficiency.get("skill", {}).get("total_tokens", 0)
+    efficiency["cost_ratio"] = (
+        skill_total / baseline_total if baseline_total and skill_total else None
+    )
+    efficiency["token_cost_definition"] = "input_tokens + output_tokens"
+    summary["efficiency"] = efficiency
     capability = aggregate_capability_metrics(
         payload["results"],
         policy=CapabilityPolicy(
@@ -116,7 +144,7 @@ def main() -> None:
         ),
     )
     summary["capability_retention"] = capability
-    (RESULTS_PATH / "summary.json").write_text(
+    (results_path / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
     )
 
@@ -142,6 +170,8 @@ def main() -> None:
     lines = [
         "# A/B Evaluation Report", "", f"- Model: `{payload['model']}`",
         f"- Reasoning effort: `{payload.get('reasoning_effort', 'default')}`",
+        f"- Verbosity: `{payload.get('verbosity', 'default')}`",
+        f"- Transport: `{payload.get('transport', 'codex')}`",
         f"- Cases: `{len(cases)}` (`{language_counts['en']}` English, `{language_counts['zh']}` Chinese)",
         f"- Categories: `{category_counts['hard_constraint']}` hard constraints, "
         f"`{category_counts['soft_preference']}` soft preferences, "
@@ -162,6 +192,24 @@ def main() -> None:
         "| Metric | Baseline | Skill | Delta |", "| --- | ---: | ---: | ---: |",
         f"| `overoptimization_score` | {baseline_overoptimization:.4f} | {skill_overoptimization:.4f} | "
         f"{skill_overoptimization - baseline_overoptimization:+.4f} |", "",
+        "## Token Usage", "",
+        "Token cost is defined as `input_tokens + output_tokens`; cached input is reported but not subtracted, "
+        "and reasoning output is not added twice.", "",
+        "| Metric | Baseline | Skill | Ratio |", "| --- | ---: | ---: | ---: |",
+        f"| Input tokens | {efficiency.get('baseline', {}).get('input_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('input_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('input_tokens', 0) / efficiency.get('baseline', {}).get('input_tokens', 1):.4f} |",
+        f"| Cached input tokens | {efficiency.get('baseline', {}).get('cached_input_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('cached_input_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('cached_input_tokens', 0) / efficiency.get('baseline', {}).get('cached_input_tokens', 1):.4f} |",
+        f"| Output tokens | {efficiency.get('baseline', {}).get('output_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('output_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('output_tokens', 0) / efficiency.get('baseline', {}).get('output_tokens', 1):.4f} |",
+        f"| Reasoning output tokens | {efficiency.get('baseline', {}).get('reasoning_output_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('reasoning_output_tokens', 0)} | "
+        f"{efficiency.get('skill', {}).get('reasoning_output_tokens', 0) / efficiency.get('baseline', {}).get('reasoning_output_tokens', 1):.4f} |",
+        f"| Total token cost | {baseline_total} | {skill_total} | "
+        f"{(efficiency['cost_ratio'] if efficiency['cost_ratio'] is not None else 0.0):.4f} |", "",
         "## Per-Case Results", "",
         "| Case | Baseline Pass | Skill Pass | Baseline Score | Skill Score | Delta |",
         "| --- | :---: | :---: | ---: | ---: | ---: |",
@@ -263,7 +311,7 @@ def main() -> None:
             reasons = ", ".join(failure.get("reasons", [])) or "unknown"
             lines.append(f"- `{failure.get('variant', 'unknown')}`: `{reasons}`")
     lines.append("")
-    (RESULTS_PATH / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
+    (results_path / "REPORT.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":

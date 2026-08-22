@@ -1,183 +1,386 @@
-Design the pipeline as a small, restartable Python service with three durable layers:
+# Hourly JSONL ETL Design
 
-- **Input:** hourly JSONL objects/files
-- **State:** SQLite checkpoint and deduplication database
-- **Output:** partitioned Parquet written with PyArrow
+## 1. Technology
 
-Use `pydantic` for schema validation, `pyarrow` for Parquet, and a scheduler such as cron, Airflow, or a container job.
+- Python 3.12
+- `orjson` for JSONL decoding
+- `jsonschema` or `fastjsonschema` for validation
+- DuckDB for durable event state, deduplication, and checkpoint metadata
+- PyArrow for Parquet writing and schema enforcement
+- An hourly scheduler such as cron, Airflow, or a container scheduler
+- No Apache Spark
 
-## Layout
+DuckDB is the system of record for accepted events and processing state. Parquet is the published analytical output.
+
+---
+
+## 2. Event contract
+
+Each JSONL record must conform to a versioned JSON Schema.
+
+Example event:
+
+```json
+{
+  "event_id": "01J8M2K4D7Y7Q5G6H8J9K0M1N2",
+  "event_type": "purchase",
+  "event_ts": "2025-01-15T13:42:11.123Z",
+  "customer_id": "cust-123",
+  "amount": 42.50,
+  "currency": "USD",
+  "attributes": {
+    "channel": "web"
+  },
+  "schema_version": 1
+}
+```
+
+Required rules:
+
+- `event_id`: non-empty string, globally unique, maximum 128 characters
+- `event_type`: non-empty string
+- `event_ts`: RFC 3339 timestamp with a UTC offset; normalize to UTC
+- `customer_id`: non-empty string
+- `amount`: non-negative number
+- `currency`: three-letter uppercase string
+- `attributes`: JSON object
+- `schema_version`: integer currently equal to `1`
+- Reject unknown top-level fields unless explicitly allowed by a schema revision
+
+Normalized analytical columns:
 
 ```text
-landing/events/
-  date=2026-08-22/hour=13/*.jsonl
-
-curated/events/
-  event_date=2026-08-22/event_hour=13/part-<run-id>.parquet
-
-quarantine/events/
-  date=2026-08-22/hour=13/invalid-<run-id>.jsonl
-
-state/etl.sqlite
+event_id        VARCHAR
+event_type      VARCHAR
+event_ts        TIMESTAMP WITH TIME ZONE
+customer_id     VARCHAR
+amount          DECIMAL(18, 2)
+currency        VARCHAR
+attributes      JSON
+schema_version INTEGER
+event_date      DATE
+event_hour      INTEGER
+payload_hash    VARCHAR
+ingest_batch_id VARCHAR
+ingested_at     TIMESTAMP WITH TIME ZONE
 ```
 
-## Event contract
+---
 
-```python
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+## 3. Processing flow
 
-class Event(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+Each hourly run performs the following steps.
 
-    event_id: str = Field(min_length=1)
-    event_type: str = Field(min_length=1)
-    event_time: datetime
-    source: str = Field(min_length=1)
-    payload: dict
+### Step 1: Discover the hourly input
+
+Use a deterministic batch identifier:
+
+```text
+batch_id = <source>/<UTC logical hour>/<input content hash>
 ```
 
-Validation rules should include:
+The batch metadata includes:
 
-- Required fields and types
-- UTC timestamps
-- Non-empty `event_id`
-- Allowed event types, if applicable
-- Maximum payload size
-- Reject unknown fields unless explicitly supported
+- Logical UTC hour
+- Source identifier
+- Content checksum or object version
+- Discovery timestamp
+- Processing attempt count
 
-Invalid records go to quarantine with the original line, source file, line number, and validation error.
+If the same batch is seen again, it is not reprocessed as a new batch.
 
-## Hourly workflow
+### Step 2: Stream and decode JSONL
 
-1. Determine the target hour, for example `2026-08-22T13:00Z`.
-2. Discover all input files for that hour.
-3. Create or load a checkpoint row.
-4. Read JSONL incrementally, tracking file and line offsets.
-5. Parse and validate each record.
-6. Deduplicate by `event_id`.
-7. Add partition columns derived from `event_time`.
-8. Write valid records to a temporary Parquet file.
-9. Atomically rename the temporary file into the target partition.
-10. Commit the checkpoint and deduplication records in one transaction.
-11. Emit metrics and mark the hour complete.
+Read one line at a time.
 
-A simplified processing loop:
+For every line:
 
-```python
-def process_hour(hour, files, db, output_root):
-    run_id = uuid.uuid4().hex
-    valid = []
-    invalid = []
+1. Decode JSON.
+2. Validate against the JSON Schema.
+3. Normalize timestamp and numeric fields.
+4. Compute `payload_hash` from canonical JSON.
+5. Derive:
+   - `event_date = date(event_ts)`
+   - `event_hour = hour(event_ts)`
+6. Send invalid records to the rejection dataset with:
+   - `batch_id`
+   - line number
+   - raw record
+   - rejection reason
+   - validation path
 
-    for path in files:
-        for line_no, raw in enumerate(path.open(), start=1):
-            try:
-                event = Event.model_validate_json(raw)
-            except Exception as exc:
-                invalid.append({
-                    "source_file": str(path),
-                    "line_number": line_no,
-                    "raw": raw.rstrip("\n"),
-                    "error": str(exc),
-                })
-                continue
+Malformed JSON, schema violations, invalid timestamps, and invalid numeric values are rejected individually. One bad record does not discard the batch.
 
-            inserted = db.execute(
-                "INSERT OR IGNORE INTO seen_events(event_id, first_seen_hour) "
-                "VALUES (?, ?)",
-                (event.event_id, hour.isoformat()),
-            ).rowcount
+### Step 3: Deduplicate
 
-            if inserted:
-                valid.append({
-                    **event.model_dump(),
-                    "event_date": event.event_time.date().isoformat(),
-                    "event_hour": event.event_time.hour,
-                })
+Deduplication uses `event_id` as the business key.
 
-    write_quarantine(invalid, hour, run_id)
+Rules:
 
-    if not valid:
-        db.mark_complete(hour, row_count=0)
-        return
+- The first valid occurrence of an `event_id` becomes canonical.
+- Repeated occurrences with the same `payload_hash` are counted as duplicates and ignored.
+- Repeated occurrences with a different `payload_hash` are written to a conflict dataset and do not replace the canonical event.
+- Deduplication applies across all historical batches, not only within the current hour.
 
-    table = pyarrow.Table.from_pylist(valid)
-    partition = output_root / (
-        f"event_date={hour.date()}/event_hour={hour.hour:02d}"
-    )
-    temp = partition / f".part-{run_id}.parquet.tmp"
-    final = partition / f"part-{run_id}.parquet"
+### Step 4: Commit accepted events
 
-    partition.mkdir(parents=True, exist_ok=True)
-    pyarrow.parquet.write_table(table, temp, compression="zstd")
-    fsync_file(temp)
-    atomic_rename(temp, final)
+Use one DuckDB transaction:
 
-    db.mark_complete(
-        hour,
-        row_count=len(valid),
-        output_file=str(final),
-        output_checksum=sha256(final),
-    )
-```
+1. Insert the batch record if it does not already exist.
+2. Insert accepted events with a uniqueness constraint on `event_id`.
+3. Record duplicate and conflict counts.
+4. Mark the batch `COMMITTED`.
+5. Record all affected `(event_date, event_hour)` partitions and the commit generation.
 
-For production, insert deduplication keys into a staging table first, then move them to `seen_events` only when the output commit succeeds. This prevents a crash from losing records that were marked seen but never written.
-
-## Checkpoint schema
+Conceptual tables:
 
 ```sql
-CREATE TABLE checkpoints (
-  hour TEXT PRIMARY KEY,
-  status TEXT NOT NULL,               -- STARTED, WRITTEN, COMMITTED, FAILED
-  input_manifest TEXT NOT NULL,       -- JSON list of files and sizes
-  output_file TEXT,
-  output_checksum TEXT,
-  row_count INTEGER DEFAULT 0,
-  invalid_count INTEGER DEFAULT 0,
-  updated_at TEXT NOT NULL,
-  error TEXT
+CREATE TABLE batches (
+    batch_id VARCHAR PRIMARY KEY,
+    logical_hour TIMESTAMP WITH TIME ZONE NOT NULL,
+    input_version VARCHAR NOT NULL,
+    status VARCHAR NOT NULL,
+    valid_count BIGINT DEFAULT 0,
+    rejected_count BIGINT DEFAULT 0,
+    duplicate_count BIGINT DEFAULT 0,
+    conflict_count BIGINT DEFAULT 0,
+    committed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE TABLE seen_events (
-  event_id TEXT PRIMARY KEY,
-  first_seen_hour TEXT NOT NULL
+CREATE TABLE events (
+    event_id VARCHAR PRIMARY KEY,
+    event_type VARCHAR NOT NULL,
+    event_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+    customer_id VARCHAR NOT NULL,
+    amount DECIMAL(18,2) NOT NULL,
+    currency VARCHAR NOT NULL,
+    attributes JSON NOT NULL,
+    schema_version INTEGER NOT NULL,
+    event_date DATE NOT NULL,
+    event_hour INTEGER NOT NULL,
+    payload_hash VARCHAR NOT NULL,
+    ingest_batch_id VARCHAR NOT NULL,
+    ingested_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE partition_state (
+    event_date DATE NOT NULL,
+    event_hour INTEGER NOT NULL,
+    desired_generation BIGINT NOT NULL,
+    published_generation BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (event_date, event_hour)
 );
 ```
 
-Store the input manifest, including file path, size, modification time, and checksum. If the same hour is rerun with an identical manifest and status `COMMITTED`, return immediately.
+The transaction must commit before any Parquet publication begins.
 
-## Recovery behavior
+---
 
-- `STARTED`: safely restart processing.
-- `WRITTEN`: verify the output checksum; finalize the checkpoint if valid, otherwise remove the incomplete output and rerun.
-- `COMMITTED`: no-op.
-- Missing or changed input manifest: fail loudly and require an explicit reprocess decision.
-- Write output to a temporary filename and rename atomically so readers never observe partial Parquet files.
-- Keep failed inputs and validation errors for replay.
+## 4. Parquet layout
 
-For late-arriving events, process a configurable lookback window, such as the previous 24 hours, and write a new Parquet part into the original event-time partition. Periodic compaction can merge small files.
+Partition by the event timestamp, not ingestion time:
 
-## Tests
+```text
+event_date=2025-01-15/event_hour=13/
+```
 
-Unit tests:
+Each partition contains canonical events for that UTC date and hour.
 
-- Valid event parses successfully.
-- Missing, malformed, extra, or oversized fields are quarantined.
-- Duplicate `event_id` values produce one output record.
-- Partition columns are derived correctly from UTC timestamps.
-- Empty hourly input completes successfully.
-- Checksum and manifest values are recorded.
+Recommended Parquet settings:
 
-Integration tests:
+- Compression: Zstandard
+- Dictionary encoding for low-cardinality strings
+- Explicit Arrow schema matching the event contract
+- Stable sort by `event_id`
+- Row groups of approximately 64–128 MB
+- One current published dataset per partition generation
 
-- End-to-end JSONL to Parquet conversion.
-- Rerunning a committed hour is idempotent.
-- Simulated crash after Parquet rename resumes without duplication.
-- Simulated crash before rename leaves no committed checkpoint.
-- Late events land in the correct historical partition.
-- Corrupt input files are reported without losing valid files.
+Late-arriving events are handled by rebuilding the affected partition. This prevents duplicate append output and ensures that each published partition contains the complete canonical set.
 
-Property-based tests can generate arbitrary JSON records to verify that validation never crashes the worker and that deduplication remains deterministic.
+For local or POSIX storage:
 
-Operational metrics should include input files, lines read, valid rows, invalid rows, duplicates dropped, output bytes, processing duration, and checkpoint status.
+1. Write the complete partition to a temporary name.
+2. Validate row count and schema.
+3. Atomically replace the published partition.
+4. Update `published_generation`.
+
+For object storage:
+
+1. Write a versioned Parquet object.
+2. Validate it.
+3. Publish a manifest containing the active object version using a conditional write.
+4. Update `published_generation`.
+
+Readers must use the manifest or published generation rather than partially written output.
+
+---
+
+## 5. Checkpointed recovery
+
+The checkpoint is the committed database state, not the scheduler’s process state.
+
+A run is considered complete only when:
+
+1. The batch is `COMMITTED`.
+2. Every affected partition has `published_generation >= desired_generation`.
+3. The batch is marked `PUBLISHED`.
+
+Recovery behavior:
+
+- If the process fails before the DuckDB transaction commits, retry the batch normally.
+- If it fails after the transaction commits but before Parquet publication, the batch remains committed and is not inserted again.
+- If it fails during partition publication, compare `desired_generation` and `published_generation`, then rebuild only missing or stale partitions.
+- If it fails after publication but before the final checkpoint update, rechecking the generation makes the operation idempotent.
+- A retry of an already published batch performs no event duplication.
+
+The scheduler should allow retries with exponential backoff and should never delete committed state automatically.
+
+---
+
+## 6. Hourly orchestration
+
+Each hourly invocation:
+
+1. Process the current UTC hour.
+2. Discover newly available batches for that hour.
+3. Retry previously committed-but-unpublished batches.
+4. Optionally scan a configurable late-arrival window, such as the previous 48 hours.
+5. Publish all stale affected partitions.
+6. Emit metrics and a run summary.
+
+Suggested configuration:
+
+```yaml
+schedule: "hourly"
+timezone: "UTC"
+late_arrival_hours: 48
+max_retries: 5
+parquet_compression: "zstd"
+schema_version: 1
+reject_invalid_records: true
+conflict_policy: "quarantine"
+```
+
+A completeness watermark may be added separately. For example, an hour can be marked complete only after no new input has appeared for two consecutive runs. This should not prevent late events from being processed later.
+
+---
+
+## 7. Operational metrics
+
+Emit metrics per batch and per run:
+
+- Input record count
+- Valid record count
+- Rejected record count
+- Duplicate count
+- Conflict count
+- Newly accepted event count
+- Affected partition count
+- Parquet rows written
+- Processing duration
+- Retry count
+- Current checkpoint state
+- Oldest unpublished generation
+
+Alert when:
+
+- A batch remains unpublished beyond the retry threshold
+- Rejection rate exceeds a configured limit
+- Conflicts occur unexpectedly
+- A partition cannot be published
+- Input checksums change for an existing batch identifier
+
+---
+
+## 8. Tests
+
+### Schema tests
+
+- Accept a fully valid record.
+- Reject missing required fields.
+- Reject wrong data types.
+- Reject malformed timestamps.
+- Reject non-UTC timestamps if UTC-only input is required.
+- Reject unknown fields.
+- Reject unsupported schema versions.
+- Verify timestamp and decimal normalization.
+
+### JSONL ingestion tests
+
+- Process valid and invalid records in the same input.
+- Preserve line numbers in rejection records.
+- Handle blank lines according to policy.
+- Handle malformed JSON without stopping the batch.
+- Verify deterministic payload hashing.
+
+### Deduplication tests
+
+- Duplicate within one batch.
+- Duplicate across two batches.
+- Same `event_id` and same payload.
+- Same `event_id` with different payload.
+- Verify that the first committed canonical event remains unchanged.
+- Verify uniqueness after retry.
+
+### Partitioning tests
+
+- Partition by UTC event date and hour.
+- Place late-arriving events in their event-time partition.
+- Rebuild a partition without duplicate rows.
+- Verify exact Parquet schema, compression, row count, and column values.
+- Verify stable output ordering.
+
+### Recovery tests
+
+Simulate interruption:
+
+- Before database commit
+- After database commit
+- During partition generation
+- After partition publication but before checkpoint update
+
+For every case, retry the run and verify:
+
+- Exactly one canonical row per `event_id`
+- No lost valid events
+- No duplicate Parquet rows
+- All affected partitions eventually show matching desired and published generations
+
+### Integration tests
+
+Use a temporary test database and local object-storage emulator or equivalent test backend to verify:
+
+1. Input discovery
+2. Validation and rejection
+3. Deduplication
+4. DuckDB transaction behavior
+5. Partition publication
+6. Checkpoint recovery
+7. Late-arrival rewriting
+8. Repeated hourly execution
+
+### Property-based tests
+
+Generate arbitrary valid and invalid events and verify invariants:
+
+```text
+count(distinct event_id) = count(all canonical events)
+all canonical events satisfy the schema
+reprocessing any batch does not change canonical output
+published output equals the canonical database projection
+```
+
+---
+
+## 9. Core correctness guarantees
+
+The design provides:
+
+- Schema validation before acceptance
+- Durable cross-hour deduplication
+- Quarantine of malformed and conflicting events
+- Event-time partitioned Parquet output
+- Safe late-arrival handling
+- Restartable, checkpointed processing
+- Idempotent retries
+- No dependency on Apache Spark

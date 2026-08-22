@@ -1,210 +1,288 @@
-Use FastAPI with `asyncpg` and explicit SQL. Keep HTTP handling, transaction orchestration, and SQL access separated, but avoid introducing an ORM or repository abstraction that hides transaction boundaries.
+**Recommended Stack**
 
-**Project layout**
+- FastAPI with Pydantic v2 for request/response validation.
+- `asyncpg` for asynchronous PostgreSQL access; no ORM or query builder.
+- PostgreSQL migrations managed by Alembic in SQL-only mode, or a comparable SQL migration tool.
+- `pytest`, `pytest-asyncio`, and HTTPX `AsyncClient` for integration tests.
+- PostgreSQL Testcontainers or a dedicated disposable PostgreSQL instance for tests.
 
-```text
-app/
-  main.py
-  db.py
-  errors.py
-  inventory/
-    models.py       # Pydantic request/response models
-    routes.py
-    service.py      # transaction and business rules
-    sql.py          # SQL constants or query functions
-tests/
-  integration/
-    conftest.py
-    test_inventory.py
-migrations/
-  001_inventory.sql
-```
-
-**Database schema**
+**Database Schema**
 
 ```sql
 CREATE TABLE products (
-    id          BIGSERIAL PRIMARY KEY,
-    sku         TEXT NOT NULL UNIQUE,
-    name        TEXT NOT NULL,
-    quantity    INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id              BIGSERIAL PRIMARY KEY,
+    sku             TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL,
+    description     TEXT,
+    quantity        INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+    unit_price      NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE stock_adjustments (
+    id              BIGSERIAL PRIMARY KEY,
+    product_id      BIGINT NOT NULL REFERENCES products(id),
+    delta           INTEGER NOT NULL CHECK (delta <> 0),
+    quantity_before INTEGER NOT NULL CHECK (quantity_before >= 0),
+    quantity_after  INTEGER NOT NULL CHECK (quantity_after >= 0),
+    reason          TEXT NOT NULL,
+    idempotency_key TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (product_id, idempotency_key)
 );
 
 CREATE INDEX products_created_id_idx
     ON products (created_at DESC, id DESC);
 
-CREATE TABLE stock_adjustments (
-    id          BIGSERIAL PRIMARY KEY,
-    product_id  BIGINT NOT NULL REFERENCES products(id),
-    delta       INTEGER NOT NULL CHECK (delta <> 0),
-    reason      TEXT NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE INDEX stock_adjustments_product_created_idx
     ON stock_adjustments (product_id, created_at DESC, id DESC);
 ```
 
-The adjustment table provides an audit trail; `products.quantity` is the current materialized stock level.
+The `quantity >= 0` constraint protects the invariant at the database level. The adjustment table provides an auditable history.
 
-**Connection management**
+**Connection and Transaction Management**
 
-Use an `asyncpg.Pool` created during FastAPI lifespan:
+Create one application-wide `asyncpg.Pool` during FastAPI startup and close it during shutdown. Inject the pool through a dependency.
+
+Use explicit transactions for all writes:
 
 ```python
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.db = await asyncpg.create_pool(
-        dsn=settings.database_url,
-        min_size=2,
-        max_size=10,
-    )
-    yield
-    await app.state.db.close()
+async with pool.acquire() as connection:
+    async with connection.transaction():
+        ...
 ```
 
-Expose the pool through a dependency. Acquire a connection only for the duration of a request or transaction.
+For multi-step operations, every query must use the same acquired connection. Never acquire separate connections within one logical transaction.
 
-**API surface**
+Configure a statement timeout and use parameterized SQL exclusively:
+
+```sql
+SET LOCAL statement_timeout = '5s';
+```
+
+Do not interpolate user input into SQL identifiers or values.
+
+**API Endpoints**
 
 ```text
 POST   /products
-GET    /products?limit=50&cursor=...
+GET    /products
 GET    /products/{product_id}
-POST   /products/{product_id}/adjustments
-GET    /products/{product_id}/adjustments?limit=50&cursor=...
+PATCH  /products/{product_id}
+DELETE /products/{product_id}
+POST   /products/{product_id}/stock-adjustments
+GET    /products/{product_id}/stock-adjustments
 ```
 
-Example payloads:
+Example request models:
 
 ```json
 POST /products
 {
   "sku": "SKU-1001",
   "name": "Keyboard",
-  "quantity": 20
+  "description": "Mechanical keyboard",
+  "unit_price": "89.99",
+  "initial_quantity": 25
 }
 ```
 
 ```json
-POST /products/1/adjustments
+POST /products/{id}/stock-adjustments
 {
   "delta": -3,
-  "reason": "damaged stock"
+  "reason": "Customer order"
 }
 ```
 
-Responses should use Pydantic models and include `id`, `sku`, `name`, `quantity`, and timestamps. Return `409 Conflict` for duplicate SKUs or an adjustment that would make stock negative, `404` for missing products, and `422` for malformed input.
+Support an optional `Idempotency-Key` header for stock adjustments. Require it for clients that may retry requests.
 
-**Key transaction for stock adjustments**
+**Product Creation**
 
-Perform the lock, validation, update, and audit insert in one transaction:
+Run product creation in a transaction:
 
-```python
-async def adjust_stock(pool, product_id: int, delta: int, reason: str):
-    if delta == 0:
-        raise InvalidAdjustment()
+1. Insert the product.
+2. If `initial_quantity` is nonzero, insert an initial stock adjustment with:
+   - `delta = initial_quantity`
+   - `quantity_before = 0`
+   - `quantity_after = initial_quantity`
+   - `reason = 'initial stock'`
+3. Commit and return the product.
 
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            product = await conn.fetchrow(
-                """
-                SELECT id, quantity
-                FROM products
-                WHERE id = $1
-                FOR UPDATE
-                """,
-                product_id,
-            )
-            if product is None:
-                raise ProductNotFound()
+Translate duplicate SKU violations into `409 Conflict`.
 
-            new_quantity = product["quantity"] + delta
-            if new_quantity < 0:
-                raise InsufficientStock()
+**Product Listing and Pagination**
 
-            updated = await conn.fetchrow(
-                """
-                UPDATE products
-                SET quantity = $2, updated_at = now()
-                WHERE id = $1
-                RETURNING id, sku, name, quantity, created_at, updated_at
-                """,
-                product_id,
-                new_quantity,
-            )
+Use keyset pagination rather than offset pagination. It remains stable and efficient as data changes.
 
-            await conn.execute(
-                """
-                INSERT INTO stock_adjustments(product_id, delta, reason)
-                VALUES ($1, $2, $3)
-                """,
-                product_id,
-                delta,
-                reason,
-            )
+Query parameters:
 
-            return updated
+```text
+limit: integer, default 50, maximum 100
+cursor: opaque cursor, optional
+sku: optional exact or prefix filter
+search: optional name search
 ```
 
-`SELECT ... FOR UPDATE` serializes concurrent adjustments for the same product. The transaction guarantees that the quantity update and audit record either both commit or both roll back.
-
-For product creation, insert the initial quantity and optionally create an initial adjustment in the same transaction. Convert PostgreSQL unique-constraint violations into `409`.
-
-**Pagination**
-
-Prefer keyset pagination over offsets for stable performance:
+Use `(created_at, id)` as the ordering key:
 
 ```sql
-SELECT id, sku, name, quantity, created_at, updated_at
+SELECT id, sku, name, description, quantity, unit_price,
+       created_at, updated_at
 FROM products
-WHERE ($1::timestamptz IS NULL AND $2::bigint IS NULL)
-   OR (created_at, id) < ($1, $2)
+WHERE
+    ($1::timestamptz IS NULL
+     OR (created_at, id) < ($1, $2))
+    AND ($3::text IS NULL OR sku ILIKE $3 || '%')
+    AND ($4::text IS NULL OR name ILIKE '%' || $4 || '%')
 ORDER BY created_at DESC, id DESC
-LIMIT $3;
+LIMIT $5;
 ```
 
-Encode the last row’s `(created_at, id)` as an opaque base64 URL-safe cursor. Validate `limit` with `Query(50, ge=1, le=200)`. Return:
+The cursor should be a URL-safe encoded JSON object containing the last row’s `created_at` and `id`. Treat malformed cursors as `400 Bad Request`.
+
+Return:
 
 ```json
 {
   "items": [],
-  "next_cursor": "opaque-token-or-null"
+  "next_cursor": "opaque-value"
 }
 ```
 
-Apply the same pattern to adjustment history, using `(created_at, id)` scoped to a single `product_id`.
+Use a separate count endpoint or omit total counts from normal listing responses. `COUNT(*)` on every request adds cost and is unnecessary for cursor pagination.
 
-**Error handling**
+**Stock Adjustment Transaction**
 
-Register handlers for:
+The adjustment operation must be atomic and serialize concurrent changes for one product:
 
-- domain exceptions (`ProductNotFound`, `InsufficientStock`)
-- `asyncpg.UniqueViolationError`
-- database connectivity errors, mapped to `503`
-- unexpected exceptions, logged with a request ID and returned as generic `500`
+```sql
+SELECT quantity
+FROM products
+WHERE id = $1
+FOR UPDATE;
+```
 
-Do not expose SQL errors or connection details to clients.
+Within the same transaction:
 
-**Integration tests**
+1. Lock the product row.
+2. Check whether `(product_id, idempotency_key)` already exists.
+3. If it exists, return the previously stored adjustment and current product state.
+4. Calculate `new_quantity = quantity + delta`.
+5. Reject the operation with `409 Conflict` if `new_quantity < 0`.
+6. Update the product quantity and `updated_at`.
+7. Insert the stock adjustment record.
+8. Commit.
 
-Run PostgreSQL in CI and locally with Testcontainers or Docker Compose. Tests should use the real database and migrations, not SQLite or mocks.
+Use an integer delta, allowing positive and negative values but rejecting zero. Use PostgreSQL `NUMERIC` for money and return monetary values as decimal strings or validated decimal fields.
 
-Recommended cases:
+The locking query ensures that two simultaneous adjustments cannot both read the same quantity and oversell stock.
 
-1. Create a product and retrieve it.
-2. Reject duplicate SKU with `409`.
-3. Apply a positive adjustment and verify quantity plus audit row.
-4. Reject an adjustment that would make quantity negative; verify neither table changed.
-5. Run concurrent adjustments against one product and verify the final quantity equals the sum of successful deltas.
-6. Verify cursor pagination has no duplicates or gaps across multiple pages.
-7. Verify adjustment history pagination.
-8. Verify missing product returns `404`.
-9. Roll back when the audit insert fails (inject a database constraint failure in a test transaction).
-10. Verify request validation rejects zero deltas and invalid limits.
+For idempotency, the insert should also be protected by the unique constraint. If a concurrent request races on the same key, handle the unique violation by selecting and returning the existing adjustment after the transaction state is recovered, or perform the idempotency lookup while holding the product lock so requests for the same product serialize.
 
-A concurrency test can start multiple async tasks, each calling the adjustment endpoint, then assert the final quantity and count of audit records. Use a separate connection per task so row locking is exercised realistically.
+**Stock History Pagination**
 
-This design keeps SQL explicit, makes transaction boundaries visible, supports safe concurrent stock changes, and provides production-like integration coverage without an ORM.
+Expose adjustment history with the same cursor strategy:
+
+```sql
+SELECT id, product_id, delta, quantity_before, quantity_after,
+       reason, idempotency_key, created_at
+FROM stock_adjustments
+WHERE product_id = $1
+  AND (
+      $2::timestamptz IS NULL
+      OR (created_at, id) < ($2, $3)
+  )
+ORDER BY created_at DESC, id DESC
+LIMIT $4;
+```
+
+History is append-only. Do not allow updates or deletes to adjustment records.
+
+**Updates and Deletes**
+
+`PATCH /products/{id}` may change `name`, `description`, and `unit_price`, but not `quantity`. Quantity changes must use the adjustment endpoint so that every stock mutation is auditable.
+
+Use a transaction for updates and return `404` when the product does not exist. Decide explicitly whether deletion is allowed for products with stock history. The safer policy is to reject deletion with `409 Conflict` when adjustments exist, or use a soft-delete column if historical products must remain queryable.
+
+**Error Contract**
+
+Return a consistent structure:
+
+```json
+{
+  "error": {
+    "code": "INSUFFICIENT_STOCK",
+    "message": "Stock cannot become negative"
+  }
+}
+```
+
+Recommended status codes:
+
+- `400`: malformed cursor or invalid request semantics.
+- `404`: product or adjustment resource not found.
+- `409`: duplicate SKU, insufficient stock, or conflicting deletion.
+- `422`: Pydantic validation failure.
+- `500`: unexpected server error, with database details excluded from the response.
+
+Add exception handlers for PostgreSQL constraint violations and map known constraint names to stable API error codes.
+
+**Application Structure**
+
+Keep boundaries explicit:
+
+- API/router layer: HTTP parsing, authentication, status codes.
+- Service layer: transaction boundaries and business rules.
+- Repository layer: parameterized SQL and row mapping.
+- Database layer: pool creation, connection helpers, migrations.
+- Schema layer: Pydantic request and response models.
+
+Repositories should accept an `asyncpg.Connection` when called inside a transaction. This prevents accidental transaction splitting.
+
+Use typed row-to-model conversion rather than returning raw driver records from route handlers.
+
+**Integration Tests**
+
+Run tests against real PostgreSQL, not SQLite or mocks.
+
+Cover:
+
+1. Product creation returns the persisted product.
+2. Duplicate SKU returns `409`.
+3. Product listing honors limit and cursor ordering.
+4. Invalid and tampered cursors return `400`.
+5. Product retrieval and updates work.
+6. Missing products return `404`.
+7. Positive stock adjustment updates quantity and creates history.
+8. Negative adjustment succeeds when sufficient stock exists.
+9. Negative adjustment that would make stock negative returns `409` and changes nothing.
+10. Zero delta returns `422`.
+11. Adjustment history contains correct before and after quantities.
+12. Repeating the same idempotent request returns the original result and creates one history row.
+13. Concurrent adjustments serialize correctly and never produce negative stock.
+14. Concurrent adjustments whose combined delta exceeds stock result in one successful transaction and one `409`.
+15. Transaction rollback leaves both product quantity and history unchanged after an induced failure.
+16. Database constraints reject invalid quantities even if application validation is bypassed.
+17. Product deletion follows the documented history policy.
+
+For concurrency testing, create a product with a known quantity, synchronize multiple async tasks with an `asyncio.Barrier`, submit adjustments simultaneously, then assert:
+
+```text
+final_quantity = initial_quantity + sum(successful_deltas)
+final_quantity >= 0
+number_of_history_rows = number_of_successful_adjustments
+```
+
+Use isolated database schemas or truncate tables between tests. Run migrations as part of the test fixture setup and verify the test suite against the same PostgreSQL major version used in deployment.
+
+**Verification and Operational Requirements**
+
+- Run formatting, linting, static type checking, and the complete integration suite in CI.
+- Test migrations both from an empty database and from a representative prior schema.
+- Add structured logs containing request ID, product ID, adjustment ID, and transaction outcome, without logging sensitive request data.
+- Expose health checks for application readiness and database connectivity.
+- Set pool size based on PostgreSQL connection capacity, with bounded acquisition timeout.
+- Document the transaction and idempotency behavior in the OpenAPI description.
+- Add metrics for request latency, database errors, stock conflicts, and transaction rollbacks.

@@ -1,153 +1,190 @@
-Design the policy as a repository-owned, reviewable contract. Generate an SBOM on every build, evaluate every direct and transitive component against that contract, and make exceptions explicit, scoped, approved, and expiring.
+**Dependency License Policy**
 
-### Policy file
+1. **Allowed licenses**
+   - MIT, BSD-2-Clause, BSD-3-Clause, ISC, Apache-2.0, Zlib, BSL-1.1, and other explicitly approved permissive licenses.
+   - SPDX license expressions are the source of truth.
+   - Dual-licensed dependencies are acceptable only when at least one permitted option is usable by the project.
 
-`policy/license-policy.yaml`:
+2. **Restricted licenses**
+   - GPL-2.0, GPL-2.0-only, GPL-2.0-or-later
+   - GPL-3.0, GPL-3.0-only, GPL-3.0-or-later
+   - AGPL-3.0, AGPL-3.0-only, AGPL-3.0-or-later
+   - Any license expression containing GPL or AGPL is restricted unless covered by an approved exception.
+   - LGPL, MPL, EPL, SSPL, source-available, custom, unknown, and `NOASSERTION` licenses require review. They are not automatically treated as GPL/AGPL, but should fail closed until explicitly classified.
+
+3. **Scope**
+   - Evaluate direct and transitive runtime and build dependencies.
+   - Include production, development, test, optional, plugin, generated-code, and vendored dependencies unless a documented policy excludes a category.
+   - License checks must run against the resolved dependency graph, not only manifest declarations.
+
+4. **Exception requirements**
+   Each exception must include:
+   - Package coordinate and ecosystem.
+   - Exact version or approved version range.
+   - SPDX license identifier or expression.
+   - Direct/transitive status.
+   - Business and legal rationale.
+   - Scope of permitted use.
+   - Approver from Legal or the designated compliance owner.
+   - Issue or ticket reference.
+   - Owner.
+   - Approval and expiration dates.
+   - Optional checksum or lockfile identity for high-risk packages.
+
+   Exceptions should be narrow. A package-wide wildcard or indefinite GPL/AGPL approval is prohibited.
+
+Example exception record:
 
 ```yaml
-version: 1
-
-blocked_spdx:
-  - GPL-1.0-only
-  - GPL-1.0-or-later
-  - GPL-2.0-only
-  - GPL-2.0-or-later
-  - GPL-3.0-only
-  - GPL-3.0-or-later
-  - AGPL-1.0-only
-  - AGPL-1.0-or-later
-  - AGPL-3.0-only
-  - AGPL-3.0-or-later
-
-unknown_license: deny
-unrecognized_license_expression: deny
-
 exceptions:
-  - purl: pkg:npm/example-gpl-package@1.2.3
-    licenses:
-      - GPL-3.0-only
-    reason: "Required for legacy file conversion"
-    owner: team-platform
-    approved_by:
-      - legal@example.com
-      - security@example.com
+  - id: EX-2025-001
+    package: "example.org/tool"
+    ecosystem: go
+    versions:
+      - "v2.4.1"
+    license: "GPL-3.0-only"
+    scope: "build-only"
+    rationale: "Used only to generate development artifacts; absent from shipped binaries."
+    owner: platform-team
+    approver: legal@example.com
     ticket: LEGAL-1234
-    expires: 2027-06-30
+    approved_on: "2025-01-15"
+    expires_on: "2025-12-31"
 ```
 
-Rules:
+The enforcement engine must reject expired exceptions, malformed records, missing approvals, and exceptions whose package, version, license, or scope does not match the detected dependency.
 
-- Inspect direct and transitive dependencies.
-- Parse SPDX identifiers and expressions structurally.
-- A component is blocked if any license option in its expression is GPL or AGPL. For example, `MIT OR GPL-3.0-only` is blocked.
-- An exception must match the exact package URL, version, and blocked license.
-- Exceptions require a reason, owning team, legal/security approval, tracking ticket, and expiration date.
-- Expired, malformed, or overly broad exceptions fail CI.
-- Unknown or non-SPDX licenses fail CI until reviewed.
-- Production and development dependencies are both checked unless the repository explicitly documents a narrower scope.
+**Required Outputs**
 
-### SBOM and policy-checking flow
+Every dependency scan produces:
 
-Use Syft (or an equivalent SBOM generator) to produce a CycloneDX or SPDX JSON document. Keep the policy evaluator separate from SBOM generation so the same checker can be used locally and in CI.
+- A CycloneDX or SPDX SBOM containing:
+  - Package name, version, ecosystem, supplier, and PURL.
+  - Declared and detected license expressions.
+  - Dependency relationships.
+  - Component scope.
+  - Scan-tool version and generation timestamp.
+- A machine-readable policy report containing:
+  - Allowed components.
+  - Restricted components.
+  - Unknown or unclassified components.
+  - Matched exception identifiers.
+  - Violations and remediation guidance.
+- A human-readable CI summary.
+- A signed or tamper-evident SBOM artifact for every release build.
 
-Recommended commands:
+Use one SBOM format consistently across all ecosystems. CycloneDX JSON is a practical default; SPDX JSON is equally acceptable if already supported by organizational tooling.
+
+**CI Workflow**
+
+1. **Dependency resolution**
+   - Resolve dependencies using locked, reproducible versions.
+   - Fail if the dependency graph is not reproducible or the lock state is stale.
+
+2. **License and SBOM generation**
+   - Run an SPDX-aware license scanner over the complete resolved graph.
+   - Generate the SBOM from the same resolved graph.
+   - Normalize license identifiers to SPDX IDs and expressions.
+
+3. **Policy evaluation**
+   - Load the approved license policy and exception registry.
+   - Match each component by ecosystem, package coordinate, resolved version, license expression, and scope.
+   - Apply this decision order:
+     1. Valid, unexpired matching exception: allow and report.
+     2. GPL or AGPL without a matching exception: fail.
+     3. Unknown, custom, or unresolved license: fail or require explicit classification.
+     4. Approved license: allow.
+     5. Other restricted license: fail pending review.
+
+4. **Security and quality checks**
+   - Run dependency vulnerability scanning separately from license scanning.
+   - Verify the SBOM is valid against its schema.
+   - Verify every resolved dependency appears in the SBOM.
+   - Verify every SBOM component has a license result or an explicit unknown classification.
+   - Upload the policy report and SBOM for pull requests and releases.
+   - Publish release SBOMs alongside release provenance.
+
+5. **Scheduled re-evaluation**
+   - Run the complete scan on every pull request and protected branch push.
+   - Run it on a scheduled basis, at least daily, to detect changed metadata, newly expired exceptions, and scanner database updates.
+   - Run a release gate independently of pull-request checks.
+
+Illustrative workflow logic:
 
 ```text
-syft dir:. -o cyclonedx-json=artifacts/sbom.cdx.json
-license-policy check \
-  --sbom artifacts/sbom.cdx.json \
-  --policy policy/license-policy.yaml
+resolve locked dependencies
+generate license inventory
+generate SBOM
+validate SBOM schema
+evaluate policy
+
+if any GPL/AGPL component lacks a valid exact exception:
+    fail CI
+
+if any unknown/custom/unresolved license lacks explicit approval:
+    fail CI
+
+if any exception is expired, malformed, or mismatched:
+    fail CI
+
+otherwise:
+    publish SBOM and policy report
+    pass CI
 ```
 
-The checker should emit a machine-readable report containing:
+**Change-Control Rules**
 
-```json
-{
-  "status": "fail",
-  "violations": [
-    {
-      "purl": "pkg:npm/bad-package@4.0.0",
-      "licenses": ["GPL-3.0-only"],
-      "exception": null
-    }
-  ]
-}
-```
+- Adding or upgrading a dependency always triggers a full policy scan.
+- Changing an exception requires review from both the owning engineering team and Legal/compliance.
+- CI must prevent bypass through manually edited reports, because reports are generated from the resolved graph.
+- Suppression comments in source code and ad hoc CI environment variables are not valid exceptions.
+- A temporary emergency override may exist only as a protected, audited approval requiring an expiration timestamp and post-incident review.
 
-### GitHub Actions workflow
+**Tests**
 
-`.github/workflows/license-policy.yml`:
+The policy implementation should include automated fixtures for:
 
-```yaml
-name: Dependency license policy
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "0 3 * * 1"
-
-permissions:
-  contents: read
-
-jobs:
-  licenses:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: ./ci/install-dependencies.sh
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: artifacts/sbom.cdx.json
-
-      - name: Validate policy file
-        run: ./ci/license-policy validate --policy policy/license-policy.yaml
-
-      - name: Enforce dependency licenses
-        run: |
-          ./ci/license-policy check \
-            --sbom artifacts/sbom.cdx.json \
-            --policy policy/license-policy.yaml \
-            --report artifacts/license-report.json
-
-      - name: Run policy tests
-        run: ./ci/license-policy test
-
-      - name: Upload SBOM and report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-license-artifacts
-          path: artifacts/
-```
-
-The `check` step must return a non-zero exit code for any unapproved GPL/AGPL dependency, so pull requests cannot merge.
-
-### Tests
-
-Store fixture SBOMs under `ci/license-policy/fixtures/` and test at least:
-
-- MIT-only dependency: passes.
-- Direct GPL dependency: fails.
-- Transitive AGPL dependency: fails.
+- Permissive direct dependency: passes.
+- Permissive transitive dependency: passes.
+- GPL direct dependency without exception: fails.
+- GPL transitive dependency without exception: fails.
+- AGPL dependency without exception: fails.
 - GPL dependency with an exact valid exception: passes.
-- Wrong version or package in an exception: fails.
-- Expired exception: fails.
-- Missing approver, ticket, owner, or reason: fails.
-- `MIT OR GPL-3.0-only`: fails.
-- `GPL-3.0-only AND MIT`: fails.
-- Unknown license: fails.
-- Multiple violations produce all reported violations.
-- A newly introduced dependency is detected by comparing the current SBOM with the base revision.
+- GPL dependency with an exception for a different version: fails.
+- GPL dependency with an expired exception: fails.
+- GPL dependency with an exception for a different ecosystem or scope: fails.
+- GPL-3.0-or-later and AGPL-3.0-or-later expressions: fail without exceptions.
+- Dual license containing an approved option: passes according to the documented selection rule.
+- Unknown, custom, malformed, and `NOASSERTION` licenses: fail pending classification.
+- Multiple dependencies where only one violates policy: fails and identifies the exact component.
+- Duplicate package versions where only one version is excepted: fails for the unapproved version.
+- Missing or invalid SBOM relationships: fails validation.
+- Missing license metadata: fails closed.
+- Malformed exception records: fail before dependency evaluation.
+- Exceptions whose approval or expiration dates are invalid: fail.
+- Deterministic repeated scans produce equivalent component and policy results.
 
-Run these tests both in CI and locally through the same `license-policy test` command.
+CI-level tests should also verify that:
 
-Require CODEOWNERS approval from the security and legal owners for changes to `policy/license-policy.yaml`. Add a scheduled job so newly released dependency versions are re-evaluated even when application code has not changed.
+- A newly introduced GPL dependency fails a pull request.
+- Adding a valid exception makes the same dependency pass.
+- Removing the exception causes the build to fail again.
+- The generated SBOM contains the restricted dependency and its license.
+- The CI summary names the package, version, license, dependency path, and required remediation.
+- Release builds cannot publish without a passing policy decision and SBOM artifact.
+
+**Required Failure Message**
+
+A violation should be actionable:
+
+```text
+Dependency license policy violation:
+  package: example.org/tool
+  version: v2.4.1
+  license: GPL-3.0-only
+  dependency path: application -> build-helper -> example.org/tool
+  exception: none
+  action: remove, replace, or obtain an approved scoped exception
+```
+
+This design guarantees that any GPL or AGPL dependency introduced into the resolved graph fails CI unless a precise, approved, current exception explicitly permits it.

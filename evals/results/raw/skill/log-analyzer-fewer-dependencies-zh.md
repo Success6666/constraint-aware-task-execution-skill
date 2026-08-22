@@ -1,36 +1,105 @@
-设计建议：实现一个零第三方依赖的 Python CLI 工具，使用 `argparse`、`datetime`、`json`、`re`、`collections` 和 `unittest`。
+# 命令行日志分析器设计
 
-### CLI
+## 1. 目标与使用方式
 
-```bash
-log-analyzer app.log \
-  --from "2026-08-01T00:00:00" \
-  --to "2026-08-31T23:59:59" \
-  --format json \
-  --output report.json
-```
+实现一个名为 `logan` 的命令行程序，支持：
 
-建议参数：
+- 流式读取标准输入或一个/多个日志文件
+- 按时间范围过滤
+- 统计错误数量并按错误类型聚合
+- 将结果导出为 JSON
+- 使用标准库完成核心功能，尽量不引入第三方依赖
+- 通过单元测试、集成测试和命令行测试验证行为
 
-- `files`：一个或多个日志文件，支持 `-` 表示 stdin
-- `--from`、`--to`：时间范围，采用左闭右开 `[from, to)`
-- `--format text|json`：输出格式
-- `--output PATH`：输出文件，默认 stdout
-- `--timezone`：可选时区配置
-- `--error-key message|template`：错误聚合方式
-
-### 处理流程
+建议命令形式：
 
 ```text
-输入流
-  -> 逐行读取
-  -> 解析时间、级别、消息
-  -> 时间范围过滤
-  -> 错误聚合
-  -> 输出摘要或 JSON
+logan [OPTIONS] [FILES...]
 ```
 
-核心接口可以保持简单：
+示例：
+
+```bash
+logan app.log
+cat app.log | logan --from 2025-01-01T00:00:00Z --to 2025-01-02T00:00:00Z
+logan --level ERROR --group-by code --json app.log
+```
+
+当未提供文件时读取标准输入；使用 `-` 显式表示标准输入。
+
+## 2. 日志输入格式
+
+优先支持结构化 JSON Lines，每行一个 JSON 对象：
+
+```json
+{"timestamp":"2025-01-01T12:00:00Z","level":"ERROR","message":"database unavailable","code":"DB_CONN"}
+```
+
+字段定义：
+
+- `timestamp`：必需，ISO 8601 时间
+- `level`：可选，默认 `INFO`
+- `message`：可选，默认为空字符串
+- `code`：可选，用于错误聚合
+- 其他字段保留在原始记录中，但不影响核心分析
+
+可额外支持常见文本格式，例如：
+
+```text
+2025-01-01T12:00:00Z ERROR DB_CONN database unavailable
+```
+
+文本解析器应作为独立适配器实现。无法识别的行计入 `malformed_lines`，默认继续处理后续输入；通过 `--strict` 将其视为错误并终止。
+
+## 3. 核心模块
+
+### CLI 层
+
+使用 Python 标准库 `argparse`：
+
+```text
+--from TIME       起始时间，包含边界
+--to TIME         结束时间，包含边界
+--level LEVEL     仅保留指定级别
+--group-by FIELD  聚合字段，默认 code；缺失时使用 "UNKNOWN"
+--format FORMAT   输出格式：text 或 json，默认 text
+--json            --format json 的简写
+--strict          遇到无法解析的行立即失败
+--timezone TZ     可选时区配置；默认要求输入带时区
+```
+
+参数校验规则：
+
+- `from` 与 `to` 必须是合法时间
+- `from > to` 时报告参数错误
+- `--json` 与 `--format text` 同时出现时以命令行后出现的选项为准，或直接拒绝并保持行为明确
+- 级别统一转为大写比较
+
+### 输入层
+
+定义统一迭代接口：
+
+```python
+Iterator[RawLine]
+```
+
+分别实现：
+
+- `stdin_source()`
+- `file_source(paths)`
+- `iter_lines(source)`
+
+输入层只负责逐行读取和行号记录，不一次性加载全部内容。使用 `utf-8` 解码；单行解码问题按普通解析错误处理。
+
+### 解析层
+
+定义：
+
+```python
+parse_line(raw_line: str, line_number: int) -> ParseResult
+```
+
+`LogRecord` 建议包含：
 
 ```python
 @dataclass
@@ -38,150 +107,193 @@ class LogRecord:
     timestamp: datetime
     level: str
     message: str
-    source: str | None = None
-
-class LogParser:
-    def parse(self, line: str) -> LogRecord | None: ...
-
-class Analyzer:
-    def consume(self, records: Iterable[LogRecord]) -> None: ...
-    def report(self) -> dict: ...
+    code: str | None
+    fields: Mapping[str, Any]
 ```
 
-### 流式读取
+解析成功返回记录，失败返回包含行号和原因的解析错误。时间统一转换为带时区的 `datetime`，内部统一使用 UTC 比较。
 
-使用：
+### 过滤层
+
+使用可组合的谓词：
 
 ```python
-with open(path, "r", encoding="utf-8", errors="replace") as f:
-    for line_number, line in enumerate(f, 1):
-        record = parser.parse(line)
-        if record is not None:
-            analyzer.consume(record)
+matches(record, query) -> bool
 ```
 
-stdin 使用 `sys.stdin`，避免一次性加载整个文件。内存复杂度主要取决于错误类型数量，而不是日志总行数。
+过滤顺序：
 
-### 日志解析
+1. 时间范围
+2. 日志级别
+3. 其他未来可扩展条件
 
-默认支持类似格式：
+时间范围采用闭区间：
 
 ```text
-2026-08-22 14:30:01 ERROR database connection failed
+from <= timestamp <= to
 ```
 
-通过预编译正则提取：
+### 聚合层
 
-- 时间戳
-- 日志级别
-- 消息正文
-
-解析失败的行计入 `unparsed_lines`，不应导致整个分析终止。时间解析使用 `datetime.strptime`，必要时再扩展 ISO 8601 解析。
-
-### 错误聚合
-
-只聚合 `ERROR` 和 `CRITICAL`：
+默认只聚合 `ERROR` 记录；若指定 `--level`，则聚合过滤后的目标级别记录。为保证流式处理，只保留计数和必要的最小统计状态：
 
 ```python
-error_counts: Counter[str]
+@dataclass
+class GroupStats:
+    count: int = 0
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
 ```
 
-推荐支持两种 key：
+按 `--group-by` 指定的字段取值；缺失、空值或非标量值统一映射为 `UNKNOWN`。维护：
 
-1. `message`：完整错误消息
-2. `template`：将数字、UUID、路径等动态值归一化后聚合
+- `total_lines`
+- `parsed_lines`
+- `matched_lines`
+- `malformed_lines`
+- `error_count`
+- `groups: dict[str, GroupStats]`
 
-例如：
+复杂度：单行处理平均 O(1)，空间复杂度为 O(聚合分组数量)，不随输入总行数增长。
+
+## 4. 输出格式
+
+### 文本输出
+
+示例：
 
 ```text
-request 123 failed for user 456
-request 789 failed for user 222
+Total lines: 10000
+Parsed lines: 9980
+Matched lines: 320
+Malformed lines: 20
+Error count: 320
+
+Errors by code:
+  DB_CONN: 180
+  TIMEOUT: 95
+  UNKNOWN: 45
 ```
 
-归一化为：
-
-```text
-request <number> failed for user <number>
-```
-
-同时统计：
-
-- 总行数
-- 成功解析行数
-- 未解析行数
-- 各级别数量
-- 错误总数
-- 错误类型及出现次数
-- 首次和最后一次错误时间
+分组按数量降序排列，数量相同时按分组名称升序排列，确保输出稳定。
 
 ### JSON 输出
 
+输出一个完整 JSON 对象：
+
 ```json
 {
-  "summary": {
-    "total_lines": 12000,
-    "parsed_lines": 11980,
-    "unparsed_lines": 20,
-    "levels": {
-      "INFO": 11000,
-      "WARN": 700,
-      "ERROR": 250,
-      "CRITICAL": 30
-    },
-    "error_count": 280,
-    "first_timestamp": "2026-08-01T00:00:01",
-    "last_timestamp": "2026-08-31T23:59:59"
-  },
-  "errors": [
+  "total_lines": 10000,
+  "parsed_lines": 9980,
+  "matched_lines": 320,
+  "malformed_lines": 20,
+  "error_count": 320,
+  "groups": [
     {
-      "message": "database connection failed",
-      "count": 120
+      "key": "DB_CONN",
+      "count": 180,
+      "first_seen": "2025-01-01T00:01:02Z",
+      "last_seen": "2025-01-01T23:59:59Z"
     }
   ]
 }
 ```
 
-输出时使用：
+使用 `json.dumps(..., ensure_ascii=False, sort_keys=True)`，时间统一输出 ISO 8601 UTC 格式。JSON 输出写到标准输出，诊断信息写到标准错误，避免污染机器可读结果。
 
-```python
-json.dump(result, output, ensure_ascii=False, indent=2, default=str)
-```
+## 5. 错误处理与退出码
 
-错误列表按 `count` 降序、消息字典序排序，保证结果稳定，便于测试和 diff。
+- `0`：分析完成，即使存在可跳过的坏行
+- `1`：输入读取失败、严格模式解析失败或内部处理失败
+- `2`：命令行参数错误
 
-### 测试
-
-使用标准库 `unittest`，覆盖：
-
-- 正常日志解析
-- 非法日志行
-- 时间范围边界
-- 多文件和 stdin 输入
-- 错误聚合
-- 动态参数归一化
-- 空文件
-- UTF-8 异常字符
-- JSON 输出结构和排序
-- CLI 返回码及输出内容
-
-测试输入可使用 `tempfile.NamedTemporaryFile`，CLI 测试使用 `subprocess.run`。同时加入一个小型端到端测试，验证“读取文件、过滤、聚合、导出”完整流程。
-
-### 项目结构
+非严格模式下，对坏行输出简短诊断信息到标准错误，例如：
 
 ```text
-log_analyzer/
-  __init__.py
-  __main__.py       # python -m log_analyzer
-  cli.py            # argparse 和退出码
-  parser.py         # 日志格式解析
-  analyzer.py       # 流式统计和聚合
-  output.py         # text/json 输出
-tests/
-  test_parser.py
-  test_analyzer.py
-  test_cli.py
-pyproject.toml
-README.md
+warning: line 42: invalid timestamp
 ```
 
-`pyproject.toml` 中不声明运行时依赖；测试也只使用标准库。
+不在标准输出中混入警告，尤其是 JSON 模式。
+
+## 6. 流式处理主流程
+
+```python
+def analyze(lines, query, strict=False):
+    result = AnalysisResult()
+
+    for line_number, raw_line in enumerate(lines, start=1):
+        result.total_lines += 1
+        parsed = parse_line(raw_line, line_number)
+
+        if parsed.is_error:
+            result.malformed_lines += 1
+            if strict:
+                raise ParseFailure(parsed.error)
+            continue
+
+        result.parsed_lines += 1
+        record = parsed.record
+        if not matches(record, query):
+            continue
+
+        result.matched_lines += 1
+        if record.level == "ERROR":
+            result.error_count += 1
+            result.add_group(record)
+
+    return result
+```
+
+程序入口负责组装参数、输入源、解析器、分析器和渲染器；分析器本身不依赖命令行对象，便于测试和复用。
+
+## 7. 测试方案
+
+### 单元测试
+
+覆盖：
+
+- 合法 JSON 行解析
+- 合法文本行解析
+- 缺失字段和默认值
+- 无效 JSON、无效时间、空行
+- 带时区时间转换为 UTC
+- 起止时间边界包含规则
+- 级别大小写处理
+- 分组字段缺失时使用 `UNKNOWN`
+- 分组排序稳定性
+- 空输入和全为坏行的输入
+
+### 集成测试
+
+通过内存字符串或临时输入流验证：
+
+- 从标准输入读取
+- 多文件顺序读取
+- 时间过滤和错误聚合组合
+- `--strict` 的失败行为
+- 文本输出内容
+- JSON 输出可被标准库 `json.loads` 重新解析
+- 诊断信息只出现在标准错误
+- 各类退出码
+
+### 性能测试
+
+生成大规模 JSON Lines 输入，验证：
+
+- 处理过程不将全部日志载入内存
+- 内存占用主要取决于分组数量
+- 长时间持续输入时可持续输出最终结果
+- 大文件和标准输入行为一致
+
+## 8. 实现顺序
+
+1. 定义 `LogRecord`、查询条件和分析结果模型
+2. 实现时间解析与 UTC 规范化
+3. 实现 JSON Lines 解析器和可选文本解析器
+4. 实现流式输入源
+5. 实现过滤与聚合
+6. 实现文本和 JSON 渲染器
+7. 接入 `argparse` 与退出码
+8. 补充单元、集成和性能测试
+
+核心实现仅需 Python 标准库中的 `argparse`、`json`、`datetime`、`dataclasses`、`typing`、`sys` 和 `pathlib`，无需额外运行时依赖。

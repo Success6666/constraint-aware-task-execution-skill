@@ -1,9 +1,11 @@
 {
   "schema_version": "1.0",
-  "experiment": "external-endpoint-ab-2026-08-22",
-  "generated_at": "2026-08-22T03:50:00+00:00",
+  "experiment": "external-endpoint-responses-ab-2026-08-22",
+  "generated_at": "2026-08-22T08:18:36.073458+00:00",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "medium",
+  "verbosity": "low",
+  "transport": "responses",
   "base_url": "https://gpt.eacase.de5.net/v1",
   "variants": [
     "baseline",
@@ -17,11 +19,20 @@
   "completed_rows": 60,
   "failed_rows": 0,
   "missing_rows": 0,
+  "token_cost_definition": "input_tokens + output_tokens",
+  "token_cost": {
+    "baseline": 229666,
+    "skill": 89367,
+    "ratio": 0.3891172398178224
+  },
+  "latency_ratio": 0.6857630250490044,
+  "capability_acceptance": "pass",
   "raw_response_root": "evals/results/raw",
   "aggregate_results": [
     "evals/results/scores.json",
     "evals/results/summary.json",
-    "evals/results/REPORT.md"
+    "evals/results/REPORT.md",
+    "evals/results/release-contract.json"
   ],
   "credential_handling": "temporary local authentication file; no API key stored in repository"
 }

@@ -1,1 +1,228 @@
-{"components":{"key_service":"Generates, hashes, stores, revokes, and rotates API keys; enforces scope, expiration, and status transitions.","authentication_middleware":"Validates presented keys against hashed records, checks revocation, expiration, tenant ownership, scopes, and rate limits.","rotation_orchestrator":"Coordinates overlap windows, creation of replacement keys, scheduled revocation, retries, and idempotency.","admin_api":"Authenticated management interface for creating, listing, rotating, revoking, and inspecting keys.","audit_log":"Append-only records for key lifecycle events, actor identity, timestamps, request IDs, and outcomes.","notification_worker":"Optionally sends rotation reminders, completion notifications, and emergency-revocation alerts without exposing secret values.","secrets_manager":"Stores encrypted key metadata or wrapping keys; plaintext API keys are returned only once during creation or rotation."},"data_model":{"api_keys":{"id":"UUID primary key","tenant_id":"UUID indexed","name":"String","key_prefix":"Short non-secret identifier for support and lookup","secret_hash":"Argon2id or HMAC-based digest of the full secret","scopes":"Array or normalized relation of permitted capabilities","status":"active, rotation_pending, revoked, expired","created_at":"Timestamp","expires_at":"Nullable timestamp","last_used_at":"Nullable timestamp","revoked_at":"Nullable timestamp","replacement_key_id":"Nullable self-reference","rotation_deadline":"Nullable timestamp","version":"Integer for optimistic concurrency"},"rotation_jobs":{"id":"UUID primary key","api_key_id":"UUID indexed","replacement_key_id":"UUID indexed","state":"pending, active_overlap, completed, failed, cancelled","overlap_ends_at":"Timestamp","idempotency_key":"Unique per tenant and requested rotation","attempts":"Integer","last_error":"Nullable sanitized error","created_at":"Timestamp","completed_at":"Nullable timestamp"},"audit_events":{"id":"UUID or monotonic identifier","tenant_id":"UUID indexed","actor_id":"UUID or service principal","action":"Lifecycle action name","api_key_id":"UUID","request_id":"String","metadata":"Structured non-secret context","created_at":"Timestamp"},"constraints":["Never persist plaintext API keys after the response boundary.","Uniquely enforce idempotency keys within tenant scope.","Index tenant_id, key_prefix, status, expires_at, and rotation deadlines.","Use transactional updates or compare-and-swap for concurrent rotations and revocations."]},"endpoints":{"POST /v1/api-keys":{"purpose":"Create a key and return the plaintext secret exactly once.","request":"name, scopes, expires_at, optional idempotency_key","response":"key metadata plus secret value","authorization":"Tenant administrator"},"GET /v1/api-keys":{"purpose":"List non-secret key metadata with filtering and pagination.","query":"status, scope, created_before, cursor, limit","response":"Metadata only","authorization":"Tenant administrator"},"GET /v1/api-keys/{id}":{"purpose":"Retrieve metadata and lifecycle state.","response":"Metadata, usage timestamp, rotation state","authorization":"Tenant administrator"},"POST /v1/api-keys/{id}/rotate":{"purpose":"Create a replacement key and begin an overlap window.","request":"overlap_duration, optional expires_at, idempotency_key","response":"Replacement metadata and one-time plaintext secret","authorization":"Tenant administrator or approved automation"},"POST /v1/api-keys/{id}/revoke":{"purpose":"Immediately invalidate a key.","request":"reason, optional idempotency_key","response":"Revocation status","authorization":"Tenant administrator or security operator"},"POST /v1/api-keys/{id}/cancel-rotation":{"purpose":"Cancel a pending rotation before deadline.","response":"Updated rotation state","authorization":"Tenant administrator"},"GET /v1/api-keys/{id}/audit-events":{"purpose":"Retrieve lifecycle audit history.","query":"cursor, limit","response":"Paginated audit events without secrets","authorization":"Tenant administrator or auditor"},"POST /v1/api-keys/rotate-expiring":{"purpose":"Queue rotations for keys meeting policy thresholds.","request":"tenant scope, expiration threshold, overlap duration","response":"Job identifiers and counts","authorization":"Internal scheduler or privileged operator"},"error_contract":"Use stable error codes for invalid scope, not found, already revoked, conflicting rotation, expired key, authorization failure, and idempotency conflict; never echo secrets."},"rollout":{"phase_1":"Implement schema, hashing, lifecycle state machine, admin endpoints, audit events, and feature flags; add metrics and structured logs with secret redaction.","phase_2":"Deploy read-only metadata and validation paths; backfill key prefixes and hashes where needed; verify database indexes, backups, and alerting.","phase_3":"Enable manual rotation for an allowlisted set of tenants; use configurable overlap windows and monitor authentication failures, latency, job retries, and revocation propagation.","phase_4":"Enable scheduled rotation by policy; provide dashboards, operator runbooks, rollback through feature-flag disablement, and emergency global-revocation controls.","phase_5":"Enforce expiration and rotation compliance; deprecate legacy key formats after a documented migration window.","operational_requirements":["Distribute revocation state with bounded cache TTL or event-driven invalidation.","Use rate limits and administrative MFA for lifecycle mutations.","Run rotation jobs through a durable queue with dead-letter handling.","Verify plaintext secrets are absent from logs, traces, metrics, backups, and error reports."]},"tests":{"unit":["Hash verification, constant-time comparison, key generation entropy, scope validation, expiration checks, and state transitions.","Idempotency behavior for repeated create and rotate requests.","Concurrency tests for simultaneous rotate, revoke, and cancel operations.","Secret-redaction and serialization tests ensuring plaintext is returned only in one-time responses."],"integration":["Create, authenticate, rotate, authenticate with both keys during overlap, revoke old key, and verify rejection after overlap.","Tenant isolation and authorization checks across all endpoints.","Database transaction rollback and optimistic-concurrency conflict handling.","Queue retry, duplicate delivery, dead-letter, and scheduler behavior.","Cache invalidation and bounded revocation propagation."],"security":["Password-hash/HMAC parameter review, entropy checks, brute-force rate-limit tests, replay resistance, and audit immutability.","MFA or privileged-role enforcement for administrative operations.","Log, trace, analytics, and backup scans for accidental secret exposure."],"load_and_resilience":["Authentication throughput and latency under expected and peak key volumes.","Rotation batch performance, queue backpressure, database failover, and partial notification failure.","Recovery from worker crashes and API restarts without duplicate keys or missed revocations."],"acceptance":["A replacement key is usable during the configured overlap window.","The prior key is rejected after revocation or overlap expiration.","Every lifecycle mutation produces a complete audit event with no secret material.","Retrying an idempotent request returns the original result without creating additional active keys."]}}
+{
+  "components": {
+    "api_service": [
+      "Authenticate administrators or service principals.",
+      "Create, list, rotate, and revoke keys.",
+      "Enforce tenant ownership, scopes, expiration, and idempotency."
+    ],
+    "key_manager": [
+      "Generate 256-bit cryptographically secure random secrets.",
+      "Return each plaintext secret only once.",
+      "Store only a keyed HMAC-SHA-256 digest and a non-secret lookup prefix.",
+      "Perform rotation and revocation in database transactions."
+    ],
+    "authentication_middleware": [
+      "Extract the key from the Authorization header.",
+      "Resolve by key ID or prefix, verify the digest, status, expiration, tenant, and required scope.",
+      "Emit authentication audit events without logging secrets."
+    ],
+    "audit_service": [
+      "Record creation, rotation, revocation, use failures, and administrative actor identity.",
+      "Publish structured events with tenant ID, key ID, request ID, timestamp, and result."
+    ],
+    "scheduled_worker": [
+      "Expire keys and completed rotation grace periods.",
+      "Emit alerts for keys nearing expiration and repeated failed authentication."
+    ],
+    "storage": [
+      "Use a relational database with unique constraints and transactional updates.",
+      "Use encrypted transport and encrypted database backups.",
+      "Keep the HMAC pepper in a managed secret store, separate from the database."
+    ]
+  },
+  "data_model": {
+    "api_keys": {
+      "id": "UUID primary key",
+      "tenant_id": "UUID indexed",
+      "name": "string",
+      "key_prefix": "string indexed",
+      "secret_digest": "binary HMAC-SHA-256 digest",
+      "scopes": "array of normalized scope strings",
+      "status": "active | rotating | revoked | expired",
+      "created_at": "timestamp",
+      "expires_at": "nullable timestamp",
+      "last_used_at": "nullable timestamp",
+      "revoked_at": "nullable timestamp",
+      "revoked_by": "nullable actor ID",
+      "rotation_parent_id": "nullable UUID",
+      "rotation_grace_ends_at": "nullable timestamp",
+      "metadata": "JSON object"
+    },
+    "rotation_records": {
+      "id": "UUID primary key",
+      "tenant_id": "UUID",
+      "old_key_id": "UUID",
+      "new_key_id": "UUID",
+      "requested_by": "actor ID",
+      "requested_at": "timestamp",
+      "grace_ends_at": "timestamp",
+      "completed_at": "nullable timestamp",
+      "idempotency_key": "string unique per tenant and operation"
+    },
+    "audit_events": {
+      "id": "UUID primary key",
+      "tenant_id": "UUID",
+      "actor_id": "nullable ID",
+      "event_type": "string",
+      "key_id": "nullable UUID",
+      "request_id": "string",
+      "result": "success | failure",
+      "details": "JSON object without secrets",
+      "created_at": "timestamp"
+    },
+    "constraints": [
+      "Each key ID is globally unique.",
+      "Key prefixes are non-secret and may be reused only according to the lookup strategy.",
+      "A tenant may have at most one active rotation per key.",
+      "Revoked keys cannot become active again.",
+      "Scopes and metadata are validated and normalized before persistence."
+    ]
+  },
+  "endpoints": {
+    "POST /v1/tenants/{tenant_id}/api-keys": {
+      "purpose": "Create an API key.",
+      "request": {
+        "name": "string",
+        "scopes": "array of strings",
+        "expires_at": "optional timestamp",
+        "metadata": "optional object"
+      },
+      "response": {
+        "status": 201,
+        "body": "key_id, name, key_prefix, scopes, expires_at, created_at, secret"
+      },
+      "rules": [
+        "Require administrative authorization.",
+        "Return secret only in this response.",
+        "Support Idempotency-Key and return the original result for retries."
+      ]
+    },
+    "GET /v1/tenants/{tenant_id}/api-keys": {
+      "purpose": "List keys without secrets.",
+      "query": "status, limit, cursor",
+      "response": {
+        "status": 200,
+        "body": "paginated key metadata including status and last_used_at"
+      }
+    },
+    "POST /v1/tenants/{tenant_id}/api-keys/{key_id}/rotate": {
+      "purpose": "Create a replacement key while preserving the old key during a grace period.",
+      "request": {
+        "grace_period_seconds": "optional bounded integer",
+        "expires_at": "optional timestamp",
+        "scopes": "optional replacement scope set",
+        "name": "optional string"
+      },
+      "response": {
+        "status": 201,
+        "body": "rotation_id, old_key_id, new_key_id, grace_ends_at, new secret"
+      },
+      "rules": [
+        "Require administrative authorization.",
+        "Atomically create the replacement and mark the old key rotating.",
+        "Allow both keys until grace_ends_at.",
+        "After grace_ends_at, mark the old key expired.",
+        "Use Idempotency-Key to make retries return the same replacement."
+      ]
+    },
+    "POST /v1/tenants/{tenant_id}/api-keys/{key_id}/revoke": {
+      "purpose": "Immediately disable a key.",
+      "request": {
+        "reason": "optional string"
+      },
+      "response": {
+        "status": 204
+      },
+      "rules": [
+        "Require administrative authorization.",
+        "Make revocation immediately effective for all authentication requests.",
+        "Make repeated revocation idempotent."
+      ]
+    },
+    "GET /v1/tenants/{tenant_id}/api-keys/{key_id}": {
+      "purpose": "Retrieve non-secret key metadata and rotation state.",
+      "response": {
+        "status": 200,
+        "body": "key metadata, status, and rotation details"
+      }
+    },
+    "POST /v1/auth/validate": {
+      "purpose": "Internal validation endpoint for services that cannot use shared authentication middleware.",
+      "request": {
+        "api_key": "string",
+        "required_scopes": "array of strings"
+      },
+      "response": {
+        "status": 200,
+        "body": "authenticated, tenant_id, key_id, scopes"
+      },
+      "rules": [
+        "Restrict access to trusted internal callers.",
+        "Never return the submitted key or its digest.",
+        "Return a generic 401 response for invalid, expired, or revoked credentials."
+      ]
+    },
+    "common_security_rules": [
+      "Require TLS.",
+      "Never log, persist, or include secrets in telemetry.",
+      "Apply tenant isolation, administrative authorization, rate limits, and request IDs.",
+      "Use generic authentication failure responses to prevent key enumeration."
+    ]
+  },
+  "rollout": {
+    "phase_1": [
+      "Create schema, secret-store integration, key generation, hashing, and audit events.",
+      "Implement create, list, revoke, and validation paths.",
+      "Add metrics for issuance, validation failures, revocations, and latency."
+    ],
+    "phase_2": [
+      "Implement transactional rotation with configurable default and maximum grace periods.",
+      "Deploy scheduled expiration processing.",
+      "Enable alerts for upcoming expiration and abnormal failure rates."
+    ],
+    "phase_3": [
+      "Run compatibility tests with all consumers.",
+      "Enable rotation for internal tenants first, then progressively for external tenants.",
+      "Require new consumers to use rotation and expiration policies."
+    ],
+    "operational_controls": [
+      "Use feature flags for rotation and grace-period enforcement.",
+      "Back up database and audit data before production enablement.",
+      "Provide an emergency revoke-all operation restricted to a break-glass role.",
+      "Monitor active-key counts, rotation completion, expired-key attempts, and audit delivery."
+    ]
+  },
+  "tests": {
+    "unit": [
+      "Generate unpredictable secrets and verify digest calculation.",
+      "Verify scope, expiration, status, and tenant authorization decisions.",
+      "Verify rotation state transitions and grace-period boundaries.",
+      "Verify secret redaction from logs and audit payloads."
+    ],
+    "integration": [
+      "Create a key and authenticate with it.",
+      "Verify the plaintext secret is returned once and never from read endpoints.",
+      "Rotate a key and verify both keys work during grace, then only the replacement works.",
+      "Revoke a key and verify authentication fails immediately.",
+      "Verify expiration, invalid scopes, malformed credentials, and cross-tenant access denial.",
+      "Verify database uniqueness and transaction rollback behavior."
+    ],
+    "api": [
+      "Validate request schemas, status codes, pagination, and error formats.",
+      "Verify Idempotency-Key behavior under retries and concurrent requests.",
+      "Verify authorization, rate limits, TLS requirements, and generic authentication errors."
+    ],
+    "security": [
+      "Test brute-force resistance and rate-limit enforcement.",
+      "Confirm secrets are absent from application logs, traces, metrics, backups, and audit events.",
+      "Test pepper rotation procedure and digest migration.",
+      "Run dependency, static-analysis, and penetration tests."
+    ],
+    "reliability": [
+      "Test concurrent rotations and revocations.",
+      "Test worker retries and duplicate expiration processing.",
+      "Test database failover during issuance and rotation.",
+      "Verify audit delivery retry and alerting behavior."
+    ]
+  }
+}

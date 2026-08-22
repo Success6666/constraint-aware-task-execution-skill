@@ -1,375 +1,391 @@
-下面给出一个适合多实例部署的 API 限流模块设计。核心原则是：实例内状态只属于 `Limiter` 对象；跨实例共享的限额交给 Redis 等外部存储；配置、时钟、指标和存储均通过依赖注入提供。
+# API 限流模块设计
 
-## 1. 模块接口
+## 1. 目标与总体方案
 
-以下以 Go 为例：
+采用**分布式 Token Bucket（令牌桶）**：
 
-```go
-type Request struct {
-    Route   string
-    Subject string // 用户、租户、API Key 等
-    Cost    int64  // 默认 1
-}
+- Redis 作为跨实例共享状态存储。
+- Redis Lua 脚本完成“读取、补充令牌、扣减、设置过期时间”原子操作。
+- API 实例本身不保存权威限流状态，避免多实例之间不一致。
+- 策略配置使用不可变快照，通过依赖注入传入。
+- Redis Key 包含策略版本，策略变更后自动使用新桶。
 
-type Decision struct {
-    Allowed   bool
-    Remaining int64
-    RetryAfter time.Duration
-    PolicyID  string
-}
-
-type Limiter interface {
-    Allow(ctx context.Context, req Request) (Decision, error)
-}
-
-type Policy struct {
-    ID              string
-    Route           string
-    Scope           string // ip/user/tenant/api_key
-    RequestsPerSec  int64
-    Burst           int64
-    CostEnabled     bool
-    FailureMode     FailureMode // FailOpen / FailClosed
-}
-
-type Config struct {
-    Policies []Policy
-}
-```
-
-业务层使用：
-
-```go
-decision, err := limiter.Allow(ctx, Request{
-    Route:   "GET /v1/orders",
-    Subject: tenantID,
-})
-
-if err != nil {
-    return err
-}
-if !decision.Allowed {
-    w.Header().Set("Retry-After",
-        strconv.FormatInt(int64(decision.RetryAfter.Seconds()), 10))
-    http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-    return nil
-}
-```
-
-## 2. 组件结构
-
-```go
-type Store interface {
-    Allow(
-        ctx context.Context,
-        key string,
-        rate int64,
-        burst int64,
-        cost int64,
-    ) (Decision, error)
-}
-
-type Metrics interface {
-    Allowed(policyID string)
-    Rejected(policyID string)
-    Error(policyID string)
-}
-
-type Clock interface {
-    Now() time.Time
-}
-
-type Engine struct {
-    config  atomic.Pointer[Config]
-    store   Store
-    metrics Metrics
-    clock   Clock
-    lookup  PolicyLookup
-}
-```
-
-所有状态都挂在 `Engine` 实例上，没有包级可变变量：
-
-```go
-func NewEngine(
-    cfg *Config,
-    store Store,
-    metrics Metrics,
-    clock Clock,
-) *Engine {
-    e := &Engine{
-        store:   store,
-        metrics: metrics,
-        clock:   clock,
-        lookup:  NewPolicyLookup(cfg),
-    }
-
-    e.config.Store(cloneConfig(cfg))
-    return e
-}
-```
-
-配置热更新使用不可变快照：
-
-```go
-func (e *Engine) UpdateConfig(cfg *Config) {
-    next := cloneConfig(cfg)
-    e.config.Store(next)
-    e.lookup.Update(next)
-}
-```
-
-读路径只读取快照，不需要长时间持锁。
-
-## 3. 多实例限流算法
-
-### 推荐方案：Redis 原子令牌桶
-
-每个限流键：
+结构：
 
 ```text
-ratelimit:{policy_id}:{subject}
+Request
+  -> IdentityResolver
+  -> PolicyResolver
+  -> RateLimiter
+       -> Redis Lua atomic operation
+  -> Allow / 429
 ```
 
-Redis 中保存：
+---
+
+## 2. 策略配置
 
 ```text
-tokens
-timestamp_ms
+RateLimitPolicy {
+    name:             string
+    version:          string
+    scope:            enum { GLOBAL, TENANT, USER, API_KEY, IP }
+    requestsPerSecond: decimal
+    burst:            integer
+    cost:             integer = 1
+    enabled:          boolean = true
+    failMode:         enum { OPEN, CLOSED }
+}
 ```
 
-通过 Lua 脚本一次性完成：
+策略匹配顺序建议：
 
-1. 读取当前 token 数和上次更新时间。
-2. 按时间补充 token。
-3. 判断是否足够支付本次请求成本。
-4. 扣除 token。
-5. 设置 TTL。
-6. 返回允许结果、剩余 token 和重试时间。
+1. API + 租户
+2. API + 用户
+3. API Key
+4. IP
+5. 全局默认策略
+
+示例：
+
+```json
+{
+  "name": "orders-create-tenant",
+  "version": "2025-03-01",
+  "scope": "TENANT",
+  "requestsPerSecond": 100,
+  "burst": 200,
+  "cost": 1,
+  "enabled": true,
+  "failMode": "CLOSED"
+}
+```
+
+配置要求：
+
+- `requestsPerSecond > 0`
+- `burst >= cost`
+- `version` 每次策略变更时递增或更新。
+- 配置加载后生成不可变快照。
+- 不将用户 ID、IP 等高基数字段放入指标标签。
+
+---
+
+## 3. 限流 Key
+
+```text
+rl:{policyName}:{policyVersion}:{scope}:{identity}
+```
+
+示例：
+
+```text
+rl:orders-create-tenant:2025-03-01:TENANT:tenant-123
+```
+
+Redis Cluster 环境可使用 Hash Tag，确保单次脚本只访问一个槽位：
+
+```text
+rl:{orders-create-tenant:tenant-123}:2025-03-01
+```
+
+Key 中包含策略版本，可避免修改速率后旧桶状态污染新策略。
+
+---
+
+## 4. Redis Lua 原子算法
+
+桶状态：
+
+```text
+tokens          当前令牌数
+last_refill_ms  上次补充时间
+```
 
 伪代码：
 
 ```lua
-local state = redis.call("HMGET", KEYS[1], "tokens", "ts")
-local tokens = tonumber(state[1]) or ARGV[2]
-local previous = tonumber(state[2]) or ARGV[3]
+local key = KEYS[1]
 
-local now = tonumber(ARGV[3])
-local elapsed = math.max(0, now - previous)
-tokens = math.min(ARGV[2], tokens + elapsed * ARGV[1] / 1000)
+local rate = tonumber(ARGV[1])          -- 每秒补充令牌数
+local capacity = tonumber(ARGV[2])      -- burst
+local cost = tonumber(ARGV[3])
+local ttl_ms = tonumber(ARGV[4])
 
-local cost = tonumber(ARGV[4])
-if tokens < cost then
-    local retry_ms = math.ceil((cost - tokens) * 1000 / ARGV[1])
-    return {0, math.floor(tokens), retry_ms}
+local now = redis.call("TIME")
+local now_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+
+local tokens = tonumber(redis.call("HGET", key, "tokens"))
+local last = tonumber(redis.call("HGET", key, "last_refill_ms"))
+
+if tokens == nil then
+    tokens = capacity
+    last = now_ms
 end
 
-tokens = tokens - cost
-redis.call("HSET", KEYS[1], "tokens", tokens, "ts", now)
-redis.call("PEXPIRE", KEYS[1], ARGV[5])
-return {1, math.floor(tokens), 0}
+local elapsed = math.max(0, now_ms - last)
+tokens = math.min(capacity, tokens + elapsed * rate / 1000)
+
+local allowed = 0
+local retry_after_ms = 0
+
+if tokens >= cost then
+    tokens = tokens - cost
+    allowed = 1
+else
+    retry_after_ms = math.ceil((cost - tokens) * 1000 / rate)
+end
+
+redis.call("HSET", key,
+    "tokens", tokens,
+    "last_refill_ms", now_ms
+)
+redis.call("PEXPIRE", key, ttl_ms)
+
+return { allowed, tokens, retry_after_ms }
 ```
 
-Redis 脚本执行具有原子性，因此多个 API 实例之间不会发生超卖。
-
-### 本地模式
-
-可以提供 `LocalStore`，用于：
-
-- 单实例部署；
-- 开发和测试；
-- Redis 不可用时的降级策略。
-
-本地实现使用分片锁：
-
-```go
-type LocalStore struct {
-    shards []localShard
-}
-
-type localShard struct {
-    mu sync.Mutex
-    m  map[string]*bucket
-}
-```
-
-每个 `Engine` 创建自己的 `LocalStore`，不会污染其他实例。
-
-## 4. 策略配置示例
-
-```yaml
-policies:
-  - id: tenant-default
-    route: "*"
-    scope: tenant
-    requests_per_sec: 100
-    burst: 200
-    failure_mode: fail_closed
-
-  - id: order-create
-    route: "POST /v1/orders"
-    scope: tenant
-    requests_per_sec: 10
-    burst: 20
-    failure_mode: fail_closed
-
-  - id: public-read
-    route: "GET /v1/catalog"
-    scope: ip
-    requests_per_sec: 50
-    burst: 100
-    failure_mode: fail_open
-```
-
-策略匹配建议：
-
-1. 精确路由优先；
-2. 方法加路径优先于路径通配；
-3. 更具体的策略优先；
-4. 同一优先级禁止重复配置；
-5. 无匹配策略默认放行或使用显式默认策略。
-
-## 5. 并发安全
-
-需要保证：
-
-- Redis 端通过 Lua 原子更新；
-- 本地桶通过分片锁保护；
-- 配置使用原子快照替换；
-- `Metrics` 实现必须自身并发安全；
-- `Clock` 可注入，避免测试依赖真实时间；
-- 限流键必须规范化，避免不同实例生成不同 key；
-- Redis key 设置 TTL，防止无限增长。
-
-不要在限流路径中使用全局 `map`、全局配置指针或全局单例。
-
-## 6. 指标设计
-
-建议提供以下指标：
+建议：
 
 ```text
-api_rate_limit_allowed_total{policy}
-api_rate_limit_rejected_total{policy,reason}
-api_rate_limit_errors_total{policy,error}
-api_rate_limit_decision_latency_seconds{policy}
-api_rate_limit_backend_latency_seconds{backend}
+ttl_ms = ceil(burst / requestsPerSecond * 1000) * 2
 ```
 
-注意：
+使用 Redis `TIME` 而非应用实例时间，避免多实例时钟偏差。
 
-- 不要把 `user_id`、IP、订单号作为 Prometheus label；
-- `policy` 数量应有上限；
-- `reason` 使用固定枚举，例如 `exhausted`、`backend_error`；
-- 记录 `Retry-After` 时可使用日志或 tracing，而不是高基数指标。
+---
 
-## 7. 错误与降级策略
+## 5. 核心接口
 
-```go
-type FailureMode int
+```text
+interface RateLimiter {
+    LimitResult check(
+        Policy policy,
+        String identity,
+        int cost
+    )
+}
+```
 
-const (
-    FailOpen FailureMode = iota
-    FailClosed
+```text
+LimitResult {
+    boolean allowed
+    long remaining
+    Duration retryAfter
+    String policyName
+}
+```
+
+策略和依赖通过构造函数注入：
+
+```text
+RateLimiter(
+    RedisClient redis,
+    PolicyProvider policyProvider,
+    IdentityResolver identityResolver,
+    Clock clock,
+    Metrics metrics
 )
 ```
 
-Redis 失败时：
+不得使用静态可变桶、静态缓存或进程级共享限流状态。
 
-- `FailClosed`：拒绝请求，适合写操作、计费接口、认证接口；
-- `FailOpen`：允许请求，适合低风险读接口；
-- 可选短时本地兜底桶，但必须限制容量和 TTL。
+---
 
-后端异常要与“正常被限流”区分统计，避免运维误判。
+## 6. 请求处理行为
 
-## 8. 测试方案
+允许请求时：
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 199
+```
+
+拒绝请求时：
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 1
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 0
+```
+
+`Retry-After` 使用 Lua 返回值计算，向上取整为秒。
+
+建议在网关或中间件层执行：
+
+```text
+resolve identity
+resolve policy
+check limiter
+if denied:
+    emit metrics
+    return 429
+continue request
+```
+
+同一请求只执行一次限流检查。
+
+---
+
+## 7. 并发安全
+
+### Redis 层
+
+- Lua 脚本是 Redis 单线程原子执行。
+- 同一 Key 的并发请求不会发生超发。
+- 不允许使用“先 GET、再 SET”的多次命令实现扣减。
+
+### 应用层
+
+- Policy 快照不可变。
+- Redis 客户端连接池由框架管理，但限流器不持有全局可变桶。
+- 不在实例本地缓存令牌数量。
+- 可缓存策略配置，但缓存必须是实例依赖的一部分，并支持版本更新。
+
+### Redis 故障策略
+
+由策略配置决定：
+
+- `OPEN`：Redis 异常时放行，适合非关键接口。
+- `CLOSED`：Redis 异常时拒绝或返回服务降级，适合成本高、风险高的接口。
+
+无论哪种模式，都记录后端错误指标。
+
+---
+
+## 8. 配置更新
+
+配置源可以是配置中心、数据库或管理接口，提供：
+
+```text
+PolicySnapshot getSnapshot()
+```
+
+更新流程：
+
+1. 加载并校验完整配置。
+2. 创建新的不可变快照。
+3. 原子替换当前实例引用。
+4. 更新策略版本。
+5. 新请求使用新版本 Key。
+
+无需主动删除旧 Redis Key，TTL 到期后自动清理。
+
+多实例最终一致时，短时间内可能存在不同版本策略。若要求严格一致，应将策略版本和内容放入统一配置中心，并在版本未同步时暂停启用新策略。
+
+---
+
+## 9. 指标
+
+指标标签保持低基数：
+
+```text
+rate_limit_requests_total{
+    policy,
+    route,
+    result="allowed|denied|backend_error"
+}
+
+rate_limit_backend_latency_seconds{
+    backend="redis"
+}
+
+rate_limit_backend_errors_total{
+    policy,
+    error_type
+}
+
+rate_limit_check_duration_seconds{
+    policy
+}
+```
+
+可选：
+
+```text
+rate_limit_remaining
+```
+
+只建议做聚合、采样或直方图，不记录用户 ID、IP、API Key。
+
+日志中可记录：
+
+- 策略名和版本
+- 路由
+- 拒绝原因
+- retry-after
+- Redis 错误类型
+
+敏感身份信息应脱敏或使用不可逆摘要。
+
+---
+
+## 10. 测试方案
 
 ### 单元测试
 
 覆盖：
 
-- 令牌桶初始容量；
-- 正常消耗和剩余 token；
-- 补充速率；
-- 突发流量；
-- `cost > 1`；
-- `RetryAfter` 计算；
-- 策略匹配优先级；
-- 配置热更新；
-- `FailOpen` / `FailClosed`。
+- 首次请求获得完整 burst。
+- 连续请求正确扣减令牌。
+- 令牌按时间补充。
+- 超过容量时拒绝。
+- `retryAfter` 计算正确。
+- `cost > 1`。
+- 策略禁用。
+- 不同 identity 互不影响。
+- 不同策略版本使用不同 Key。
+- `OPEN` 和 `CLOSED` 故障模式。
 
-使用假的时钟：
+### Lua/Redis 集成测试
 
-```go
-type FakeClock struct {
-    mu  sync.Mutex
-    now time.Time
-}
+覆盖：
 
-func (c *FakeClock) Now() time.Time {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    return c.now
-}
-```
+- 并发请求不会超过 burst。
+- 多个应用实例共享同一个限流桶。
+- Redis Key 正确过期。
+- Redis `TIME` 被正确使用。
+- 速率为小数时结果正确。
+- Redis 重启或连接失败时行为符合配置。
 
 ### 并发测试
 
-启动大量 goroutine 同时调用同一个 key，验证：
+启动多个限流器实例，同时向同一 identity 发起大量请求：
 
 ```text
-允许数 <= burst + rate * elapsed
+总允许数 <= burst + 时间窗口内补充的令牌数
 ```
 
-并检查：
+重点验证：
 
-- 无数据竞争；
-- 不出现负 token；
-- 配置更新期间请求结果始终来自完整快照。
+- 无双重扣减。
+- 无超发。
+- 不同 identity 之间不会互相阻塞。
+- Redis Cluster 下 Key 位于同一槽位。
 
-使用：
+### 性能测试
 
-```bash
-go test -race ./...
-```
+测量：
 
-### Redis 集成测试
-
-使用 Testcontainers 或独立 Redis 测试实例：
-
-- 多个 `Engine` 共享同一 Redis；
-- 并发请求总允许数不超过全局额度；
-- 脚本异常时验证降级模式；
-- key TTL 正确设置；
-- Redis 重启后的恢复行为。
+- 限流检查 P50/P95/P99 延迟。
+- Redis CPU 和网络开销。
+- 高并发下拒绝比例。
+- 策略数量和 identity 数量增长后的 Key 数量。
 
 ### 属性测试
 
-随机生成：
-
-- 请求时间间隔；
-- 请求成本；
-- 并发顺序；
-- 配置速率和 burst。
-
-验证限流不变量，而不是只验证固定样例。
-
-## 9. 部署建议
-
-每个应用实例独立创建：
+对随机请求序列验证：
 
 ```text
-HTTP Middleware
-    -> Policy Lookup
-    -> RedisStore
-    -> Metrics Adapter
+任何时间段内，允许请求量
+<= burst + rate * elapsed_seconds
 ```
 
-Redis 建议：
+并验证令牌数始终满足：
 
-- 使用高可用部署；
-- 限流脚本版本随应用发布；
-- key 使用 hash tag，确保 Redis Cluster 下脚本涉及的 key 位于同一 slot；
-- 设置合理连接池和超时；
-- 将 Redis 延迟、错误率纳入告警。
+```text
+0 <= tokens <= burst
+```
 
-这样可以同时满足多实例一致性、并发安全、可观测性和测试可控性，并避免依赖全局可变状态。
+这样即可在多实例部署下获得原子、一致、可观测且不依赖全局可变状态的 API 限流能力。

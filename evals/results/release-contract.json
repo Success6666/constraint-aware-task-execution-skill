@@ -1,0 +1,159 @@
+{
+  "checks": {
+    "dataset_integrity": {
+      "datasets": [
+        {
+          "cases": 30,
+          "id": "answer-bilingual-v1",
+          "sha256": "a3c6670c8a0949cb34cc498c15b8353ed5d2767fa4c0da87594aaec7959451b1"
+        },
+        {
+          "cases": 32,
+          "id": "gate-adversarial-v1",
+          "sha256": "01a3564c2a6da6dc7ef262fa5b9dd3364deb4ddbbc995d619a0d4a1cd8f0c4c9"
+        },
+        {
+          "cases": 6,
+          "id": "constraint-adversarial-v1",
+          "sha256": "d8109d557304aef779c9051d85bf0a0400b94002d10ea66928b172e87f0bb871"
+        },
+        {
+          "cases": 6,
+          "id": "workspace-runtime-v1",
+          "sha256": "a955b47797a62eaad36389f9decc66db01a372965ebd39c3839bb063a3c66507"
+        }
+      ],
+      "errors": [],
+      "status": "pass"
+    },
+    "release_coverage": {
+      "errors": [],
+      "matrices": {
+        "primary": {
+          "entries": [
+            {
+              "cases": 36,
+              "datasets": [
+                "answer-bilingual-v1",
+                "constraint-adversarial-v1"
+              ],
+              "executor": "codex",
+              "id": "primary",
+              "model": "gpt-5.6-sol",
+              "repeats": 1,
+              "variants": [
+                "baseline",
+                "full-v2",
+                "plan-validation",
+                "positive-framing-only",
+                "remove-anti-overoptimization",
+                "remove-constraint-echo",
+                "structured-plan-only",
+                "v1-full"
+              ]
+            }
+          ],
+          "models": 1
+        },
+        "runtime": {
+          "entries": [
+            {
+              "cases": 6,
+              "datasets": [
+                "workspace-runtime-v1"
+              ],
+              "executor": "codex",
+              "id": "primary-runtime",
+              "model": "gpt-5.6-sol",
+              "modes": [
+                "direct",
+                "full-v2"
+              ],
+              "repeats": 1
+            }
+          ],
+          "models": 1
+        },
+        "secondary": {
+          "entries": [
+            {
+              "cases": 30,
+              "datasets": [
+                "answer-bilingual-v1"
+              ],
+              "executor": "codex",
+              "id": "secondary-terra",
+              "model": "gpt-5.6-terra",
+              "repeats": 1,
+              "variants": [
+                "baseline",
+                "full-v2",
+                "v1-full"
+              ]
+            },
+            {
+              "cases": 30,
+              "datasets": [
+                "answer-bilingual-v1"
+              ],
+              "executor": "codex",
+              "id": "secondary-55",
+              "model": "gpt-5.5",
+              "repeats": 1,
+              "variants": [
+                "baseline",
+                "full-v2",
+                "v1-full"
+              ]
+            },
+            {
+              "cases": 30,
+              "datasets": [
+                "answer-bilingual-v1"
+              ],
+              "executor": "ollama",
+              "id": "local-qwen",
+              "model": "qwen3.5:9b",
+              "repeats": 1,
+              "variants": [
+                "baseline",
+                "full-v2",
+                "v1-full"
+              ]
+            }
+          ],
+          "models": 3
+        }
+      },
+      "status": "pass"
+    },
+    "schema_validation": {
+      "errors": [],
+      "schemas": [
+        "artifact-bundle.output.schema.json",
+        "benchmark-manifest.schema.json",
+        "execution-plan.output.schema.json",
+        "execution-plan.schema.json",
+        "generation-request.schema.json",
+        "generation-response.schema.json",
+        "pairwise-adjudication.schema.json",
+        "pairwise-review-key.schema.json",
+        "pairwise-review.schema.json",
+        "release-experiment.schema.json",
+        "result.schema.json",
+        "runtime-request.schema.json",
+        "score.schema.json"
+      ],
+      "status": "pass"
+    },
+    "secret_scan": "[REDACTED]",
+    "skill_validation": {
+      "errors": [],
+      "path": "skills\\constraint-exec\\SKILL.md",
+      "status": "pass"
+    }
+  },
+  "generated_at": "2026-08-22T09:09:13.585604+00:00",
+  "schema_version": "1.0",
+  "status": "pass"
+}

@@ -1,239 +1,487 @@
-下面是一套可落地的支付 Webhook 接收服务设计。核心原则是：**先完成安全校验，再进入幂等处理；任何签名无效、时间过期或 nonce 已使用的请求都不得产生业务副作用。**
+# 支付 Webhook 接收服务设计
 
-## 1. 接口协议
+## 1. 接口
 
-`POST /api/v1/webhooks/payment`
-
-请求头：
-
-```text
-X-Webhook-Key-Id: key_2026_01
-X-Webhook-Timestamp: 1720000000
-X-Webhook-Nonce: 550e8400-e29b-41d4-a716-446655440000
-X-Webhook-Signature: base64(hmac_sha256(...))
+```http
+POST /api/v1/payment/webhooks/{provider}
 Content-Type: application/json
+X-Webhook-Key-Id: key_2025_01
+X-Webhook-Timestamp: 1735689600
+X-Webhook-Nonce: 01J...
+X-Webhook-Signature: v1=base64(hmac_sha256(...))
+X-Request-Id: optional-client-id
 ```
 
-签名原文必须基于收到的原始请求体，不要基于 JSON 重新序列化后的内容：
+请求体必须使用原始字节参与签名，不能先 JSON 解析再重新序列化。
+
+推荐响应：
+
+| 场景 | HTTP | 说明 |
+|---|---:|---|
+| 接收成功并进入处理队列 | 202 | 已持久化、尚未完成业务处理 |
+| 已处理过的相同业务事件 | 200 | 不重复执行业务，可停止上游重试 |
+| 签名无效 | 401 | 必须拒绝处理 |
+| 时间戳超限 | 401 | 必须拒绝处理 |
+| nonce 重放 | 409 | 必须拒绝处理 |
+| 请求格式错误 | 400 | 必须拒绝处理 |
+| 系统暂时不可用 | 503 | 未确认接收，允许上游重试 |
+
+---
+
+## 2. 签名协议
+
+### 2.1 待签名字符串
 
 ```text
-POST
-/api/v1/webhooks/payment
-{timestamp}
-{nonce}
-{sha256(raw_body)}
+v1:{timestamp}:{nonce}:{sha256_hex(raw_body)}
 ```
 
-签名算法：
+例如：
+
+```text
+v1:1735689600:01JABCDEF:7f83b1657ff1fc53b92dc18148a1d65dfa135e...
+```
+
+签名计算：
 
 ```text
 signature = Base64(
-  HMAC-SHA256(secret, canonical_string)
+    HMAC-SHA256(
+        secret,
+        signing_string
+    )
 )
 ```
 
-要求：
+请求头格式：
 
-- 使用 HTTPS。
-- `Key-Id` 支持密钥轮换，但旧密钥只能在过渡期内有效。
-- 限制请求体大小，例如 1 MB。
-- 签名比较使用 constant-time compare。
-- JSON 解析前先保存并哈希原始 body。
+```text
+X-Webhook-Signature: v1=<base64-signature>
+```
 
-## 2. 校验顺序
+### 2.2 验证规则
 
-建议严格按以下顺序执行：
+1. 读取原始请求体。
+2. 校验必需请求头存在、长度合理、字符集合法。
+3. 根据 `X-Webhook-Key-Id` 查找当前或仍在轮换期内的密钥。
+4. 计算请求体 SHA-256。
+5. 构造待签名字符串。
+6. 使用常量时间比较比较签名，禁止普通字符串比较。
+7. 签名验证失败时：
+   - 不进入业务处理；
+   - 不写入幂等成功记录；
+   - 记录安全审计事件；
+   - 返回 `401`。
 
-1. 检查 HTTP 方法、Content-Type、请求体大小。
-2. 读取并校验 `Key-Id`。
-3. 解析 `Timestamp`，检查时间偏差：
+密钥不能出现在日志、响应、审计明文或异常堆栈中。
 
-   ```text
-   abs(server_now - timestamp) <= allowed_skew
-   ```
+### 2.3 密钥轮换
 
-   例如允许偏差 5 分钟。超限直接拒绝。
-4. 校验 `Nonce` 格式和长度。
-5. 根据原始 body 计算 canonical string。
-6. 使用对应密钥计算 HMAC，并进行恒时比较。
-7. 原子地登记 nonce：
+保存：
 
-   ```sql
-   INSERT INTO webhook_nonce(nonce, key_id, timestamp, expires_at)
-   VALUES (?, ?, ?, ?);
-   ```
+```text
+provider
+key_id
+secret_ciphertext
+status: active | verifying_only | revoked
+valid_from
+valid_to
+```
 
-   `nonce` 建立唯一索引。插入冲突表示请求重放，直接拒绝。
-8. 解析业务 JSON，校验事件结构。
-9. 进入幂等登记和异步业务处理。
+验证时允许当前密钥和轮换期内的旧密钥，生成签名时只使用当前密钥。密钥应存放在 KMS 或 Secret Manager 中。
 
-注意：nonce 必须在签名验证成功后登记，否则攻击者可以消耗合法 nonce，造成拒绝服务。
+---
 
-## 3. 幂等与重放处理
+## 3. 时间戳防护
 
-建议同时使用两个维度：
+服务端记录接收时间：
 
-- `nonce`：防止同一 HTTP 请求被重放。
-- `event_id`：防止支付平台使用不同 nonce 重试同一业务事件。
+```text
+now = server_utc_unix_seconds()
+delta = abs(now - timestamp)
+```
 
-### webhook_inbox
+默认允许偏差：
+
+```text
+delta <= 300 seconds
+```
+
+超出范围时：
+
+- 不验证 nonce；
+- 不进入业务处理；
+- 记录 `TIMESTAMP_OUT_OF_RANGE`；
+- 返回 `401`。
+
+所有服务节点必须使用同步的 UTC 时间，部署 NTP 或等效时间同步机制。
+
+时间窗口应配置化，例如：
+
+```yaml
+webhook:
+  max_clock_skew_seconds: 300
+```
+
+---
+
+## 4. nonce 防重放
+
+### 4.1 存储
+
+使用 Redis 或具备原子唯一约束的高速存储：
+
+```text
+key: webhook:nonce:{provider}:{key_id}:{nonce}
+value: request_hash
+ttl: 600 seconds
+```
+
+TTL 应大于允许时间偏差，例如允许偏差 300 秒时设置为 600 秒。
+
+### 4.2 原子校验
+
+签名和时间戳验证成功后执行：
+
+```text
+SET webhook:nonce:{provider}:{key_id}:{nonce} request_hash NX EX 600
+```
+
+结果：
+
+- `OK`：首次出现，继续处理；
+- `NOT-OK`：nonce 已存在，视为重放，返回 `409`；
+- Redis 不可用：不能降级放行，返回 `503`，否则无法保证重放防护。
+
+nonce 必须限制长度和字符集，例如最多 128 个 ASCII 字符。
+
+### 4.3 并发行为
+
+两个相同 nonce 的并发请求中，只允许一个请求成功执行 `SET NX`。另一个请求必须被拒绝，不能依赖应用层先查后写。
+
+---
+
+## 5. 业务幂等
+
+nonce 防止同一请求被重复发送；业务幂等防止同一支付事件因不同 nonce、网络重试或上游重新签名而重复执行业务。
+
+要求上游提供：
+
+```json
+{
+  "event_id": "evt_123456",
+  "event_type": "payment.succeeded",
+  "occurred_at": "2025-01-01T00:00:00Z",
+  "data": {
+    "payment_id": "pay_123",
+    "amount": 1000,
+    "currency": "CNY"
+  }
+}
+```
+
+### 5.1 Inbox 表
 
 ```sql
 CREATE TABLE webhook_inbox (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id              BIGINT PRIMARY KEY,
+    provider        VARCHAR(64) NOT NULL,
     event_id        VARCHAR(128) NOT NULL,
-    event_type      VARCHAR(64) NOT NULL,
+    event_type      VARCHAR(128) NOT NULL,
     payload_hash    CHAR(64) NOT NULL,
-    nonce           VARCHAR(128) NOT NULL,
-    key_id           VARCHAR(64) NOT NULL,
-    received_at      TIMESTAMP NOT NULL,
-    status           VARCHAR(20) NOT NULL,
-    response_code    INT,
-    response_body    JSON,
-    UNIQUE KEY uk_event_id(event_id),
-    UNIQUE KEY uk_nonce(nonce)
+    raw_payload     JSONB NOT NULL,
+    status          VARCHAR(32) NOT NULL,
+    received_at     TIMESTAMP NOT NULL,
+    processed_at    TIMESTAMP NULL,
+    last_error      VARCHAR(512) NULL,
+    UNIQUE (provider, event_id)
 );
 ```
 
-处理规则：
-
-| 情况 | 行为 |
-|---|---|
-| nonce 已存在 | 判定重放，返回 `409 Replay Detected`，不处理 |
-| event_id 首次出现 | 插入 inbox，投递业务队列 |
-| event_id 已存在且 payload_hash 相同 | 幂等重复，不重复执行业务，可返回首次结果 |
-| event_id 已存在但 payload_hash 不同 | 判定篡改或协议错误，拒绝并告警 |
-
-“同一事件的新 nonce 重试”属于正常幂等重复；“同一 nonce 再次提交”属于请求重放，必须拒绝。
-
-## 4. 推荐处理流程
+`status`：
 
 ```text
-收到请求
-  |
-  +-- 基础限制失败 ------------------> 400/413
-  |
-  +-- 时间偏差超限 ------------------> 408 或 400
-  |
-  +-- 签名无效 ----------------------> 401
-  |
-  +-- nonce 已存在 ------------------> 409 Replay Detected
-  |
-  +-- event_id 已处理 ---------------> 返回历史结果，不产生副作用
-  |
-  +-- 首次事件
+RECEIVED
+PROCESSING
+SUCCEEDED
+FAILED_RETRYABLE
+FAILED_FINAL
+```
+
+### 5.2 幂等规则
+
+在数据库事务中插入 inbox：
+
+```sql
+INSERT INTO webhook_inbox (...)
+VALUES (...)
+ON CONFLICT (provider, event_id) DO NOTHING;
+```
+
+- 首次插入：写入 `RECEIVED`，发布处理任务；
+- 已存在且 `payload_hash` 相同：
+  - 不重复执行业务；
+  - 已成功则返回 `200`；
+  - 处理中或可重试失败则返回 `202`；
+- 已存在但 `payload_hash` 不同：
+  - 记录 `EVENT_ID_PAYLOAD_CONFLICT`；
+  - 返回 `409`；
+  - 不得覆盖原始事件。
+
+业务处理必须在同一事务中完成状态变更和业务幂等控制，或使用可靠 Outbox 保证消息不会丢失。
+
+---
+
+## 6. 请求处理流程
+
+```text
+接收原始 HTTP 请求
         |
-        +-- 事务写入 webhook_inbox
-        +-- 写入 outbox / 投递消息队列
-        +-- 返回 202 Accepted
+        v
+限制请求大小、校验请求头和 Content-Type
+        |
+        v
+解析 timestamp / nonce / signature
+        |
+        v
+校验 timestamp 是否在允许窗口内
+        | 失败 -> 审计 + 401
+        v
+根据 key_id 获取密钥
+        |
+        v
+计算 raw_body hash 和 HMAC
+        | 失败 -> 审计 + 401
+        v
+原子写入 nonce
+        | 已存在 -> 审计 + 409
+        v
+解析 JSON 和 event_id
+        | 失败 -> 审计 + 400
+        v
+数据库插入 webhook_inbox
+        |
+        +-- 已有相同 event_id -> 按幂等规则返回
+        |
+        v
+提交事务并投递处理任务
+        |
+        v
+返回 202
 ```
 
-推荐采用 Inbox/Outbox 模式：
+签名验证必须基于原始请求体；JSON 解析只用于业务字段读取，不能影响签名验证结果。
 
-- 接收请求时只负责安全校验和可靠落库。
-- 业务处理由 worker 异步执行。
-- 支付状态更新、订单更新、发货等副作用必须在幂等事务中完成。
-- 对外通知使用 outbox，避免数据库提交成功但消息发送失败。
+---
 
-业务 worker 伪代码：
+## 7. 审计设计
 
-```pseudo
-record = inbox.claim(event_id)
-
-if record.status == PROCESSED:
-    return record.response
-
-begin transaction
-    lock payment/order by payment_id
-
-    if event already applied:
-        mark inbox PROCESSED
-        save response
-        commit
-        return
-
-    apply payment state transition
-    insert payment_event(event_id, ...)
-    mark inbox PROCESSED
-    save response
-commit
-```
-
-状态迁移也应有限制，例如不能从 `REFUNDED` 回退到 `PAID`。
-
-## 5. 响应约定
-
-- `202 Accepted`：签名和安全校验通过，事件已持久化并排队。
-- `200 OK`：同一 `event_id` 的幂等重复，返回首次处理结果。
-- `400 Bad Request`：格式或业务字段非法。
-- `401 Unauthorized`：签名无效、未知 key。
-- `408 Request Timeout`：时间戳超出允许窗口。
-- `409 Conflict`：nonce 重放，响应体明确标识 `Replay Detected`。
-- `413 Payload Too Large`：请求体超限。
-- `500`：仅用于暂时性内部故障；如果尚未可靠落库，允许支付平台稍后重试。
-
-## 6. 审计设计
-
-所有请求都记录审计事件，包括成功和拒绝：
+建立独立的不可变审计记录：
 
 ```sql
 CREATE TABLE webhook_audit (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    trace_id        VARCHAR(64),
-    event_id        VARCHAR(128),
-    nonce           VARCHAR(128),
-    key_id           VARCHAR(64),
-    request_hash     CHAR(64),
-    received_at      TIMESTAMP,
-    result           VARCHAR(20),  -- ACCEPTED/REJECTED/DUPLICATE
-    reject_reason    VARCHAR(64),
-    source_ip        VARCHAR(64),
-    user_agent       VARCHAR(256),
-    latency_ms       INT
+    id                  BIGINT PRIMARY KEY,
+    request_id          VARCHAR(128) NOT NULL,
+    provider            VARCHAR(64) NOT NULL,
+    key_id              VARCHAR(128),
+    event_id            VARCHAR(128),
+    nonce_hash          CHAR(64),
+    payload_hash        CHAR(64),
+    received_at         TIMESTAMP NOT NULL,
+    timestamp_value     BIGINT,
+    clock_skew_seconds  BIGINT,
+    result              VARCHAR(32) NOT NULL,
+    reason              VARCHAR(64) NOT NULL,
+    source_ip_hash      CHAR(64),
+    user_agent           VARCHAR(512),
+    created_at          TIMESTAMP NOT NULL
 );
+```
+
+`result` 示例：
+
+```text
+ACCEPTED
+REJECTED
+DUPLICATE
+ERROR
+```
+
+`reason` 示例：
+
+```text
+SIGNATURE_INVALID
+KEY_NOT_FOUND
+TIMESTAMP_OUT_OF_RANGE
+NONCE_REPLAY
+MALFORMED_REQUEST
+EVENT_ID_DUPLICATE
+EVENT_ID_PAYLOAD_CONFLICT
+ACCEPTED_FOR_PROCESSING
 ```
 
 审计要求：
 
-- 不记录密钥、完整签名或未脱敏支付数据。
-- 业务 payload 最多记录 hash、脱敏摘要或对象存储引用。
-- 拒绝原因使用固定枚举，例如 `INVALID_SIGNATURE`、`TIMESTAMP_EXPIRED`、`NONCE_REPLAY`。
-- 审计日志应防篡改、可检索，并设置保留期限。
-- 对签名失败、重放、同一 IP 高频请求设置告警。
+- 所有拒绝请求都必须记录；
+- 记录哈希而非完整签名、密钥和敏感支付数据；
+- 原始 payload 仅在受控的 inbox 表保存，并按数据保留策略清理；
+- 审计记录不可被普通业务更新或删除；
+- 记录 `request_id`，若客户端未提供则服务端生成；
+- 监控签名失败、重放、时间偏差、队列积压和处理失败数量。
 
-nonce 存储期限至少覆盖时间窗口和支付平台最大重试周期；生产环境建议使用持久化数据库，Redis 可作为前置缓存，但不能单独承担审计和最终一致性。
+---
 
-## 7. 测试矩阵
+## 8. 业务处理器要求
 
-### 单元测试
+消费者处理 `webhook_inbox`：
 
-- 正确签名通过。
-- 修改 body 后签名失败。
-- 修改 timestamp、nonce、path、HTTP method 后签名失败。
-- 恒时比较逻辑。
-- 时间戳在边界内通过，边界外拒绝。
-- nonce 首次成功，第二次冲突。
-- event_id 相同且 payload 相同只处理一次。
-- event_id 相同但 payload 不同拒绝。
-- 无效 Base64、未知 key、nonce 格式错误。
-- 空 body、超大 body、非法 JSON。
+1. 使用数据库锁或状态条件更新抢占任务：
 
-### 并发与集成测试
+```sql
+UPDATE webhook_inbox
+SET status = 'PROCESSING'
+WHERE id = ?
+  AND status IN ('RECEIVED', 'FAILED_RETRYABLE');
+```
 
-- 同一 nonce 并发提交，只有一个请求进入处理流程。
-- 同一 event_id 使用多个 nonce 并发提交，业务副作用只发生一次。
-- 数据库提交成功但消息发送失败时，outbox 能补偿。
-- worker 崩溃后重试不会重复扣款或发货。
-- 时钟偏移、NTP 不可用时的降级行为。
-- 密钥轮换期间新旧 key 验证策略。
+2. 业务更新必须带业务幂等条件，例如：
 
-### 安全测试
+```sql
+INSERT INTO payment_event_effects (provider, event_id)
+VALUES (?, ?)
+ON CONFLICT DO NOTHING;
+```
 
-- 重放历史完整请求。
-- 重放但修改一个字段。
-- 签名长度异常和比较时序测试。
-- 请求体截断、重复 header、编码差异。
-- 速率限制、慢请求、恶意超大请求。
-- 审计日志中不得泄露 secret、完整 token 或敏感支付信息。
+3. 只有成功完成业务事务后才设置 `SUCCEEDED`。
+4. 可重试异常设置 `FAILED_RETRYABLE`。
+5. 数据不合法、金额不匹配、状态非法等设置 `FAILED_FINAL` 并告警。
+6. 不因重复投递再次发货、记账、退款或发送通知。
 
-这套设计将“签名认证”“时间窗口”“一次性 nonce”“业务幂等”分层处理，能够同时覆盖伪造请求、延迟请求、完整请求重放，以及支付平台正常重试等场景。
+---
+
+## 9. 伪代码
+
+```python
+def receive_webhook(request):
+    request_id = request.header("X-Request-Id") or uuid4()
+    raw_body = request.raw_body
+
+    if len(raw_body) > MAX_BODY_SIZE:
+        audit(request, request_id, "REJECTED", "BODY_TOO_LARGE")
+        return 400
+
+    headers = parse_headers(request)
+
+    timestamp = parse_integer(headers.timestamp)
+    if timestamp is None:
+        audit(request, request_id, "REJECTED", "INVALID_TIMESTAMP")
+        return 401
+
+    skew = abs(current_unix_seconds() - timestamp)
+    if skew > MAX_CLOCK_SKEW:
+        audit(request, request_id, "REJECTED",
+              "TIMESTAMP_OUT_OF_RANGE", skew=skew)
+        return 401
+
+    secret = secret_store.get(headers.key_id)
+    if secret is None:
+        audit(request, request_id, "REJECTED", "KEY_NOT_FOUND")
+        return 401
+
+    body_hash = sha256_hex(raw_body)
+    signing_string = f"v1:{timestamp}:{headers.nonce}:{body_hash}"
+    expected = base64(hmac_sha256(secret, signing_string))
+
+    if not constant_time_equal(headers.signature, "v1=" + expected):
+        audit(request, request_id, "REJECTED", "SIGNATURE_INVALID")
+        return 401
+
+    if not redis.set(
+        nonce_key(provider, headers.key_id, headers.nonce),
+        body_hash,
+        nx=True,
+        ex=NONCE_TTL
+    ):
+        audit(request, request_id, "REJECTED", "NONCE_REPLAY")
+        return 409
+
+    payload = parse_json(raw_body)
+    event_id = validate_event(payload)
+
+    result = inbox.insert_idempotently(
+        provider=provider,
+        event_id=event_id,
+        event_type=payload["event_type"],
+        payload_hash=body_hash,
+        raw_payload=payload
+    )
+
+    if result.conflict:
+        audit(request, request_id, "REJECTED",
+              "EVENT_ID_PAYLOAD_CONFLICT")
+        return 409
+
+    if result.duplicate:
+        audit(request, request_id, "DUPLICATE",
+              "EVENT_ID_DUPLICATE")
+        return 200
+
+    queue.publish(result.inbox_id)
+
+    audit(request, request_id, "ACCEPTED",
+          "ACCEPTED_FOR_PROCESSING")
+    return 202
+```
+
+---
+
+## 10. 必须覆盖的测试
+
+### 签名
+
+- 正确签名通过；
+- 修改一个 JSON 字节后签名失败；
+- 修改 timestamp、nonce 或 key ID 后失败；
+- 使用错误密钥失败；
+- 缺少签名头失败；
+- 验证使用原始 body，而不是重新序列化后的 JSON；
+- 比较使用常量时间函数。
+
+### 时间戳
+
+- 当前时间通过；
+- 正好在允许边界通过；
+- 超出边界被拒绝；
+- 未来时间超限被拒绝；
+- 非数字、负数、过长值被拒绝。
+
+### nonce 重放
+
+- 同一 nonce 的第一次请求通过；
+- 第二次请求被拒绝；
+- 并发发送相同 nonce 时仅一个通过；
+- nonce TTL 到期后可按协议再次使用；
+- Redis 不可用时返回 `503`，不能放行。
+
+### 幂等
+
+- 相同 `event_id`、相同 payload 不重复执行业务；
+- 相同 `event_id`、不同 payload 被拒绝；
+- 不同 nonce 的同一事件仍只产生一次业务效果；
+- 消费者重复执行不会重复扣款、退款或发货；
+- 消费者失败后可安全重试。
+
+### 审计和安全
+
+- 所有拒绝原因均有审计记录；
+- 审计不包含密钥、完整签名和敏感支付字段；
+- 请求体超限、JSON 非法、未知事件类型均被正确拒绝；
+- 日志和审计中的 nonce、IP 等按规定脱敏或哈希；
+- 密钥轮换期间新旧密钥行为符合预期。
+
+### 集成与并发
+
+- 多实例部署下 nonce 和幂等仍然有效；
+- 数据库提交成功但消息投递失败时，Outbox 或补偿任务可以恢复；
+- 消息重复投递不会产生重复业务效果；
+- 队列积压和处理失败能被监控和告警。
